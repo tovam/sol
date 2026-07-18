@@ -61,6 +61,12 @@ jobs:
       - name: Build release app without Apple signing
         id: xcodebuild
         run: |
+          yoga_modulemap="$GITHUB_WORKSPACE/macos/Pods/Headers/Public/yoga/Yoga.modulemap"
+          if [ ! -f "$yoga_modulemap" ]; then
+            echo "::error::Yoga module map not found at $yoga_modulemap"
+            exit 1
+          fi
+
           set +e
           xcodebuild \
             -workspace macos/sol.xcworkspace \
@@ -69,7 +75,7 @@ jobs:
             -sdk macosx \
             -destination "platform=macOS" \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
-            'OTHER_SWIFT_FLAGS=$(inherited) -Xcc -fmodule-map-file=$(PODS_ROOT)/Headers/Public/yoga/Yoga.modulemap' \
+            "OTHER_SWIFT_FLAGS=\$(inherited) -Xcc -fmodule-map-file=$yoga_modulemap" \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="-" \
             AD_HOC_CODE_SIGNING_ALLOWED=YES \
