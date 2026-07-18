@@ -59,7 +59,9 @@ jobs:
         run: df -h /
 
       - name: Build release app without Apple signing
+        id: xcodebuild
         run: |
+          set +e
           xcodebuild \
             -workspace macos/sol.xcworkspace \
             -scheme release \
@@ -72,7 +74,36 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             DEVELOPMENT_TEAM="" \
             COMPILER_INDEX_STORE_ENABLE=NO \
-            build
+            build 2>&1 | tee "$RUNNER_TEMP/xcodebuild.log"
+
+          build_status=${PIPESTATUS[0]}
+          if [ "$build_status" -ne 0 ]; then
+            echo "### Xcode build errors" >> "$GITHUB_STEP_SUMMARY"
+            echo '```text' >> "$GITHUB_STEP_SUMMARY"
+            grep -E -i '(^|: )(fatal )?error:|\*\* BUILD FAILED \*\*|The following build commands failed' \
+              "$RUNNER_TEMP/xcodebuild.log" \
+              | tail -n 40 \
+              | tee -a "$GITHUB_STEP_SUMMARY" \
+              | head -n 10 \
+              | while IFS= read -r line; do
+                  line=${line//'%'/'%25'}
+                  line=${line//$'\r'/'%0D'}
+                  line=${line//$'\n'/'%0A'}
+                  echo "::error::$line"
+                done
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          exit "$build_status"
+
+      - name: Upload Xcode build log on failure
+        if: failure() && steps.xcodebuild.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: ${{ runner.temp }}/xcodebuild.log
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Package application
         run: |
