@@ -697,6 +697,11 @@
 					"-ObjC",
 					"-lc++",
 				);
+				OTHER_SWIFT_FLAGS = (
+					"$(inherited)",
+					"-Xcc",
+					"-fmodule-map-file=$(PODS_ROOT)/Headers/Public/yoga/Yoga.modulemap",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.ospfranco.sol.debug;
 				PRODUCT_NAME = "sol-debug";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -740,6 +745,11 @@
 					"$(inherited)",
 					"-ObjC",
 					"-lc++",
+				);
+				OTHER_SWIFT_FLAGS = (
+					"$(inherited)",
+					"-Xcc",
+					"-fmodule-map-file=$(PODS_ROOT)/Headers/Public/yoga/Yoga.modulemap",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.ospfranco.sol;
 				PRODUCT_NAME = sol;

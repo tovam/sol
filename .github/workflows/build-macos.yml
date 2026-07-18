@@ -58,6 +58,18 @@ jobs:
       - name: Check disk space after dependencies
         run: df -h /
 
+      - name: Show resolved app build settings
+        run: |
+          xcodebuild \
+            -workspace macos/sol.xcworkspace \
+            -scheme release \
+            -configuration Release \
+            -showBuildSettings \
+            | grep -E '^ *(HEADER_SEARCH_PATHS|OTHER_SWIFT_FLAGS|SWIFT_ENABLE_EXPLICIT_MODULES) =' \
+            | while IFS= read -r line; do
+                echo "::notice::$line"
+              done
+
       - name: Build release app without Apple signing
         id: xcodebuild
         run: |
