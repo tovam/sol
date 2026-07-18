@@ -70,6 +70,7 @@ jobs:
             -destination "platform=macOS" \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
             SWIFT_ENABLE_EXPLICIT_MODULES=NO \
+            "HEADER_SEARCH_PATHS=\$(inherited) $GITHUB_WORKSPACE/macos/Pods/Headers/Public/yoga" \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="-" \
             AD_HOC_CODE_SIGNING_ALLOWED=YES \
