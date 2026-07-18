@@ -69,10 +69,12 @@ jobs:
             -sdk macosx \
             -destination "platform=macOS" \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
+            'OTHER_SWIFT_FLAGS=$(inherited) -Xcc -fmodule-map-file=$(PODS_ROOT)/Headers/Public/yoga/Yoga.modulemap' \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="-" \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES \
             DEVELOPMENT_TEAM="" \
+            PROVISIONING_PROFILE_SPECIFIER="" \
             COMPILER_INDEX_STORE_ENABLE=NO \
             build 2>&1 | tee "$RUNNER_TEMP/xcodebuild.log"
 
