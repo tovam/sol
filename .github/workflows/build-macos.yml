@@ -83,6 +83,7 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="-" \
+            EXPANDED_CODE_SIGN_IDENTITY_NAME="-" \
             AD_HOC_CODE_SIGNING_ALLOWED=YES \
             DEVELOPMENT_TEAM="" \
             PROVISIONING_PROFILE_SPECIFIER="" \
