@@ -72,8 +72,6 @@ jobs:
 
       - name: Build release app without Apple signing
         id: xcodebuild
-        env:
-          SENTRY_DISABLE_AUTO_UPLOAD: "true"
         run: |
           set +e
           xcodebuild \

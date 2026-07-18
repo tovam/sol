@@ -436,7 +436,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -e\n\nWITH_ENVIRONMENT=\"../node_modules/react-native/scripts/xcode/with-environment.sh\"\nSENTRY_XCODE=\"../node_modules/@sentry/react-native/scripts/sentry-xcode.sh\"\n: \"${SENTRY_PROPERTIES:=$PROJECT_DIR/sentry.properties}\"\nexport SENTRY_PROPERTIES\n\n/bin/sh -c \"$WITH_ENVIRONMENT $SENTRY_XCODE\"\n";
+			shellScript = "set -e\n\nWITH_ENVIRONMENT=\"../node_modules/react-native/scripts/xcode/with-environment.sh\"\nSENTRY_XCODE=\"../node_modules/@sentry/react-native/scripts/sentry-xcode.sh\"\nREACT_NATIVE_XCODE=\"../node_modules/react-native/scripts/react-native-xcode.sh\"\n: \"${SENTRY_PROPERTIES:=$PROJECT_DIR/sentry.properties}\"\nexport SENTRY_PROPERTIES\n\nif [ \"${AD_HOC_CODE_SIGNING_ALLOWED}\" = \"YES\" ]; then\n  /bin/sh -c \"$WITH_ENVIRONMENT $REACT_NATIVE_XCODE\"\nelse\n  /bin/sh -c \"$WITH_ENVIRONMENT $SENTRY_XCODE\"\nfi\n";
 		};
 		381D8A6F24576A6C00465D17 /* Start Packager */ = {
 			isa = PBXShellScriptBuildPhase;
