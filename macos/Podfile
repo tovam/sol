@@ -33,3 +33,13 @@ target 'macOS' do
   end
 
 end
+
+post_integrate do |installer|
+  support_files = File.join(installer.sandbox.root.to_s, 'Target Support Files', '**', '*.xcconfig')
+
+  Dir.glob(support_files).each do |path|
+    contents = File.read(path)
+    normalized = contents.gsub('/Headers/Public/yoga/Yoga.modulemap', '/Headers/Public/Yoga/Yoga.modulemap')
+    File.write(path, normalized) if normalized != contents
+  end
+end

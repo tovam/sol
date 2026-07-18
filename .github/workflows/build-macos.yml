@@ -58,25 +58,6 @@ jobs:
       - name: Check disk space after dependencies
         run: df -h /
 
-      - name: Diagnose duplicate Yoga module maps
-        run: |
-          found=0
-          while IFS= read -r modulemap; do
-            if grep -E -q 'module[[:space:]]+(yoga|Yoga)' "$modulemap"; then
-              found=1
-              metadata=$(ls -li "$modulemap")
-              digest=$(shasum -a 256 "$modulemap" | cut -d ' ' -f 1)
-              echo "::notice title=Yoga module map::$metadata (sha256: $digest)"
-            fi
-          done < <(find -L macos/Pods -type f -name '*.modulemap' -print)
-
-          if [ "$found" -eq 0 ]; then
-            echo "::error::No Yoga module map found"
-          fi
-
-          echo "::error::Stopping after Yoga module-map diagnostics"
-          exit 1
-
       - name: Show resolved app build settings
         run: |
           xcodebuild \
