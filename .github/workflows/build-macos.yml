@@ -61,12 +61,6 @@ jobs:
       - name: Build release app without Apple signing
         id: xcodebuild
         run: |
-          yoga_modulemap="$GITHUB_WORKSPACE/macos/Pods/Headers/Public/yoga/Yoga.modulemap"
-          if [ ! -f "$yoga_modulemap" ]; then
-            echo "::error::Yoga module map not found at $yoga_modulemap"
-            exit 1
-          fi
-
           set +e
           xcodebuild \
             -workspace macos/sol.xcworkspace \
@@ -75,7 +69,7 @@ jobs:
             -sdk macosx \
             -destination "platform=macOS" \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
-            "OTHER_SWIFT_FLAGS=\$(inherited) -Xcc -fmodule-map-file=$yoga_modulemap" \
+            SWIFT_ENABLE_EXPLICIT_MODULES=NO \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="-" \
             AD_HOC_CODE_SIGNING_ALLOWED=YES \
@@ -88,7 +82,7 @@ jobs:
           if [ "$build_status" -ne 0 ]; then
             echo "### Xcode build errors" >> "$GITHUB_STEP_SUMMARY"
             echo '```text' >> "$GITHUB_STEP_SUMMARY"
-            grep -E -i '(^|: )(fatal )?error:|\*\* BUILD FAILED \*\*|The following build commands failed' \
+            grep -E -i -B 4 -A 4 '(^|: )(fatal )?error:|\*\* BUILD FAILED \*\*|The following build commands failed' \
               "$RUNNER_TEMP/xcodebuild.log" \
               | tail -n 40 \
               | tee -a "$GITHUB_STEP_SUMMARY" \
