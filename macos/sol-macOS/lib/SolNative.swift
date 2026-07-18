@@ -1,6 +1,7 @@
 import Foundation
 import HotKey
 import LaunchAtLogin
+import React
 
 private let keychain = Keychain(service: "Sol")
 

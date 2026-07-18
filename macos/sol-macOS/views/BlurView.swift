@@ -1,4 +1,5 @@
 import Cocoa
+import React
 
 class BlurView: NSVisualEffectView {
   @objc var borderRadius: Double = 0

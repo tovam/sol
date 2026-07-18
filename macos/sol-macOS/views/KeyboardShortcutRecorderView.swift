@@ -1,4 +1,5 @@
 import Cocoa
+import React
 
 class KeyboardShortcutRecorderView: NSView {
   private let instructionLabel = NSTextField(labelWithString: "Enter Key Combination")

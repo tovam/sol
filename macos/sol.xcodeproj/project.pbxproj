@@ -680,10 +680,6 @@
 				DEVELOPMENT_TEAM = 24CMR7378R;
 				ENABLE_HARDENED_RUNTIME = YES;
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = "i386 arm64";
-				HEADER_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(PODS_ROOT)/Headers/Public/Yoga",
-				);
 				INFOPLIST_FILE = "sol-macos/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = SolDebug;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -696,11 +692,6 @@
 					"$(inherited)",
 					"-ObjC",
 					"-lc++",
-				);
-				OTHER_SWIFT_FLAGS = (
-					"$(inherited)",
-					"-Xcc",
-					"-fmodule-map-file=$(PODS_ROOT)/Headers/Public/Yoga/Yoga.modulemap",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.ospfranco.sol.debug;
 				PRODUCT_NAME = "sol-debug";
@@ -730,10 +721,6 @@
 				DEVELOPMENT_TEAM = 24CMR7378R;
 				ENABLE_HARDENED_RUNTIME = YES;
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = "i386 arm64";
-				HEADER_SEARCH_PATHS = (
-					"$(inherited)",
-					"$(PODS_ROOT)/Headers/Public/Yoga",
-				);
 				INFOPLIST_FILE = "sol-macos/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -745,11 +732,6 @@
 					"$(inherited)",
 					"-ObjC",
 					"-lc++",
-				);
-				OTHER_SWIFT_FLAGS = (
-					"$(inherited)",
-					"-Xcc",
-					"-fmodule-map-file=$(PODS_ROOT)/Headers/Public/Yoga/Yoga.modulemap",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.ospfranco.sol;
 				PRODUCT_NAME = sol;

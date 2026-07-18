@@ -1,4 +1,5 @@
 import Cocoa
+import React
 
 class FileIcon: NSView {
   let image = NSImageView()

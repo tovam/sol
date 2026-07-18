@@ -1,5 +1,6 @@
 import EventKit
 import Foundation
+import React
 import React_RCTAppDelegate
 import Sparkle
 
