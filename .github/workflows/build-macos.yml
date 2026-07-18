@@ -164,3 +164,63 @@ jobs:
           path: Sol-macOS-unsigned.zip
           if-no-files-found: error
           retention-days: 7
+
+  publish-development-release:
+    name: Publish public development release
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+
+    steps:
+      - name: Download built application
+        uses: actions/download-artifact@v4
+        with:
+          name: Sol-macOS-unsigned
+
+      - name: Publish development release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: sol-development
+        run: |
+          test -f Sol-macOS-unsigned.zip
+          sha256sum Sol-macOS-unsigned.zip > Sol-macOS-unsigned.zip.sha256
+
+          printf '%s\n' \
+            'Automated unsigned macOS build from the `main` branch.' \
+            '' \
+            "Commit: \`${GITHUB_SHA}\`" \
+            '' \
+            'This development build is not notarized by Apple.' \
+            > "$RUNNER_TEMP/release-notes.md"
+
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title 'Sol development build (unsigned)' \
+              --notes-file "$RUNNER_TEMP/release-notes.md" \
+              --prerelease
+            gh release upload "$RELEASE_TAG" \
+              Sol-macOS-unsigned.zip \
+              Sol-macOS-unsigned.zip.sha256 \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
+          else
+            gh release create "$RELEASE_TAG" \
+              Sol-macOS-unsigned.zip \
+              Sol-macOS-unsigned.zip.sha256 \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title 'Sol development build (unsigned)' \
+              --notes-file "$RUNNER_TEMP/release-notes.md" \
+              --prerelease \
+              --latest=false
+          fi
+
+          printf 'Public download: https://github.com/%s/releases/download/%s/Sol-macOS-unsigned.zip\n' \
+            "$GITHUB_REPOSITORY" \
+            "$RELEASE_TAG" \
+            >> "$GITHUB_STEP_SUMMARY"
