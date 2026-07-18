@@ -514,7 +514,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"${BUILT_PRODUCTS_DIR}/LaunchAtLogin_LaunchAtLogin.bundle/Contents/Resources/copy-helper-swiftpm.sh\"\n";
+			shellScript = "if [ \"${AD_HOC_CODE_SIGNING_ALLOWED}\" = \"YES\" ]; then\n  export EXPANDED_CODE_SIGN_IDENTITY_NAME=\"-\"\nfi\n\n\"${BUILT_PRODUCTS_DIR}/LaunchAtLogin_LaunchAtLogin.bundle/Contents/Resources/copy-helper-swiftpm.sh\"\n";
 		};
 		708FF25F28AC12E900F1A1B6 /* Upload debug symbols */ = {
 			isa = PBXShellScriptBuildPhase;
