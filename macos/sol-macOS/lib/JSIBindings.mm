@@ -8,6 +8,12 @@
 #import <EventKit/EKEvent.h>
 #import <EventKit/EKParticipant.h>
 #import <Foundation/Foundation.h>
+#import <RCTAppDelegate.h>
+#import <React/RCTBridge.h>
+#import <React/RCTBridgeModule.h>
+#import <React/RCTEventEmitter.h>
+#import <React/RCTRootView.h>
+#import <React/RCTViewManager.h>
 #import <iostream>
 #ifdef DEBUG
 #import <sol_debug-Swift.h>
