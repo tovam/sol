@@ -15,7 +15,7 @@ export const FUSE_OPTIONS: IFuseOptions<any> = {
   ],
 }
 
-if (!__DEV__) {
+if (!__DEV__ && SentryDSN) {
   Sentry.init({
     dsn: SentryDSN,
     enableAppHangTracking: false,
