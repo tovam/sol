@@ -1,0 +1,93 @@
+name: Build macOS
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build unsigned macOS app
+    runs-on: macos-15
+    timeout-minutes: 60
+
+    env:
+      CI: "true"
+      RCT_NO_LAUNCH_PACKAGER: "1"
+      SENTRY_DISABLE_AUTO_UPLOAD: "true"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Show toolchain and disk space
+        run: |
+          xcodebuild -version
+          df -h /
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install Ruby dependencies
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: 3.2.8
+          bundler-cache: true
+
+      - name: Install JavaScript dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install CocoaPods dependencies
+        run: |
+          cd macos
+          bundle exec pod install
+
+      - name: Check disk space after dependencies
+        run: df -h /
+
+      - name: Build release app without Apple signing
+        run: |
+          xcodebuild \
+            -workspace macos/sol.xcworkspace \
+            -scheme release \
+            -configuration Release \
+            -sdk macosx \
+            -destination "platform=macOS" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            build
+
+      - name: Package application
+        run: |
+          APP_PATH="$RUNNER_TEMP/DerivedData/Build/Products/Release/sol.app"
+          test -d "$APP_PATH"
+          ditto -c -k --sequesterRsrc --keepParent \
+            "$APP_PATH" \
+            Sol-macOS-unsigned.zip
+          du -sh Sol-macOS-unsigned.zip
+          df -h /
+
+      - name: Upload application
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sol-macOS-unsigned
+          path: Sol-macOS-unsigned.zip
+          if-no-files-found: error
+          retention-days: 7
