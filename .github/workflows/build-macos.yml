@@ -50,6 +50,32 @@ jobs:
       - name: Install JavaScript dependencies
         run: bun install --frozen-lockfile
 
+      - name: Verify React Native bundle
+        run: |
+          set +e
+          mkdir -p "$RUNNER_TEMP/bundle-assets"
+          bunx react-native bundle \
+            --entry-file index.js \
+            --platform macos \
+            --dev false \
+            --reset-cache \
+            --bundle-output "$RUNNER_TEMP/main.jsbundle" \
+            --assets-dest "$RUNNER_TEMP/bundle-assets" \
+            2>&1 | tee "$RUNNER_TEMP/react-native-bundle.log"
+
+          bundle_status=${PIPESTATUS[0]}
+          if [ "$bundle_status" -ne 0 ]; then
+            tail -n 30 "$RUNNER_TEMP/react-native-bundle.log" \
+              | while IFS= read -r line; do
+                  line=${line//'%'/'%25'}
+                  line=${line//$'\r'/'%0D'}
+                  line=${line//$'\n'/'%0A'}
+                  echo "::error::$line"
+                done
+          fi
+
+          exit "$bundle_status"
+
       - name: Install CocoaPods dependencies
         run: |
           cd macos
