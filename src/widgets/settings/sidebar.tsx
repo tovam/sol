@@ -47,6 +47,12 @@ export const Sidebar = ({
 			/>
 			<SelectableButton
 				icon={Assets.smallLogo}
+				selected={selected === "DAILYMOTION"}
+				onPress={() => setSelected("DAILYMOTION")}
+				title="Dailymotion"
+			/>
+			<SelectableButton
+				icon={Assets.smallLogo}
 				className="items-center "
 				selected={selected === "ABOUT"}
 				onPress={() => setSelected("ABOUT")}

@@ -2,6 +2,11 @@ import * as Sentry from "@sentry/react-native";
 import { Assets } from "assets";
 import { Parser } from "expr-eval";
 import { CONSTANTS } from "lib/constants";
+import {
+	type DailymotionStream,
+	extractDailymotionVideoID,
+	normalizeDailymotionStreams,
+} from "lib/dailymotion";
 import { fetchPublicIPAddress } from "lib/publicIp";
 import { solNative } from "lib/SolNative";
 import {
@@ -106,7 +111,8 @@ export type SettingsSection =
 	| "ITEMS"
 	| "SCRIPTS"
 	| "CALENDARS"
-	| "AI";
+	| "AI"
+	| "DAILYMOTION";
 
 const minisearch = new MiniSearch({
 	fields: ["name", "localizedName", "alias", "type"],
@@ -299,6 +305,9 @@ export const createUIStore = (root: IRootStore) => {
 						src.hasDismissedGettingStarted ?? false;
 					store.hyperKeyEnabled = src.hyperKeyEnabled ?? false;
 					store.disabledItemIds = src.disabledItemIds ?? [];
+					store.dailymotionStreams = normalizeDailymotionStreams(
+						src.dailymotionStreams,
+					);
 
 					// If JSON had portable data, user completed onboarding
 					if (hasPortableData) {
@@ -389,6 +398,10 @@ export const createUIStore = (root: IRootStore) => {
 					store.customItems = jsonConfig.customItems;
 				if (jsonConfig.disabledItemIds !== undefined)
 					store.disabledItemIds = jsonConfig.disabledItemIds;
+				if (jsonConfig.dailymotionStreams !== undefined)
+					store.dailymotionStreams = normalizeDailymotionStreams(
+						jsonConfig.dailymotionStreams,
+					);
 			});
 			// Re-apply native side effects
 			solNative.setLaunchAtLogin(store.launchAtLogin);
@@ -431,6 +444,7 @@ export const createUIStore = (root: IRootStore) => {
 		events: [] as INativeEvent[],
 		customItems: [] as Item[],
 		disabledItemIds: [] as string[],
+		dailymotionStreams: [] as DailymotionStream[],
 		editingCustomItem: null as Item | null,
 		apps: [] as Item[],
 		isLoading: false,
@@ -616,6 +630,29 @@ export const createUIStore = (root: IRootStore) => {
 		},
 		setSettingsSection: (section: SettingsSection) => {
 			store.settingsSection = section;
+		},
+		saveDailymotionStream: (name: string, url: string) => {
+			const videoID = extractDailymotionVideoID(url);
+			if (!videoID) return false;
+			const stream: DailymotionStream = {
+				id: videoID,
+				name: name.trim() || `Dailymotion ${videoID}`,
+				url: url.trim(),
+			};
+			const existingIndex = store.dailymotionStreams.findIndex(
+				(candidate) => candidate.id === videoID,
+			);
+			if (existingIndex >= 0) {
+				store.dailymotionStreams[existingIndex] = stream;
+			} else {
+				store.dailymotionStreams.push(stream);
+			}
+			return true;
+		},
+		removeDailymotionStream: (id: string) => {
+			store.dailymotionStreams = store.dailymotionStreams.filter(
+				(stream) => stream.id !== id,
+			);
 		},
 		setSelectedIndex: (idx: number) => {
 			store.selectedIndex = idx;

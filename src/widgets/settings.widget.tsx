@@ -6,6 +6,7 @@ import { useStore } from "store";
 import { About } from "./settings/about";
 import { AI } from "./settings/ai";
 import { Calendars } from "./settings/calendars";
+import { DailymotionSettings } from "./settings/dailymotion";
 import { General } from "./settings/general";
 import { Items } from "./settings/items";
 import { Scripts } from "./settings/scripts";
@@ -26,6 +27,7 @@ export const SettingsWidget: FC = observer(() => {
 				{selected === "SCRIPTS" && <Scripts />}
 				{selected === "CALENDARS" && <Calendars />}
 				{selected === "AI" && <AI />}
+				{selected === "DAILYMOTION" && <DailymotionSettings />}
 				{selected === "ABOUT" && <About />}
 			</View>
 			{showKeyboardRecorder && (
