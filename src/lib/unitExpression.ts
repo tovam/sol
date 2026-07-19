@@ -65,6 +65,9 @@ const UNITS: Record<string, Quantity> = {
 	min: quantity(60, TIME),
 	h: quantity(3_600, TIME),
 	d: quantity(86_400, TIME),
+	wk: quantity(604_800, TIME),
+	mo: quantity(2_629_800, TIME),
+	yr: quantity(31_557_600, TIME),
 
 	// Electric current
 	A: quantity(1, CURRENT),
@@ -161,6 +164,12 @@ const UNIT_ALIASES: Record<string, string> = {
 	hours: "h",
 	day: "d",
 	days: "d",
+	week: "wk",
+	weeks: "wk",
+	month: "mo",
+	months: "mo",
+	year: "yr",
+	years: "yr",
 	liter: "L",
 	liters: "L",
 	litre: "L",
@@ -303,8 +312,11 @@ function tokenize(input: string): Token[] {
 
 class QuantityParser {
 	private index = 0;
+	private readonly tokens: Token[];
 
-	constructor(private readonly tokens: Token[]) {}
+	constructor(tokens: Token[]) {
+		this.tokens = tokens;
+	}
 
 	parse() {
 		const result = this.parseAdditive();
@@ -442,7 +454,11 @@ const AUTOMATIC_UNIT_GROUPS: AutomaticUnitGroup[] = [
 		units: ["km", "m", "cm", "mm", "um", "nm"],
 		fallback: "m",
 	},
-	{ dimensions: TIME, units: ["d", "h", "min", "s", "ms"], fallback: "s" },
+	{
+		dimensions: TIME,
+		units: ["yr", "mo", "wk", "d", "h", "min", "s", "ms"],
+		fallback: "s",
+	},
 	{ dimensions: CURRENT, units: ["A", "mA"], fallback: "A" },
 	{
 		dimensions: derivedDimensions(0, 3, 0),
