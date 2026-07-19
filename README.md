@@ -23,6 +23,19 @@ brew install --cask sol
 
 Or manually download the latest [release](https://github.com/ospfranco/sol/tree/main/releases).
 
+### Install the latest locally signed development build
+
+The development release can be downloaded, verified, signed with a persistent
+certificate in your login keychain, installed, and launched with:
+
+```sh
+./scripts/install-latest-local.sh
+```
+
+The first run creates the `Sol Local Signing` identity and may ask you to trust
+it. Calendar and Accessibility must then be authorized one final time. Later
+builds installed with the same script keep the same local signing identity.
+
 ## Discord
 
 Join the Discord
