@@ -2,12 +2,6 @@ name: Build macOS
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
 
 permissions:
   contents: read
@@ -173,7 +167,7 @@ jobs:
 
   publish-development-release:
     name: Publish public development release
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -195,7 +189,7 @@ jobs:
           sha256sum Sol-macOS-unsigned.zip > Sol-macOS-unsigned.zip.sha256
 
           printf '%s\n' \
-            'Automated unsigned macOS build from the `main` branch.' \
+            'Manually triggered unsigned macOS build from the `main` branch.' \
             '' \
             "Commit: \`${GITHUB_SHA}\`" \
             '' \
