@@ -289,6 +289,10 @@ export const SearchWidget: FC = observer(() => {
 	const selectedIndex = store.ui.selectedIndex;
 	const listRef = useRef<LegendListRef | null>(null);
 	const items = store.ui.searchItems;
+	const temporaryActionLabel =
+		store.ui.temporaryResult?.kind === "text"
+			? store.ui.temporaryResult.actionLabel
+			: undefined;
 	const [listViewportHeight, setListViewportHeight] = useState(0);
 	const [listContentHeight, setListContentHeight] = useState(0);
 	const [listOffset, setListOffset] = useState(0);
@@ -384,7 +388,7 @@ export const SearchWidget: FC = observer(() => {
 						<View className="mx-2" />
 						<Text className="text-xs darker-text mr-1">
 							{store.ui.currentItem?.type === ItemType.TEMPORARY_RESULT
-								? "Copy"
+								? (temporaryActionLabel ?? "Copy")
 								: items.length
 									? "Open"
 									: "Search the web"}

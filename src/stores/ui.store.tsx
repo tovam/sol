@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/react-native";
 import { Assets } from "assets";
 import { Parser } from "expr-eval";
 import { CONSTANTS } from "lib/constants";
+import { fetchPublicIPAddress } from "lib/publicIp";
 import { solNative } from "lib/SolNative";
 import {
 	defaultShortcuts,
@@ -712,6 +713,46 @@ export const createUIStore = (root: IRootStore) => {
 			}
 
 			if (store.focusedWidget === Widget.SEARCH) {
+				if (store.query.trim().toLowerCase() === "ip") {
+					const querySnapshot = store.query;
+					store.temporaryResult = createTextTemporaryResult(
+						"Fetching…",
+						"Public IP",
+						{ canCopy: false, actionLabel: "Loading" },
+					);
+					void fetchPublicIPAddress()
+						.then((ip) => {
+							if (
+								store.focusedWidget === Widget.SEARCH &&
+								store.query === querySnapshot
+							) {
+								runInAction(() => {
+									store.temporaryResult = createTextTemporaryResult(
+										ip,
+										"Public IP",
+										{ copyValue: ip },
+									);
+								});
+							}
+						})
+						.catch((error) => {
+							console.log("Public IP request failed", error);
+							if (
+								store.focusedWidget === Widget.SEARCH &&
+								store.query === querySnapshot
+							) {
+								runInAction(() => {
+									store.temporaryResult = createTextTemporaryResult(
+										"Unavailable",
+										"Public IP",
+										{ canCopy: false, actionLabel: "Unavailable" },
+									);
+								});
+							}
+						});
+					return;
+				}
+
 				const timezoneResult = parseTimezoneConversion(store.query);
 				if (timezoneResult != null) {
 					store.temporaryResult = timezoneResult;
@@ -759,13 +800,6 @@ export const createUIStore = (root: IRootStore) => {
 					}
 				} catch (_) {
 					store.temporaryResult = null;
-				}
-
-				if (query === "ip") {
-					const info = solNative.getWifiInfo();
-					if (info.ip) {
-						store.temporaryResult = createTextTemporaryResult(info.ip, "IP");
-					}
 				}
 			}
 		},

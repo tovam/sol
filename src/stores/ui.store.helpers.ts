@@ -9,6 +9,9 @@ export type TemporaryResult =
 			kind: "text";
 			value: string;
 			secondary?: string;
+			copyValue?: string;
+			canCopy?: boolean;
+			actionLabel?: string;
 	  }
 	| {
 			kind: "comparison";
@@ -165,11 +168,16 @@ function formatConvertedValue(value: number) {
 export function createTextTemporaryResult(
 	value: string,
 	secondary?: string,
+	options?: Pick<
+		Extract<TemporaryResult, { kind: "text" }>,
+		"copyValue" | "canCopy" | "actionLabel"
+	>,
 ): TemporaryResult {
 	return {
 		kind: "text",
 		value,
 		secondary,
+		...options,
 	};
 }
 
@@ -478,6 +486,7 @@ export async function fetchFlightInfoFromWeb(
 
 export function formatTemporaryResultForClipboard(result: TemporaryResult) {
 	if (result.kind === "text") {
+		if (result.copyValue != null) return result.copyValue;
 		return result.secondary
 			? `${result.value} (${result.secondary})`
 			: result.value;

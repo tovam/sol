@@ -418,6 +418,12 @@ export const createKeystrokeStore = (root: IRootStore) => {
 								item.type === ItemType.TEMPORARY_RESULT &&
 								root.ui.temporaryResult
 							) {
+								if (
+									root.ui.temporaryResult.kind === "text" &&
+									root.ui.temporaryResult.canCopy === false
+								) {
+									return;
+								}
 								Clipboard.setString(
 									formatTemporaryResultForClipboard(root.ui.temporaryResult),
 								);
