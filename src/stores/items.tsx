@@ -552,6 +552,18 @@ export function createBaseItems(store: IRootStore) {
 			},
 		},
 		{
+			id: "yt_dlp",
+			icon: "⬇️",
+			name: "Download with yt-dlp",
+			alias: "youtube video audio mp3 download télécharger",
+			type: ItemType.CONFIGURATION,
+			callback: () => {
+				store.ui.setQuery("");
+				store.ui.focusWidget(Widget.YTDLP);
+			},
+			preventClose: true,
+		},
+		{
 			id: "downloads_folder",
 			IconComponent: (...props: any[]) => (
 				<FileIcon {...props} url="~/Downloads" className="w-6 h-6" />

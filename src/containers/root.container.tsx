@@ -21,6 +21,7 @@ import {SettingsWidget} from 'widgets/settings.widget'
 import {TimerWidget} from 'widgets/timer.widget'
 import {TmuxCheatsheetWidget} from 'widgets/tmuxCheatsheet.widget'
 import {TranslationWidget} from 'widgets/translation.widget'
+import {YtDlpWidget} from 'widgets/ytDlp.widget'
 
 export const RootContainer = observer(() => {
   const store = useStore()
@@ -100,6 +101,14 @@ export const RootContainer = observer(() => {
     subWindow = (
       <View className="fullWindow">
         <QRCodeWidget />
+      </View>
+    )
+  }
+
+  if (widget === Widget.YTDLP) {
+    subWindow = (
+      <View className="fullWindow">
+        <YtDlpWidget />
       </View>
     )
   }

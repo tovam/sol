@@ -75,6 +75,7 @@ export enum Widget {
 	TMUX_CHEATSHEET = "TMUX_CHEATSHEET",
 	PASSWORD_GENERATOR = "PASSWORD_GENERATOR",
 	QR_CODE = "QR_CODE",
+	YTDLP = "YTDLP",
 }
 
 export enum ItemType {
