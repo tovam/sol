@@ -29,8 +29,8 @@ export const AIChatWidget = observer(() => {
 
 	const messages = store.ai.conversation;
 
-	const clearConversation = () => {
-		store.ai.setConversation([]);
+	const newConversation = () => {
+		store.ai.startNewConversation();
 		setError("");
 	};
 
@@ -41,7 +41,8 @@ export const AIChatWidget = observer(() => {
 			...messages,
 			createMessage("user", content),
 		];
-		store.ai.setConversation(messagesWithQuestion);
+		const conversationID =
+			store.ai.saveCurrentConversation(messagesWithQuestion);
 		setInput("");
 		setError("");
 		setLoading(true);
@@ -57,7 +58,9 @@ export const AIChatWidget = observer(() => {
 				...messagesWithQuestion,
 				createMessage("assistant", answer),
 			];
-			store.ai.setConversation(completedMessages);
+			if (conversationID) {
+				store.ai.updateConversation(conversationID, completedMessages);
+			}
 		} catch (requestError) {
 			setError(
 				requestError instanceof Error
@@ -103,6 +106,14 @@ export const AIChatWidget = observer(() => {
 				<AIProviderModelControls compact />
 				<TouchableOpacity
 					className="px-2.5 py-1.5 rounded-lg subBg border border-color"
+					onPress={() => store.ui.focusWidget(Widget.AI_HISTORY)}
+				>
+					<Text className="text text-xs">
+						History ({store.ai.conversations.length})
+					</Text>
+				</TouchableOpacity>
+				<TouchableOpacity
+					className="px-2.5 py-1.5 rounded-lg subBg border border-color"
 					onPress={() => store.ui.showSettings("AI")}
 				>
 					<Text className="text text-xs">Settings</Text>
@@ -112,7 +123,7 @@ export const AIChatWidget = observer(() => {
 					className={`px-2.5 py-1.5 rounded-lg subBg border border-color ${
 						loading ? "opacity-50" : ""
 					}`}
-					onPress={clearConversation}
+					onPress={newConversation}
 				>
 					<Text className="text text-xs">New</Text>
 				</TouchableOpacity>

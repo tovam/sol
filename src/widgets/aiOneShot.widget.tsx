@@ -83,6 +83,12 @@ export const AIOneShotWidget = observer(() => {
 				<AIProviderModelControls compact />
 				<TouchableOpacity
 					className="px-2.5 py-1.5 rounded-lg subBg border border-color"
+					onPress={() => store.ui.focusWidget(Widget.AI_HISTORY)}
+				>
+					<Text className="text text-xs">History</Text>
+				</TouchableOpacity>
+				<TouchableOpacity
+					className="px-2.5 py-1.5 rounded-lg subBg border border-color"
 					onPress={() => store.ui.showSettings("AI")}
 				>
 					<Text className="text text-xs">Settings</Text>

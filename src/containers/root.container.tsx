@@ -6,6 +6,7 @@ import {Text, TouchableOpacity, View} from 'react-native'
 import {useStore} from 'store'
 import {SearchTab, Widget} from 'stores/ui.store'
 import {AIChatWidget} from 'widgets/aiChat.widget'
+import {AIHistoryWidget} from 'widgets/aiHistory.widget'
 import {AIOneShotWidget} from 'widgets/aiOneShot.widget'
 import {ClipboardWidget} from 'widgets/clipboard.widget'
 import {ColorPickerWidget} from 'widgets/colorPicker.widget'
@@ -139,6 +140,14 @@ export const RootContainer = observer(() => {
     subWindow = (
       <View className="fullWindow">
         <AIChatWidget />
+      </View>
+    )
+  }
+
+  if (widget === Widget.AI_HISTORY) {
+    subWindow = (
+      <View className="fullWindow">
+        <AIHistoryWidget />
       </View>
     )
   }

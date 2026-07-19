@@ -605,6 +605,19 @@ export function createBaseItems(store: IRootStore) {
 			preventClose: true,
 		},
 		{
+			id: "ai_conversation_history",
+			icon: "↺",
+			name: "AI Conversation History",
+			alias:
+				"ai ia conversations history historique chatgpt openai openwebui assistant",
+			type: ItemType.CONFIGURATION,
+			callback: () => {
+				store.ui.setQuery("");
+				store.ui.focusWidget(Widget.AI_HISTORY);
+			},
+			preventClose: true,
+		},
+		{
 			id: "dailymotion_player",
 			icon: "▶️",
 			name: "Dailymotion Floating Player",

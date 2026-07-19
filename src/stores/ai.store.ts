@@ -19,6 +19,7 @@ import {
 	restoreOpenAILifetimeCost,
 } from "lib/openaiPricing";
 import { autorun, makeAutoObservable, runInAction, toJS } from "mobx";
+import { v4 as uuidv4 } from "uuid";
 import { readPersistedStore, writePersistedStore } from "./persisted-config";
 
 type PersistedProviderSettings = Pick<
@@ -35,8 +36,22 @@ type PersistedAISettings = {
 type PersistedAIState = {
 	settings?: Partial<PersistedAISettings>;
 	conversation?: unknown;
+	conversations?: unknown;
+	activeConversationID?: unknown;
 	openAILifetimeCost?: unknown;
 };
+
+export type AIConversation = {
+	id: string;
+	title: string;
+	messages: AIMessage[];
+	createdAt: number;
+	updatedAt: number;
+	provider?: AIProvider;
+	model?: string;
+};
+
+const CONVERSATION_TITLE_LIMIT = 64;
 
 const cloneDefaultSettings = (): AISettings => ({
 	provider: DEFAULT_AI_SETTINGS.provider,
@@ -114,6 +129,75 @@ function normalizeConversation(value: unknown): AIMessage[] {
 	});
 }
 
+function conversationTitle(messages: AIMessage[]) {
+	const firstPrompt = messages.find((message) => message.role === "user")?.content;
+	const title = firstPrompt?.replace(/\s+/g, " ").trim() || "Conversation";
+	return title.length > CONVERSATION_TITLE_LIMIT
+		? `${title.slice(0, CONVERSATION_TITLE_LIMIT - 1)}…`
+		: title;
+}
+
+function cloneConversation(conversation: AIConversation): AIConversation {
+	return {
+		...conversation,
+		messages: conversation.messages.map((message) => ({ ...message })),
+	};
+}
+
+function normalizeConversations(value: unknown): AIConversation[] {
+	if (!Array.isArray(value)) return [];
+	const usedIDs = new Set<string>();
+	const now = Date.now();
+
+	return value
+		.flatMap((candidate) => {
+			if (typeof candidate !== "object" || candidate === null) return [];
+			const record = candidate as Record<string, unknown>;
+			const messages = normalizeConversation(record.messages);
+			if (messages.length === 0) return [];
+
+			let id =
+				typeof record.id === "string" && record.id.trim()
+					? record.id
+					: uuidv4();
+			while (usedIDs.has(id)) id = uuidv4();
+			usedIDs.add(id);
+
+			const createdAt =
+				typeof record.createdAt === "number" &&
+				Number.isFinite(record.createdAt)
+					? record.createdAt
+					: now;
+			const updatedAt =
+				typeof record.updatedAt === "number" &&
+				Number.isFinite(record.updatedAt)
+					? record.updatedAt
+					: createdAt;
+			const provider =
+				record.provider === "openai" || record.provider === "openwebui"
+					? record.provider
+					: undefined;
+
+			return [
+				{
+					id,
+					title:
+						typeof record.title === "string" && record.title.trim()
+							? record.title.trim()
+							: conversationTitle(messages),
+					messages,
+					createdAt,
+					updatedAt,
+					...(provider ? { provider } : {}),
+					...(typeof record.model === "string"
+						? { model: record.model }
+						: {}),
+				},
+			];
+		})
+		.sort((left, right) => right.updatedAt - left.updatedAt);
+}
+
 export function validateAIProviderSettings(
 	provider: AIProvider,
 	settings: AIProviderSettings,
@@ -142,7 +226,8 @@ export const createAIStore = () => {
 		if (!store.hasPersistedSettings && !store.secretsLoaded) return;
 		writePersistedStore("ai", {
 			settings: persistentSettings(store.settings),
-			conversation: store.conversation.map((message) => ({ ...message })),
+			conversations: store.conversations.map(cloneConversation),
+			activeConversationID: store.activeConversationID,
 			openAILifetimeCost: toJS(store.openAILifetimeCost),
 		});
 	};
@@ -156,7 +241,8 @@ export const createAIStore = () => {
 		secretsLoading: false,
 		secretsAttempted: false,
 		secretsError: "",
-		conversation: [] as AIMessage[],
+		conversations: [] as AIConversation[],
+		activeConversationID: null as string | null,
 		openAILifetimeCost: createEmptyOpenAILifetimeCost(),
 		modelsByProvider: {
 			openai: [] as AIModelInfo[],
@@ -173,6 +259,18 @@ export const createAIStore = () => {
 
 		get currentSettings() {
 			return store.settings[store.settings.provider];
+		},
+
+		get activeConversation(): AIConversation | null {
+			return (
+				store.conversations.find(
+					(conversation) => conversation.id === store.activeConversationID,
+				) ?? null
+			);
+		},
+
+		get conversation(): AIMessage[] {
+			return store.activeConversation?.messages ?? [];
 		},
 
 		get currentModelOptions(): AIModelInfo[] {
@@ -231,9 +329,99 @@ export const createAIStore = () => {
 			store.updateProviderSettings(provider, "model", model);
 		},
 
-		setConversation(messages: AIMessage[]) {
-			store.conversation = messages.map((message) => ({ ...message }));
+		startNewConversation() {
+			store.activeConversationID = null;
 			store.hasPersistedSettings = true;
+		},
+
+		openConversation(conversationID: string) {
+			if (
+				!store.conversations.some(
+					(conversation) => conversation.id === conversationID,
+				)
+			) {
+				return false;
+			}
+			store.activeConversationID = conversationID;
+			store.hasPersistedSettings = true;
+			return true;
+		},
+
+		saveCurrentConversation(messages: AIMessage[]) {
+			const copiedMessages = messages.map((message) => ({ ...message }));
+			if (copiedMessages.length === 0) {
+				store.startNewConversation();
+				return null;
+			}
+
+			const now = Date.now();
+			const provider = store.settings.provider;
+			const model = store.settings[provider].model;
+			const existing = store.activeConversation;
+			const conversation: AIConversation = existing
+				? {
+						...existing,
+						title: conversationTitle(copiedMessages),
+						messages: copiedMessages,
+						updatedAt: now,
+						provider,
+						model,
+					}
+				: {
+						id: uuidv4(),
+						title: conversationTitle(copiedMessages),
+						messages: copiedMessages,
+						createdAt: now,
+						updatedAt: now,
+						provider,
+						model,
+					};
+
+			store.conversations = [
+				conversation,
+				...store.conversations.filter(
+					(candidate) => candidate.id !== conversation.id,
+				),
+			];
+			store.activeConversationID = conversation.id;
+			store.hasPersistedSettings = true;
+			return conversation.id;
+		},
+
+		updateConversation(conversationID: string, messages: AIMessage[]) {
+			const existing = store.conversations.find(
+				(conversation) => conversation.id === conversationID,
+			);
+			if (!existing) return false;
+
+			const copiedMessages = messages.map((message) => ({ ...message }));
+			const updated: AIConversation = {
+				...existing,
+				title: conversationTitle(copiedMessages),
+				messages: copiedMessages,
+				updatedAt: Date.now(),
+			};
+			store.conversations = [
+				updated,
+				...store.conversations.filter(
+					(conversation) => conversation.id !== conversationID,
+				),
+			];
+			store.hasPersistedSettings = true;
+			return true;
+		},
+
+		deleteConversation(conversationID: string) {
+			const nextConversations = store.conversations.filter(
+				(conversation) => conversation.id !== conversationID,
+			);
+			if (nextConversations.length === store.conversations.length) return false;
+			store.conversations = nextConversations;
+			if (store.activeConversationID === conversationID) {
+				store.activeConversationID = nextConversations[0]?.id ?? null;
+			}
+			store.hasPersistedSettings = true;
+			return true;
 		},
 
 		ensureSecretsLoaded: async (force = false) => {
@@ -419,14 +607,45 @@ export const createAIStore = () => {
 					await readPersistedStore<PersistedAIState>("ai");
 				if (disposed) return;
 				runInAction(() => {
-					store.settings = mergePersistedSettings(
+					const settings = mergePersistedSettings(
 						cloneDefaultSettings(),
 						persistedState?.settings,
 					);
-					store.hasPersistedSettings = persistedState?.settings != null;
-					store.conversation = normalizeConversation(
+					let conversations = normalizeConversations(
+						persistedState?.conversations,
+					);
+					const legacyConversation = normalizeConversation(
 						persistedState?.conversation,
 					);
+					if (conversations.length === 0 && legacyConversation.length > 0) {
+						const now = Date.now();
+						conversations = [
+							{
+								id: uuidv4(),
+								title: conversationTitle(legacyConversation),
+								messages: legacyConversation,
+								createdAt: now,
+								updatedAt: now,
+								provider: settings.provider,
+								model: settings[settings.provider].model,
+							},
+						];
+					}
+					const persistedActiveID = persistedState?.activeConversationID;
+					const activeConversationID =
+						typeof persistedActiveID === "string" &&
+						conversations.some(
+							(conversation) => conversation.id === persistedActiveID,
+						)
+							? persistedActiveID
+							: persistedActiveID === null
+								? null
+								: (conversations[0]?.id ?? null);
+
+					store.settings = settings;
+					store.hasPersistedSettings = persistedState != null;
+					store.conversations = conversations;
+					store.activeConversationID = activeConversationID;
 					store.openAILifetimeCost = restoreOpenAILifetimeCost(
 						persistedState?.openAILifetimeCost,
 					);
