@@ -33,6 +33,13 @@ const quantity = (value: number, dimensions: Dimensions): Quantity => ({
 	dimensions,
 });
 
+export const CALCULATOR_CONSTANT_VALUES = {
+	pi: Math.PI,
+	e: Math.E,
+} as const;
+
+const SPEED_OF_LIGHT_IN_METERS_PER_SECOND = 299_792_458;
+
 const derivedDimensions = (
 	mass: number,
 	length: number,
@@ -120,6 +127,15 @@ const UNITS: Record<string, Quantity> = {
 	MW: quantity(1_000_000, derivedDimensions(1, 2, -3)),
 };
 
+const EXPRESSION_CONSTANTS: Record<string, Quantity> = {
+	pi: quantity(CALCULATOR_CONSTANT_VALUES.pi, DIMENSIONLESS),
+	e: quantity(CALCULATOR_CONSTANT_VALUES.e, DIMENSIONLESS),
+	c: quantity(
+		SPEED_OF_LIGHT_IN_METERS_PER_SECOND,
+		derivedDimensions(0, 1, -1),
+	),
+};
+
 const UNIT_ALIASES: Record<string, string> = {
 	meter: "m",
 	meters: "m",
@@ -171,6 +187,7 @@ const UNIT_ALIASES: Record<string, string> = {
 	weeks: "wk",
 	month: "mo",
 	months: "mo",
+	y: "yr",
 	year: "yr",
 	years: "yr",
 	liter: "L",
@@ -246,6 +263,11 @@ function isDimensionless(dimensions: Dimensions) {
 }
 
 function resolveUnit(rawUnit: string): Quantity {
+	const constant = EXPRESSION_CONSTANTS[rawUnit];
+	if (constant) {
+		return constant;
+	}
+
 	const direct = UNITS[rawUnit];
 	if (direct) {
 		return direct;
@@ -460,6 +482,13 @@ function parseQuantity(input: string) {
 	return new QuantityParser(tokenize(input)).parse();
 }
 
+function containsExpressionConstant(input: string) {
+	return tokenize(input).some(
+		(token) =>
+			token.type === "unit" && EXPRESSION_CONSTANTS[token.value] != null,
+	);
+}
+
 type AutomaticUnitGroup = {
 	dimensions: Dimensions;
 	units: string[];
@@ -599,7 +628,15 @@ export function evaluateUnitExpression(
 
 	try {
 		const source = parseQuantity(expression);
-		if (!hasExplicitTarget && isDimensionless(source.dimensions)) return null;
+		if (!hasExplicitTarget && isDimensionless(source.dimensions)) {
+			if (!containsExpressionConstant(expression)) return null;
+			return {
+				expression,
+				targetUnit: "",
+				value: source.value,
+				formattedValue: formatResult(source.value),
+			};
+		}
 		const inferredTarget = hasExplicitTarget ? null : inferTargetUnit(source);
 		const resolvedTargetUnit = inferredTarget?.unit ?? targetUnit;
 		const target = inferredTarget?.quantity ?? parseQuantity(targetUnit);

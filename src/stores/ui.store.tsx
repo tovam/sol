@@ -15,6 +15,7 @@ import {
 	normalizeShortcutMap,
 } from "lib/shortcuts";
 import { googleTranslate } from "lib/translator";
+import { CALCULATOR_CONSTANT_VALUES } from "lib/unitExpression";
 import MiniSearch from "minisearch";
 import {
 	autorun,
@@ -1003,7 +1004,10 @@ export const createUIStore = (root: IRootStore) => {
 				}
 
 				try {
-					const res = exprParser.evaluate(store.query);
+					const res = exprParser.evaluate(
+						store.query,
+						CALCULATOR_CONSTANT_VALUES,
+					);
 					if (typeof res === "number" && !Number.isNaN(res)) {
 						store.temporaryResult = createTextTemporaryResult(
 							formatExpressionResult(res),

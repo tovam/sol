@@ -121,6 +121,10 @@ const UNIT_ALIASES: Record<string, string> = {
 	hours: "h",
 	day: "d",
 	days: "d",
+	y: "year",
+	yr: "year",
+	year: "year",
+	years: "year",
 	celsius: "C",
 	fahrenheit: "F",
 	kelvin: "K",
@@ -136,13 +140,14 @@ function offsetMinutesToUtcZone(offsetMinutes: number) {
 }
 
 function normalizeUnit(rawUnit: string) {
-	const normalized = rawUnit.trim().toLowerCase().replace(/\s+/g, "");
-	if (UNIT_ALIASES[normalized]) {
-		return UNIT_ALIASES[normalized];
+	const compact = rawUnit.trim().replace(/\s+/g, "");
+	if (compact === "C" || compact === "F" || compact === "K") {
+		return compact;
 	}
 
-	if (normalized === "c") {
-		return "C";
+	const normalized = compact.toLowerCase();
+	if (UNIT_ALIASES[normalized]) {
+		return UNIT_ALIASES[normalized];
 	}
 
 	if (normalized === "f") {
@@ -307,6 +312,10 @@ export function parseUnitConversion(query: string): TemporaryResult | null {
 	const normalized = query.trim().replace(/,/g, "").replace(/\s+/g, " ");
 	const expressionResult = evaluateUnitExpression(query);
 	if (expressionResult != null) {
+		const suffix = expressionResult.targetUnit
+			? ` ${expressionResult.targetUnit}`
+			: "";
+		const formattedResult = `${expressionResult.formattedValue}${suffix}`;
 		return {
 			kind: "comparison",
 			left: {
@@ -315,9 +324,9 @@ export function parseUnitConversion(query: string): TemporaryResult | null {
 			},
 			right: {
 				label: "",
-				value: `${expressionResult.formattedValue} ${expressionResult.targetUnit}`,
+				value: formattedResult,
 			},
-			copyValue: `${expressionResult.formattedValue} ${expressionResult.targetUnit}`,
+			copyValue: formattedResult,
 			layout: "inline",
 		};
 	}
