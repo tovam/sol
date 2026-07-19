@@ -1,13 +1,10 @@
 import { BackButton } from "components/BackButton";
 import {
 	type AIMessage,
-	type AIProvider,
-	type AIProviderSettings,
 	type AISettings,
 	DEFAULT_AI_SETTINGS,
 	loadAISettings,
 	requestAI,
-	saveAISettings,
 } from "lib/ai";
 import { solNative } from "lib/SolNative";
 import { type FC, useEffect, useRef, useState } from "react";
@@ -58,7 +55,6 @@ export const AIChatWidget: FC = () => {
 	const [input, setInput] = useState("");
 	const [error, setError] = useState("");
 	const [loading, setLoading] = useState(false);
-	const [showSettings, setShowSettings] = useState(false);
 
 	useEffect(() => {
 		void loadAISettings().then(setSettings);
@@ -90,23 +86,6 @@ export const AIChatWidget: FC = () => {
 		);
 	};
 
-	const selectProvider = (provider: AIProvider) => {
-		const nextSettings = { ...settings, provider };
-		setSettings(nextSettings);
-		void saveAISettings(nextSettings);
-		setError("");
-	};
-
-	const updateCurrent = (key: keyof AIProviderSettings, value: string) => {
-		setSettings((previous) => ({
-			...previous,
-			[previous.provider]: {
-				...previous[previous.provider],
-				[key]: value,
-			},
-		}));
-	};
-
 	const clearConversation = () => {
 		setMessages([]);
 		setError("");
@@ -118,17 +97,14 @@ export const AIChatWidget: FC = () => {
 		if (!content || loading) return;
 		if (!current.baseURL.trim()) {
 			setError("Enter the API server URL in Settings");
-			setShowSettings(true);
 			return;
 		}
 		if (!current.model.trim()) {
 			setError("Enter a model name in Settings");
-			setShowSettings(true);
 			return;
 		}
 		if (settings.provider === "openai" && !current.apiKey.trim()) {
 			setError("Enter your OpenAI API key in Settings");
-			setShowSettings(true);
 			return;
 		}
 
@@ -142,10 +118,7 @@ export const AIChatWidget: FC = () => {
 		setLoading(true);
 
 		try {
-			await Promise.all([
-				saveAISettings(settings),
-				persistConversation(messagesWithQuestion),
-			]);
+			await persistConversation(messagesWithQuestion);
 			const answer = await requestAI(
 				settings.provider,
 				current,
@@ -188,9 +161,9 @@ export const AIChatWidget: FC = () => {
 				</View>
 				<TouchableOpacity
 					className="px-3 py-2 rounded-lg subBg border border-color"
-					onPress={() => setShowSettings((visible) => !visible)}
+					onPress={() => store.ui.showSettings("AI")}
 				>
-					<Text className="text text-sm">Settings</Text>
+					<Text className="text text-sm">AI Settings</Text>
 				</TouchableOpacity>
 				<TouchableOpacity
 					className="px-3 py-2 rounded-lg subBg border border-color"
@@ -199,61 +172,6 @@ export const AIChatWidget: FC = () => {
 					<Text className="text text-sm">New conversation</Text>
 				</TouchableOpacity>
 			</View>
-
-			{showSettings && (
-				<View className="px-5 py-3 gap-3 border-b border-color subBg">
-					<View className="flex-row gap-2">
-						{(["openai", "openwebui"] as const).map((provider) => (
-							<TouchableOpacity
-								key={provider}
-								className={`px-4 py-2 rounded-lg border ${
-									settings.provider === provider
-										? "bg-accent-strong border-transparent"
-										: "border-color"
-								}`}
-								onPress={() => selectProvider(provider)}
-							>
-								<Text
-									className={
-										settings.provider === provider ? "text-white" : "text"
-									}
-								>
-									{provider === "openai" ? "OpenAI" : "OpenWebUI"}
-								</Text>
-							</TouchableOpacity>
-						))}
-						<TextInput
-							enableFocusRing={false}
-							className="flex-[2] text-sm text px-3 border border-color rounded-lg"
-							value={current.baseURL}
-							onChangeText={(value) => updateCurrent("baseURL", value)}
-							placeholder="API server"
-						/>
-						<TextInput
-							enableFocusRing={false}
-							className="flex-1 text-sm text px-3 border border-color rounded-lg"
-							value={current.model}
-							onChangeText={(value) => updateCurrent("model", value)}
-							placeholder="Model"
-						/>
-						<TextInput
-							enableFocusRing={false}
-							secureTextEntry
-							className="flex-1 text-sm text px-3 border border-color rounded-lg"
-							value={current.apiKey}
-							onChangeText={(value) => updateCurrent("apiKey", value)}
-							placeholder={
-								settings.provider === "openai"
-									? "API key"
-									: "API key (optional)"
-							}
-						/>
-					</View>
-					<Text className="text-xs darker-text">
-						Settings and conversation are stored in the macOS Keychain.
-					</Text>
-				</View>
-			)}
 
 			<ScrollView
 				ref={scrollView}

@@ -99,6 +99,15 @@ export enum ScratchPadColor {
 	ORANGE = "ORANGE",
 }
 
+export type SettingsSection =
+	| "ABOUT"
+	| "GENERAL"
+	| "TRANSLATE"
+	| "ITEMS"
+	| "SCRIPTS"
+	| "CALENDARS"
+	| "AI";
+
 const minisearch = new MiniSearch({
 	fields: ["name", "localizedName", "alias", "type"],
 	storeFields: [
@@ -418,6 +427,7 @@ export const createUIStore = (root: IRootStore) => {
 		query: "",
 		selectedIndex: 0,
 		focusedWidget: Widget.SEARCH,
+		settingsSection: "GENERAL" as SettingsSection,
 		events: [] as INativeEvent[],
 		customItems: [] as Item[],
 		disabledItemIds: [] as string[],
@@ -599,9 +609,13 @@ export const createUIStore = (root: IRootStore) => {
 				store.focusWidget(Widget.EMOJIS);
 			}
 		},
-		showSettings: () => {
+		showSettings: (section: SettingsSection = "GENERAL") => {
 			store.setQuery("");
+			store.settingsSection = section;
 			store.focusWidget(Widget.SETTINGS);
+		},
+		setSettingsSection: (section: SettingsSection) => {
+			store.settingsSection = section;
 		},
 		setSelectedIndex: (idx: number) => {
 			store.selectedIndex = idx;

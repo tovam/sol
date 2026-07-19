@@ -3,14 +3,14 @@ import { BackButton } from "components/BackButton";
 import { SelectableButton } from "components/SelectableButton";
 import { View } from "react-native";
 import { useStore } from "store";
-import { Widget } from "stores/ui.store";
+import { type SettingsSection, Widget } from "stores/ui.store";
 
 export const Sidebar = ({
 	selected,
 	setSelected,
 }: {
-	selected: string;
-	setSelected: (selected: string) => unknown;
+	selected: SettingsSection;
+	setSelected: (selected: SettingsSection) => unknown;
 }) => {
 	const store = useStore();
 
@@ -38,6 +38,12 @@ export const Sidebar = ({
 				selected={selected === "ITEMS"}
 				onPress={() => setSelected("ITEMS")}
 				title="Items"
+			/>
+			<SelectableButton
+				icon={Assets.smallLogo}
+				selected={selected === "AI"}
+				onPress={() => setSelected("AI")}
+				title="AI"
 			/>
 			<SelectableButton
 				icon={Assets.smallLogo}

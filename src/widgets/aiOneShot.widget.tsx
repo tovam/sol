@@ -2,11 +2,8 @@ import { BackButton } from "components/BackButton";
 import {
 	DEFAULT_AI_SETTINGS,
 	loadAISettings,
-	type AIProvider as Provider,
-	type AIProviderSettings as ProviderSettings,
 	requestAI,
 	type AISettings as Settings,
-	saveAISettings,
 } from "lib/ai";
 import { solNative } from "lib/SolNative";
 import { type FC, useEffect, useState } from "react";
@@ -36,28 +33,6 @@ export const AIOneShotWidget: FC = () => {
 
 	const current = settings[settings.provider];
 
-	const saveSettings = async (nextSettings = settings) => {
-		await saveAISettings(nextSettings);
-	};
-
-	const selectProvider = (provider: Provider) => {
-		const nextSettings = { ...settings, provider };
-		setSettings(nextSettings);
-		void saveSettings(nextSettings);
-		setError("");
-		setAnswer("");
-	};
-
-	const updateCurrent = (key: keyof ProviderSettings, value: string) => {
-		setSettings((previous) => ({
-			...previous,
-			[previous.provider]: {
-				...previous[previous.provider],
-				[key]: value,
-			},
-		}));
-	};
-
 	const ask = async () => {
 		const prompt = question.trim();
 		if (!prompt) {
@@ -81,7 +56,6 @@ export const AIOneShotWidget: FC = () => {
 		setError("");
 		setAnswer("");
 		try {
-			await saveSettings();
 			const responseText = await requestAI(settings.provider, current, [
 				{ role: "user", content: prompt },
 			]);
@@ -112,70 +86,15 @@ export const AIOneShotWidget: FC = () => {
 						One question, one answer — no conversation history
 					</Text>
 				</View>
+				<TouchableOpacity
+					className="px-3 py-2 rounded-lg subBg border border-color"
+					onPress={() => store.ui.showSettings("AI")}
+				>
+					<Text className="text text-sm">AI Settings</Text>
+				</TouchableOpacity>
 			</View>
 
 			<View className="flex-1 px-6 py-5 gap-4">
-				<View className="flex-row gap-2">
-					{(["openai", "openwebui"] as const).map((provider) => (
-						<TouchableOpacity
-							key={provider}
-							className={`flex-1 py-2 rounded-lg border items-center ${
-								settings.provider === provider
-									? "bg-accent-strong border-transparent"
-									: "subBg border-color"
-							}`}
-							onPress={() => selectProvider(provider)}
-						>
-							<Text
-								className={
-									settings.provider === provider
-										? "text-white font-semibold"
-										: "text"
-								}
-							>
-								{provider === "openai" ? "OpenAI" : "OpenWebUI"}
-							</Text>
-						</TouchableOpacity>
-					))}
-				</View>
-
-				<View className="flex-row gap-3">
-					<View className="flex-[2] rounded-xl border border-color subBg px-3 py-2">
-						<Text className="text-xs darker-text">API server</Text>
-						<TextInput
-							enableFocusRing={false}
-							className="text-sm text mt-1"
-							value={current.baseURL}
-							onChangeText={(value) => updateCurrent("baseURL", value)}
-						/>
-					</View>
-					<View className="flex-1 rounded-xl border border-color subBg px-3 py-2">
-						<Text className="text-xs darker-text">Model</Text>
-						<TextInput
-							enableFocusRing={false}
-							className="text-sm text mt-1"
-							value={current.model}
-							onChangeText={(value) => updateCurrent("model", value)}
-							placeholder={
-								settings.provider === "openai" ? "gpt-5.6-sol" : "llama3.2"
-							}
-						/>
-					</View>
-					<View className="flex-1 rounded-xl border border-color subBg px-3 py-2">
-						<Text className="text-xs darker-text">
-							API key{settings.provider === "openwebui" ? " (optional)" : ""}
-						</Text>
-						<TextInput
-							enableFocusRing={false}
-							secureTextEntry
-							className="text-sm text mt-1"
-							value={current.apiKey}
-							onChangeText={(value) => updateCurrent("apiKey", value)}
-							placeholder="Stored in Keychain"
-						/>
-					</View>
-				</View>
-
 				<View className="flex-1 flex-row gap-4">
 					<View className="flex-1 rounded-xl border border-color subBg p-4">
 						<Text className="text-xs font-semibold darker-text mb-2">
