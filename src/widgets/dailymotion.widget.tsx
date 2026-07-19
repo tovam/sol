@@ -29,17 +29,26 @@ export const DailymotionWidget: FC = () => {
 		});
 	}, []);
 
-	const openPlayer = (sourceURL: string) => {
+	const openPlayer = async (sourceURL: string) => {
 		const playerURL = dailymotionPlayerURL(sourceURL);
 		if (!playerURL) {
 			setError("Paste a Dailymotion video, dai.ly, or player URL");
 			return;
 		}
-		setError("");
-		solNative.openDailymotionPlayer(playerURL);
-		void solNative.showToast("Floating player opened", "success");
+
+		try {
+			const opened = await solNative.openDailymotionPlayer(playerURL);
+			if (!opened) {
+				throw new Error("The player window did not become visible");
+			}
+			setError("");
+			void solNative.showToast("Floating player opened", "success");
+		} catch {
+			setError("Could not open the floating player");
+			void solNative.showToast("Could not open floating player", "error");
+		}
 	};
-	const openCurrent = () => openPlayer(url);
+	const openCurrent = () => void openPlayer(url);
 
 	return (
 		<View className="fullWindow">
@@ -94,7 +103,7 @@ export const DailymotionWidget: FC = () => {
 								<TouchableOpacity
 									key={stream.id}
 									className="px-3 py-2 rounded-lg border border-color bg-neutral-100 dark:bg-neutral-700"
-									onPress={() => openPlayer(stream.url)}
+									onPress={() => void openPlayer(stream.url)}
 								>
 									<Text className="text-sm font-medium">▶ {stream.name}</Text>
 								</TouchableOpacity>

@@ -32,7 +32,7 @@ export const DailymotionSettings = observer(() => {
 	const preview = (streamURL: string) => {
 		const playerURL = dailymotionPlayerURL(streamURL);
 		if (!playerURL) return;
-		solNative.openDailymotionPlayer(playerURL);
+		void solNative.openDailymotionPlayer(playerURL);
 	};
 
 	return (

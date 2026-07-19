@@ -436,8 +436,14 @@ class SolNative: RCTEventEmitter {
     ScreenRulerController.shared.toggle()
   }
 
-  @objc func openDailymotionPlayer(_ url: String) {
-    DailymotionPlayerController.shared.open(urlString: url)
+  @objc func openDailymotionPlayer(
+    _ url: String,
+    resolver resolve: @escaping RCTPromiseResolveBlock,
+    rejecter _: RCTPromiseRejectBlock
+  ) {
+    DailymotionPlayerController.shared.open(urlString: url) { opened in
+      resolve(opened)
+    }
   }
 
   @objc func getNetworkInfo(

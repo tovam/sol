@@ -74,7 +74,7 @@ class SolNative extends NativeEventEmitter {
 	useBackgroundOverlay: (v: boolean) => void;
 	toggleDND: () => void;
 	toggleScreenRuler: () => void;
-	openDailymotionPlayer: (url: string) => void;
+	openDailymotionPlayer: (url: string) => Promise<boolean>;
 	getNetworkInfo: () => Promise<{
 		connection?: string;
 		ssid?: string;

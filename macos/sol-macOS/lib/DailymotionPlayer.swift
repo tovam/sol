@@ -12,8 +12,9 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
   private var panel: FloatingVideoPanel?
   private var webView: WKWebView?
 
-  func open(urlString: String) {
+  func open(urlString: String, completion: @escaping (Bool) -> Void) {
     guard let url = URL(string: urlString), isAllowedEmbedURL(url) else {
+      completion(false)
       return
     }
 
@@ -22,6 +23,8 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
       self.webView?.load(URLRequest(url: url))
       player.title = "Dailymotion"
       player.makeKeyAndOrderFront(nil)
+      player.orderFrontRegardless()
+      completion(player.isVisible)
     }
   }
 
@@ -52,6 +55,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     panel.contentView = webView
     panel.delegate = self
     panel.level = .floating
+    panel.hidesOnDeactivate = false
     panel.hasShadow = true
     panel.isReleasedWhenClosed = false
     panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
