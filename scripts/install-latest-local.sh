@@ -89,12 +89,10 @@ create_signing_identity() {
   local certificate_directory="$WORK_DIRECTORY/certificate"
   local openssl_config="$certificate_directory/openssl.cnf"
   local private_key="$certificate_directory/private-key.pem"
+  local traditional_private_key="$certificate_directory/private-key-rsa.pem"
   local certificate="$certificate_directory/certificate.pem"
-  local archive="$certificate_directory/identity.p12"
-  local archive_password
 
   mkdir -p "$certificate_directory"
-  archive_password="$(openssl rand -hex 24)"
 
   cat > "$openssl_config" <<'EOF'
 [req]
@@ -127,19 +125,19 @@ EOF
     -config "$openssl_config" \
     >/dev/null 2>&1
 
-  openssl pkcs12 \
-    -export \
-    -legacy \
-    -inkey "$private_key" \
-    -in "$certificate" \
-    -name "$CERTIFICATE_NAME" \
-    -passout "pass:$archive_password" \
-    -out "$archive"
+  # macOS Keychain rejects some PKCS#12 files produced by OpenSSL 3 with
+  # errSecDecode (-26276). Importing the traditional RSA key directly avoids
+  # that decoder while keeping the private key protected by the login keychain.
+  openssl rsa \
+    -traditional \
+    -in "$private_key" \
+    -out "$traditional_private_key" \
+    >/dev/null 2>&1
 
-  security import "$archive" \
+  security import "$traditional_private_key" \
     -k "$LOGIN_KEYCHAIN" \
-    -f pkcs12 \
-    -P "$archive_password" \
+    -t priv \
+    -f openssl \
     -T /usr/bin/codesign \
     >/dev/null
 
