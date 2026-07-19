@@ -19,7 +19,7 @@ export interface Emoji {
 
 const minisearch = new MiniSearch({
 	fields: ["description", "category", "aliases", "tags"],
-	storeFields: ["emoji"],
+	storeFields: ["emoji", "description", "category", "aliases", "tags"],
 	searchOptions: {
 		prefix: true,
 		fuzzy: 0.2,
@@ -29,7 +29,7 @@ const minisearch = new MiniSearch({
 
 minisearch.addAll(rawEmojis);
 
-export const EMOJI_ROW_SIZE = 7;
+export const EMOJI_ROW_SIZE = 14;
 
 function groupEmojis(emojis: Emoji[]): Array<Emoji[]> {
 	const emojisArray: Array<Emoji[]> = [];
@@ -188,13 +188,17 @@ export const createEmojiStore = (root: IRootStore) => {
 			if (!root.ui.query && favorites.length) {
 				const mappedFavorites = favorites
 					.sort(([_, frequency1], [_2, frequency2]) => frequency2 - frequency1)
-					.map((entry) => ({
-						emoji: entry[0],
-						description: "",
-						category: "",
-						aliases: [],
-						tags: [],
-					}));
+					.map(([emoji]) => {
+						return (
+							rawEmojis.find((candidate) => candidate.emoji === emoji) ?? {
+								emoji,
+								description: "",
+								category: "",
+								aliases: [],
+								tags: [],
+							}
+						);
+					});
 
 				for (let i = mappedFavorites.length; i < EMOJI_ROW_SIZE; i++) {
 					mappedFavorites.push({
