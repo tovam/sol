@@ -5,6 +5,7 @@ import { solNative } from "lib/SolNative";
 import { nanoid } from "nanoid";
 import { Clipboard, Linking, Text, View } from "react-native";
 import type { IRootStore } from "store";
+import { parseTimerDuration } from "stores/timer.store";
 import { v4 as uuidv4 } from "uuid";
 import { systemPreferenceItems } from "./systemPreferences";
 import { ItemType, Widget } from "./ui.store";
@@ -488,8 +489,10 @@ export function createBaseItems(store: IRootStore) {
 			alias: "timer countdown pomodoro minuteur chronomètre",
 			type: ItemType.CONFIGURATION,
 			callback: () => {
+				const duration = parseTimerDuration(store.ui.query);
 				store.ui.setQuery("");
 				store.ui.focusWidget(Widget.TIMER);
+				if (duration != null) store.timer.start(duration);
 			},
 			preventClose: true,
 		},

@@ -5,7 +5,10 @@ export type TimerStatus = "idle" | "running" | "paused" | "finished";
 export type TimerStore = ReturnType<typeof createTimerStore>;
 
 export function parseTimerDuration(input: string): number | null {
-	const normalized = input.trim().toLowerCase();
+	const normalized = input
+		.trim()
+		.toLowerCase()
+		.replace(/^(?:timer|countdown|minuteur)\s+/, "");
 	if (/^\d+(?:\.\d+)?$/.test(normalized)) {
 		const minutes = Number(normalized);
 		return minutes > 0 ? Math.round(minutes * 60) : null;
