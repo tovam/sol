@@ -1,5 +1,6 @@
 import { BackButton } from "components/BackButton";
 import { observer } from "mobx-react-lite";
+import { useState } from "react";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useStore } from "store";
 import type { AIConversation } from "stores/ai.store";
@@ -20,25 +21,33 @@ function conversationDetails(conversation: AIConversation) {
 	const messageCount = `${conversation.messages.length} message${
 		conversation.messages.length === 1 ? "" : "s"
 	}`;
+	const kind = conversation.kind === "one-shot" ? "One-shot" : "Chat";
 	const provider =
 		conversation.provider === "openai"
 			? "OpenAI"
 			: conversation.provider === "openwebui"
 				? "OpenWebUI"
 				: "";
-	return [messageCount, provider, conversation.model].filter(Boolean).join(" · ");
+	return [kind, messageCount, provider, conversation.model]
+		.filter(Boolean)
+		.join(" · ");
 }
 
 export const AIHistoryWidget = observer(() => {
 	const store = useStore();
 	const conversations = store.ai.conversations;
+	const [deleteConfirmationID, setDeleteConfirmationID] = useState<
+		string | null
+	>(null);
 
 	const openConversation = (conversationID: string) => {
 		if (!store.ai.openConversation(conversationID)) return;
+		setDeleteConfirmationID(null);
 		store.ui.focusWidget(Widget.AI_CHAT);
 	};
 
 	const startNewConversation = () => {
+		setDeleteConfirmationID(null);
 		store.ai.startNewConversation();
 		store.ui.focusWidget(Widget.AI_CHAT);
 	};
@@ -46,7 +55,7 @@ export const AIHistoryWidget = observer(() => {
 	return (
 		<View className="fullWindow">
 			<View className="h-14 px-4 flex-row items-center gap-3 border-b border-color">
-				<BackButton onPress={() => store.ui.focusWidget(Widget.AI_CHAT)} />
+				<BackButton onPress={() => store.ui.closeAIHistory()} />
 				<View className="flex-1">
 					<Text className="text-lg font-semibold text">AI Conversations</Text>
 					<Text className="text-xs darker-text">
@@ -79,6 +88,9 @@ export const AIHistoryWidget = observer(() => {
 					conversations.map((conversation) => {
 						const isActive =
 							conversation.id === store.ai.activeConversationID;
+						const isPending = store.ai.isConversationPending(conversation.id);
+						const isConfirmingDelete =
+							deleteConfirmationID === conversation.id;
 						return (
 							<View
 								key={conversation.id}
@@ -113,11 +125,33 @@ export const AIHistoryWidget = observer(() => {
 										)}
 									</View>
 								</TouchableOpacity>
+								{isConfirmingDelete && !isPending && (
+									<TouchableOpacity
+										className="px-2 py-2"
+										onPress={() => setDeleteConfirmationID(null)}
+									>
+										<Text className="text-xs darker-text">Cancel</Text>
+									</TouchableOpacity>
+								)}
 								<TouchableOpacity
-									className="px-2 py-2"
-									onPress={() => store.ai.deleteConversation(conversation.id)}
+									disabled={isPending}
+									className={`px-2 py-2 ${isPending ? "opacity-50" : ""}`}
+									onPress={() => {
+										if (!isConfirmingDelete) {
+											setDeleteConfirmationID(conversation.id);
+											return;
+										}
+										store.ai.deleteConversation(conversation.id);
+										setDeleteConfirmationID(null);
+									}}
 								>
-									<Text className="text-xs text-red-500">Delete</Text>
+									<Text className="text-xs text-red-500">
+										{isPending
+											? "Waiting…"
+											: isConfirmingDelete
+												? "Confirm delete"
+												: "Delete"}
+									</Text>
 								</TouchableOpacity>
 							</View>
 						);

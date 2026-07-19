@@ -403,6 +403,14 @@ class SolNative: RCTEventEmitter {
     HotKeyManager.shared.catchEnterPress = false
   }
 
+  @objc func turnOnCommandEnterListener() {
+    HotKeyManager.shared.catchCommandEnterPress = true
+  }
+
+  @objc func turnOffCommandEnterListener() {
+    HotKeyManager.shared.catchCommandEnterPress = false
+  }
+
   @objc func checkForUpdates() {
     appDelegate?.checkForUpdates()
   }

@@ -613,7 +613,7 @@ export function createBaseItems(store: IRootStore) {
 			type: ItemType.CONFIGURATION,
 			callback: () => {
 				store.ui.setQuery("");
-				store.ui.focusWidget(Widget.AI_HISTORY);
+				store.ui.openAIHistory();
 			},
 			preventClose: true,
 		},

@@ -22,22 +22,28 @@ export const AIOneShotWidget = observer(() => {
 	const [error, setError] = useState("");
 	const [loading, setLoading] = useState(false);
 	const askRef = useRef<() => void>(() => undefined);
+	const submittingRef = useRef(false);
 
 	const ask = async () => {
 		const prompt = question.trim();
-		if (loading) return;
+		if (submittingRef.current) return;
 		if (!prompt) {
 			setError("Write a question first");
 			return;
 		}
+		submittingRef.current = true;
 		setLoading(true);
 		setError("");
 		setAnswer("");
 		try {
+			await store.ai.ensureSecretsLoaded();
+			const provider = store.ai.settings.provider;
+			const model = store.ai.settings[provider].model;
 			const responseText = await store.ai.request([
 				{ role: "user", content: prompt },
 			]);
 			setAnswer(responseText);
+			store.ai.saveOneShotConversation(prompt, responseText, provider, model);
 		} catch (requestError) {
 			setError(
 				requestError instanceof Error
@@ -45,6 +51,7 @@ export const AIOneShotWidget = observer(() => {
 					: "The request failed",
 			);
 		} finally {
+			submittingRef.current = false;
 			setLoading(false);
 		}
 	};
@@ -53,6 +60,7 @@ export const AIOneShotWidget = observer(() => {
 
 	useEffect(() => {
 		solNative.turnOffEnterListener();
+		solNative.turnOnCommandEnterListener();
 		const subscription = solNative.addListener("keyDown", (event) => {
 			if (event.keyCode === 36 && event.meta && !event.shift) {
 				askRef.current();
@@ -60,6 +68,7 @@ export const AIOneShotWidget = observer(() => {
 		});
 		return () => {
 			subscription.remove();
+			solNative.turnOffCommandEnterListener();
 			solNative.turnOnEnterListener();
 		};
 	}, []);
@@ -83,7 +92,7 @@ export const AIOneShotWidget = observer(() => {
 				<AIProviderModelControls compact />
 				<TouchableOpacity
 					className="px-2.5 py-1.5 rounded-lg subBg border border-color"
-					onPress={() => store.ui.focusWidget(Widget.AI_HISTORY)}
+					onPress={() => store.ui.openAIHistory()}
 				>
 					<Text className="text text-xs">History</Text>
 				</TouchableOpacity>

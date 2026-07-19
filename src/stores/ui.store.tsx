@@ -508,6 +508,7 @@ export const createUIStore = (root: IRootStore) => {
 		query: "",
 		selectedIndex: 0,
 		focusedWidget: Widget.SEARCH,
+		aiHistoryReturnWidget: Widget.SEARCH as Widget,
 		searchTab: SearchTab.ALL as SearchTab,
 		settingsSection: "GENERAL" as SettingsSection,
 		events: [] as INativeEvent[],
@@ -903,6 +904,17 @@ export const createUIStore = (root: IRootStore) => {
 			}
 			store.selectedIndex = 0;
 			store.focusedWidget = widget;
+		},
+		openAIHistory: () => {
+			store.aiHistoryReturnWidget =
+				store.focusedWidget === Widget.AI_CHAT ||
+				store.focusedWidget === Widget.AI_ONE_SHOT
+					? store.focusedWidget
+					: Widget.SEARCH;
+			store.focusWidget(Widget.AI_HISTORY);
+		},
+		closeAIHistory: () => {
+			store.focusWidget(store.aiHistoryReturnWidget);
 		},
 		setFocus: (widget: Widget) => {
 			store.focusedWidget = widget;

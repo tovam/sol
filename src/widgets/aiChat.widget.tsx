@@ -26,8 +26,13 @@ export const AIChatWidget = observer(() => {
 	const [error, setError] = useState("");
 	const [loading, setLoading] = useState(false);
 	const sendRef = useRef<() => void>(() => undefined);
+	const submittingRef = useRef(false);
 
 	const messages = store.ai.conversation;
+	const activeConversationPending = store.ai.activeConversationID
+		? store.ai.isConversationPending(store.ai.activeConversationID)
+		: false;
+	const isConversationLoading = loading || activeConversationPending;
 
 	const newConversation = () => {
 		store.ai.startNewConversation();
@@ -36,13 +41,21 @@ export const AIChatWidget = observer(() => {
 
 	const send = async () => {
 		const content = input.trim();
-		if (!content || loading) return;
+		if (!content || submittingRef.current) return;
+		if (
+			store.ai.activeConversationID &&
+			store.ai.isConversationPending(store.ai.activeConversationID)
+		) {
+			return;
+		}
+		submittingRef.current = true;
 		const messagesWithQuestion: AIMessage[] = [
 			...messages,
 			createMessage("user", content),
 		];
 		const conversationID =
 			store.ai.saveCurrentConversation(messagesWithQuestion);
+		if (conversationID) store.ai.setConversationPending(conversationID, true);
 		setInput("");
 		setError("");
 		setLoading(true);
@@ -68,6 +81,8 @@ export const AIChatWidget = observer(() => {
 					: "The request failed",
 			);
 		} finally {
+			if (conversationID) store.ai.setConversationPending(conversationID, false);
+			submittingRef.current = false;
 			setLoading(false);
 		}
 	};
@@ -76,6 +91,7 @@ export const AIChatWidget = observer(() => {
 
 	useEffect(() => {
 		solNative.turnOffEnterListener();
+		solNative.turnOnCommandEnterListener();
 		const subscription = solNative.addListener("keyDown", (event) => {
 			if (event.keyCode === 36 && event.meta && !event.shift) {
 				sendRef.current();
@@ -83,6 +99,7 @@ export const AIChatWidget = observer(() => {
 		});
 		return () => {
 			subscription.remove();
+			solNative.turnOffCommandEnterListener();
 			solNative.turnOnEnterListener();
 		};
 	}, []);
@@ -106,7 +123,7 @@ export const AIChatWidget = observer(() => {
 				<AIProviderModelControls compact />
 				<TouchableOpacity
 					className="px-2.5 py-1.5 rounded-lg subBg border border-color"
-					onPress={() => store.ui.focusWidget(Widget.AI_HISTORY)}
+					onPress={() => store.ui.openAIHistory()}
 				>
 					<Text className="text text-xs">
 						History ({store.ai.conversations.length})
@@ -166,7 +183,7 @@ export const AIChatWidget = observer(() => {
 						</Text>
 					</View>
 				))}
-				{loading && (
+				{isConversationLoading && (
 					<View className="self-start subBg border border-color px-3 py-2 rounded-lg flex-row items-center gap-2">
 						<ActivityIndicator size="small" />
 						<Text className="text-xs darker-text">Thinking…</Text>
@@ -191,9 +208,11 @@ export const AIChatWidget = observer(() => {
 				</View>
 				<TouchableOpacity
 					className={`px-4 py-2 rounded-lg ${
-						loading || !input.trim() ? "bg-neutral-500" : "bg-accent-strong"
+						isConversationLoading || !input.trim()
+							? "bg-neutral-500"
+							: "bg-accent-strong"
 					}`}
-					disabled={loading || !input.trim()}
+					disabled={isConversationLoading || !input.trim()}
 					onPress={() => void send()}
 				>
 					<Text className="text-white text-sm font-semibold">Send  ⌘↩</Text>

@@ -57,6 +57,8 @@ class SolNative extends NativeEventEmitter {
 	turnOffVerticalArrowsListeners: () => void;
 	turnOnEnterListener: () => void;
 	turnOffEnterListener: () => void;
+	turnOnCommandEnterListener: () => void;
+	turnOffCommandEnterListener: () => void;
 	checkForUpdates: () => void;
 	setWindowRelativeSize: (relativeSize: number) => void;
 	resetWindowSize: typeof global.__SolProxy.resetWindowSize;
@@ -187,6 +189,8 @@ class SolNative extends NativeEventEmitter {
 		this.checkForUpdates = module.checkForUpdates;
 		this.turnOnEnterListener = module.turnOnEnterListener;
 		this.turnOffEnterListener = module.turnOffEnterListener;
+		this.turnOnCommandEnterListener = module.turnOnCommandEnterListener;
+		this.turnOffCommandEnterListener = module.turnOffCommandEnterListener;
 		this.setWindowRelativeSize = module.setWindowRelativeSize;
 		this.setWindowHeight = module.setWindowHeight;
 		this.openFinderAt = module.openFinderAt;

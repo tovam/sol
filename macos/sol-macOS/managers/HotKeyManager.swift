@@ -9,6 +9,7 @@ final class HotKeyManager {
   public var catchHorizontalArrowsPress = false
   public var catchVerticalArrowsPress = true
   public var catchEnterPress = true
+  public var catchCommandEnterPress = false
   private var shiftPressed = false
   private var controlPressed = false
   private var f18Down = false
@@ -52,7 +53,9 @@ final class HotKeyManager {
         $0.keyCode == 36 && $0.modifierFlags.contains(.command)
         && !$0.modifierFlags.contains(.shift)
 
-      if $0.keyCode == 36 && !self.catchEnterPress && !commandEnter {
+      if $0.keyCode == 36 && !self.catchEnterPress
+        && !(self.catchCommandEnterPress && commandEnter)
+      {
         return $0
       }
 

@@ -45,6 +45,7 @@ export type AIConversation = {
 	id: string;
 	title: string;
 	messages: AIMessage[];
+	kind: "chat" | "one-shot";
 	createdAt: number;
 	updatedAt: number;
 	provider?: AIProvider;
@@ -186,6 +187,7 @@ function normalizeConversations(value: unknown): AIConversation[] {
 							? record.title.trim()
 							: conversationTitle(messages),
 					messages,
+					kind: record.kind === "one-shot" ? "one-shot" : "chat",
 					createdAt,
 					updatedAt,
 					...(provider ? { provider } : {}),
@@ -243,6 +245,7 @@ export const createAIStore = () => {
 		secretsError: "",
 		conversations: [] as AIConversation[],
 		activeConversationID: null as string | null,
+		pendingConversationIDs: [] as string[],
 		openAILifetimeCost: createEmptyOpenAILifetimeCost(),
 		modelsByProvider: {
 			openai: [] as AIModelInfo[],
@@ -347,6 +350,18 @@ export const createAIStore = () => {
 			return true;
 		},
 
+		isConversationPending(conversationID: string) {
+			return store.pendingConversationIDs.includes(conversationID);
+		},
+
+		setConversationPending(conversationID: string, pending: boolean) {
+			store.pendingConversationIDs = pending
+				? Array.from(new Set([...store.pendingConversationIDs, conversationID]))
+				: store.pendingConversationIDs.filter(
+						(candidate) => candidate !== conversationID,
+					);
+		},
+
 		saveCurrentConversation(messages: AIMessage[]) {
 			const copiedMessages = messages.map((message) => ({ ...message }));
 			if (copiedMessages.length === 0) {
@@ -363,6 +378,7 @@ export const createAIStore = () => {
 						...existing,
 						title: conversationTitle(copiedMessages),
 						messages: copiedMessages,
+						kind: "chat",
 						updatedAt: now,
 						provider,
 						model,
@@ -371,6 +387,7 @@ export const createAIStore = () => {
 						id: uuidv4(),
 						title: conversationTitle(copiedMessages),
 						messages: copiedMessages,
+						kind: "chat",
 						createdAt: now,
 						updatedAt: now,
 						provider,
@@ -384,6 +401,32 @@ export const createAIStore = () => {
 				),
 			];
 			store.activeConversationID = conversation.id;
+			store.hasPersistedSettings = true;
+			return conversation.id;
+		},
+
+		saveOneShotConversation(
+			prompt: string,
+			answer: string,
+			provider: AIProvider,
+			model: string,
+		) {
+			const messages: AIMessage[] = [
+				{ role: "user", content: prompt },
+				{ role: "assistant", content: answer },
+			];
+			const now = Date.now();
+			const conversation: AIConversation = {
+				id: uuidv4(),
+				title: conversationTitle(messages),
+				messages,
+				kind: "one-shot",
+				createdAt: now,
+				updatedAt: now,
+				provider,
+				model,
+			};
+			store.conversations = [conversation, ...store.conversations];
 			store.hasPersistedSettings = true;
 			return conversation.id;
 		},
@@ -412,6 +455,7 @@ export const createAIStore = () => {
 		},
 
 		deleteConversation(conversationID: string) {
+			if (store.isConversationPending(conversationID)) return false;
 			const nextConversations = store.conversations.filter(
 				(conversation) => conversation.id !== conversationID,
 			);
@@ -624,6 +668,7 @@ export const createAIStore = () => {
 								id: uuidv4(),
 								title: conversationTitle(legacyConversation),
 								messages: legacyConversation,
+								kind: "chat",
 								createdAt: now,
 								updatedAt: now,
 								provider: settings.provider,
