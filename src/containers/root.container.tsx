@@ -5,6 +5,7 @@ import {observer} from 'mobx-react-lite'
 import {Text, TouchableOpacity, View} from 'react-native'
 import {useStore} from 'store'
 import {Widget} from 'stores/ui.store'
+import {AIChatWidget} from 'widgets/aiChat.widget'
 import {AIOneShotWidget} from 'widgets/aiOneShot.widget'
 import {ClipboardWidget} from 'widgets/clipboard.widget'
 import {ColorPickerWidget} from 'widgets/colorPicker.widget'
@@ -118,6 +119,14 @@ export const RootContainer = observer(() => {
     subWindow = (
       <View className="fullWindow">
         <AIOneShotWidget />
+      </View>
+    )
+  }
+
+  if (widget === Widget.AI_CHAT) {
+    subWindow = (
+      <View className="fullWindow">
+        <AIChatWidget />
       </View>
     )
   }

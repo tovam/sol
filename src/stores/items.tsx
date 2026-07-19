@@ -577,6 +577,18 @@ export function createBaseItems(store: IRootStore) {
 			preventClose: true,
 		},
 		{
+			id: "ai_chat",
+			icon: "💬",
+			name: "AI Conversation",
+			alias: "ai chat conversation chatgpt openai openwebui assistant history",
+			type: ItemType.CONFIGURATION,
+			callback: () => {
+				store.ui.setQuery("");
+				store.ui.focusWidget(Widget.AI_CHAT);
+			},
+			preventClose: true,
+		},
+		{
 			id: "downloads_folder",
 			IconComponent: (...props: any[]) => (
 				<FileIcon {...props} url="~/Downloads" className="w-6 h-6" />

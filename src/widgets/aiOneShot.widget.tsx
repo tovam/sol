@@ -1,5 +1,13 @@
-import axios from "axios";
 import { BackButton } from "components/BackButton";
+import {
+	DEFAULT_AI_SETTINGS,
+	loadAISettings,
+	type AIProvider as Provider,
+	type AIProviderSettings as ProviderSettings,
+	requestAI,
+	type AISettings as Settings,
+	saveAISettings,
+} from "lib/ai";
 import { solNative } from "lib/SolNative";
 import { type FC, useEffect, useState } from "react";
 import {
@@ -14,130 +22,22 @@ import { TextInput } from "react-native-macos";
 import { useStore } from "store";
 import { Widget } from "stores/ui.store";
 
-type Provider = "openai" | "openwebui";
-
-type ProviderSettings = {
-	baseURL: string;
-	model: string;
-	apiKey: string;
-};
-
-type Settings = {
-	provider: Provider;
-	openai: ProviderSettings;
-	openwebui: ProviderSettings;
-};
-
-const SETTINGS_KEY = "@sol.ai_one_shot_settings";
-const DEFAULT_SETTINGS: Settings = {
-	provider: "openai",
-	openai: {
-		baseURL: "https://api.openai.com/v1",
-		model: "gpt-5.6-sol",
-		apiKey: "",
-	},
-	openwebui: {
-		baseURL: "http://localhost:3000",
-		model: "",
-		apiKey: "",
-	},
-};
-
-function trimTrailingSlashes(value: string) {
-	return value.trim().replace(/\/+$/, "");
-}
-
-function openAIEndpoint(baseURL: string) {
-	const base = trimTrailingSlashes(baseURL);
-	if (base.endsWith("/responses")) return base;
-	if (base.endsWith("/v1")) return `${base}/responses`;
-	return `${base}/v1/responses`;
-}
-
-function openWebUIEndpoint(baseURL: string) {
-	const base = trimTrailingSlashes(baseURL);
-	if (base.endsWith("/api/chat/completions")) return base;
-	if (base.endsWith("/api")) return `${base}/chat/completions`;
-	return `${base}/api/chat/completions`;
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-	return typeof value === "object" && value !== null
-		? (value as Record<string, unknown>)
-		: null;
-}
-
-function extractOpenAIText(data: unknown) {
-	const root = asRecord(data);
-	if (!root) return "";
-	if (typeof root.output_text === "string") return root.output_text;
-
-	if (!Array.isArray(root.output)) return "";
-	const parts: string[] = [];
-	for (const outputItem of root.output) {
-		const item = asRecord(outputItem);
-		if (!item || !Array.isArray(item.content)) continue;
-		for (const contentItem of item.content) {
-			const content = asRecord(contentItem);
-			if (content && typeof content.text === "string") {
-				parts.push(content.text);
-			}
-		}
-	}
-	return parts.join("\n");
-}
-
-function extractOpenWebUIText(data: unknown) {
-	const root = asRecord(data);
-	const choices = root?.choices;
-	if (!Array.isArray(choices)) return "";
-	const firstChoice = asRecord(choices[0]);
-	const message = asRecord(firstChoice?.message);
-	if (typeof message?.content === "string") return message.content;
-	if (!Array.isArray(message?.content)) return "";
-	return message.content
-		.map((part) => asRecord(part)?.text)
-		.filter((part): part is string => typeof part === "string")
-		.join("\n");
-}
-
-function getRequestError(error: unknown) {
-	if (!axios.isAxiosError(error)) return "The request failed";
-	const data = asRecord(error.response?.data);
-	const apiError = asRecord(data?.error);
-	if (typeof apiError?.message === "string") return apiError.message;
-	if (typeof data?.detail === "string") return data.detail;
-	return error.message;
-}
-
 export const AIOneShotWidget: FC = () => {
 	const store = useStore();
-	const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+	const [settings, setSettings] = useState<Settings>(DEFAULT_AI_SETTINGS);
 	const [question, setQuestion] = useState("");
 	const [answer, setAnswer] = useState("");
 	const [error, setError] = useState("");
 	const [loading, setLoading] = useState(false);
 
 	useEffect(() => {
-		void solNative.securelyRetrieve(SETTINGS_KEY).then((savedValue) => {
-			if (!savedValue) return;
-			try {
-				const saved = JSON.parse(savedValue) as Partial<Settings>;
-				setSettings({
-					provider: saved.provider === "openwebui" ? "openwebui" : "openai",
-					openai: { ...DEFAULT_SETTINGS.openai, ...saved.openai },
-					openwebui: { ...DEFAULT_SETTINGS.openwebui, ...saved.openwebui },
-				});
-			} catch {
-				// Ignore an invalid legacy value and retain safe defaults.
-			}
-		});
+		void loadAISettings().then(setSettings);
 	}, []);
 
 	const current = settings[settings.provider];
 
 	const saveSettings = async (nextSettings = settings) => {
-		await solNative.securelyStore(SETTINGS_KEY, JSON.stringify(nextSettings));
+		await saveAISettings(nextSettings);
 	};
 
 	const selectProvider = (provider: Provider) => {
@@ -182,41 +82,15 @@ export const AIOneShotWidget: FC = () => {
 		setAnswer("");
 		try {
 			await saveSettings();
-			const headers: Record<string, string> = {
-				"Content-Type": "application/json",
-			};
-			if (current.apiKey.trim()) {
-				headers.Authorization = `Bearer ${current.apiKey.trim()}`;
-			}
-
-			if (settings.provider === "openai") {
-				const response = await axios.post(
-					openAIEndpoint(current.baseURL),
-					{ model: current.model.trim(), input: prompt },
-					{ headers },
-				);
-				const responseText = extractOpenAIText(response.data);
-				if (!responseText) throw new Error("The API returned no text");
-				setAnswer(responseText);
-			} else {
-				const response = await axios.post(
-					openWebUIEndpoint(current.baseURL),
-					{
-						model: current.model.trim(),
-						messages: [{ role: "user", content: prompt }],
-						stream: false,
-					},
-					{ headers },
-				);
-				const responseText = extractOpenWebUIText(response.data);
-				if (!responseText) throw new Error("The API returned no text");
-				setAnswer(responseText);
-			}
+			const responseText = await requestAI(settings.provider, current, [
+				{ role: "user", content: prompt },
+			]);
+			setAnswer(responseText);
 		} catch (requestError) {
 			setError(
-				requestError instanceof Error && !axios.isAxiosError(requestError)
+				requestError instanceof Error
 					? requestError.message
-					: getRequestError(requestError),
+					: "The request failed",
 			);
 		} finally {
 			setLoading(false);

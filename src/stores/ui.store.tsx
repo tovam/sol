@@ -77,6 +77,7 @@ export enum Widget {
 	QR_CODE = "QR_CODE",
 	YTDLP = "YTDLP",
 	AI_ONE_SHOT = "AI_ONE_SHOT",
+	AI_CHAT = "AI_CHAT",
 }
 
 export enum ItemType {
