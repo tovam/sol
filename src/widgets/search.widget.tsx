@@ -398,32 +398,34 @@ export const SearchWidget: FC = observer(() => {
 				/>
 			</View>
 
-			<View className="h-9 px-3 flex-row items-center border-b border-color">
-				{SEARCH_TABS.map((tab) => {
-					const isActive = tab.value === activeTab;
-					return (
-						<TouchableOpacity
-							key={tab.value}
-							onPress={() => store.ui.setSearchTab(tab.value)}
-						>
-							<View className="h-full px-3 items-center justify-center relative">
-								<Text
-									className={clsx("text-xs darker-text", {
-										"text font-semibold": isActive,
-									})}
-								>
-									{tab.label}
-								</Text>
-								{isActive && (
-									<View className="absolute bottom-0 left-3 right-3 h-[2px] bg-accent-strong" />
-								)}
-							</View>
-						</TouchableOpacity>
-					);
-				})}
-				<View className="flex-1" />
-				<Text className="text-xs darker-text px-2">⌃⇥</Text>
-			</View>
+			{!!store.ui.query && (
+				<View className="h-9 px-3 flex-row items-center border-b border-color">
+					{SEARCH_TABS.map((tab) => {
+						const isActive = tab.value === activeTab;
+						return (
+							<TouchableOpacity
+								key={tab.value}
+								onPress={() => store.ui.setSearchTab(tab.value)}
+							>
+								<View className="h-full px-3 items-center justify-center relative">
+									<Text
+										className={clsx("text-xs darker-text", {
+											"text font-semibold": isActive,
+										})}
+									>
+										{tab.label}
+									</Text>
+									{isActive && (
+										<View className="absolute bottom-0 left-3 right-3 h-[2px] bg-accent-strong" />
+									)}
+								</View>
+							</TouchableOpacity>
+						);
+					})}
+					<View className="flex-1" />
+					<Text className="text-xs darker-text px-2">⌃⇥</Text>
+				</View>
+			)}
 
 			{showResults && (
 				<>
