@@ -1,4 +1,3 @@
-import clsx from "clsx";
 import { MainInput } from "components/MainInput";
 import { languages } from "lib/languages";
 import { solNative } from "lib/SolNative";
@@ -26,6 +25,7 @@ type TranslationCardProps = {
 	languageCode: string;
 	primary: string;
 	secondary: string | null;
+	isFirst: boolean;
 	selected: boolean;
 	onCopy: () => void;
 	onSelect: () => void;
@@ -42,15 +42,13 @@ const TranslationCard: FC<TranslationCardProps> = ({
 	languageCode,
 	primary,
 	secondary,
+	isFirst,
 	selected,
 	onCopy,
 	onSelect,
 }) => (
 	<TouchableOpacity
-		className={clsx(
-			"flex-1 rounded-2xl border overflow-hidden",
-			selected ? "border-accent-strong bg-accent-dark" : "border-color subBg",
-		)}
+		className={`flex-1 relative ${isFirst ? "" : "border-l border-color"}`}
 		onPress={onSelect}
 	>
 		<View className="h-12 px-4 flex-row items-center border-b border-color">
@@ -58,39 +56,32 @@ const TranslationCard: FC<TranslationCardProps> = ({
 				<Text className="text-sm font-semibold text">
 					{getLanguageName(languageCode)}
 				</Text>
-				<Text className="text-xs darker-text uppercase">{languageCode}</Text>
+				<Text className="text-xs darker-text">{languageCode}</Text>
 			</View>
-			{!!secondary && (
-				<View className="px-2 py-1 rounded-md bg-accent-dark mr-2">
-					<Text className="text-xxs text-accent">LATIN + ЋИРИЛИЦА</Text>
-				</View>
-			)}
 			<TouchableOpacity
-				className="px-3 py-1 rounded-lg border border-color"
+				className="px-2 py-1"
 				onPress={onCopy}
 			>
-				<Text className="text-xs text">Copy</Text>
+				<Text className="text-xs text-accent">Copy</Text>
 			</TouchableOpacity>
 		</View>
 
 		<ScrollView
 			className="flex-1"
-			contentContainerStyle={{ padding: 16 }}
+			contentContainerStyle={{ padding: 18 }}
 			showsVerticalScrollIndicator
 		>
 			{!!secondary && (
-				<Text className="text-xxs font-semibold darker-text mb-2">LATIN</Text>
+				<Text className="text-xs darker-text mb-2">Latin</Text>
 			)}
-			<Text selectable className="text-lg text leading-7">
+			<Text selectable className="text-xl text leading-8">
 				{primary || "No translation returned"}
 			</Text>
 
 			{!!secondary && (
-				<View className="mt-5 pt-4 border-t border-color">
-					<Text className="text-xxs font-semibold darker-text mb-2">
-						ЋИРИЛИЦА
-					</Text>
-					<Text selectable className="text-base darker-text leading-6">
+				<View className="mt-6 pt-4 border-t border-color">
+					<Text className="text-xs darker-text mb-2">Cyrillic</Text>
+					<Text selectable className="text-lg darker-text leading-7">
 						{secondary}
 					</Text>
 				</View>
@@ -98,7 +89,7 @@ const TranslationCard: FC<TranslationCardProps> = ({
 		</ScrollView>
 
 		{selected && (
-			<View className="absolute left-0 top-3 bottom-3 w-1 bg-accent-strong rounded-full" />
+			<View className="absolute left-0 right-0 top-0 h-0.5 bg-accent-strong" />
 		)}
 	</TouchableOpacity>
 );
@@ -128,6 +119,7 @@ export const TranslationWidget: FC<Props> = observer(({ style, className }) => {
 		),
 	}));
 	const hasTranslations = cards.some(({ primary }) => Boolean(primary));
+	const hasSourceText = Boolean(store.ui.query.trim());
 
 	return (
 		<View className={`flex-1 ${className ?? ""}`} style={style}>
@@ -144,21 +136,26 @@ export const TranslationWidget: FC<Props> = observer(({ style, className }) => {
 
 			{!store.ui.isLoading && !hasTranslations && (
 				<View className="flex-1 items-center justify-center gap-2">
-					<Text className="text-lg font-semibold text">No translation</Text>
+					<Text className="text-lg font-semibold text">
+						{hasSourceText ? "No translation available" : "Type something to translate"}
+					</Text>
 					<Text className="text-sm darker-text">
-						Try again or check your connection.
+						{hasSourceText
+							? "Try again or check your connection."
+							: "Results will appear here as you type."}
 					</Text>
 				</View>
 			)}
 
 			{!store.ui.isLoading && hasTranslations && (
-				<View className="flex-1 flex-row gap-3 p-4">
+				<View className="flex-1 flex-row">
 					{cards.map((card) => (
 						<TranslationCard
 							key={`${card.languageCode}-${card.index}`}
 							languageCode={card.languageCode}
 							primary={card.primary}
 							secondary={card.secondary}
+							isFirst={card.index === 0}
 							selected={store.ui.selectedIndex === card.index}
 							onSelect={() => store.ui.setSelectedIndex(card.index)}
 							onCopy={() => {
