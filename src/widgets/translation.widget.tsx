@@ -1,8 +1,7 @@
 import clsx from "clsx";
 import { MainInput } from "components/MainInput";
-import { useFullSize } from "hooks/useFullSize";
 import { solNative } from "lib/SolNative";
-import { languages } from "lib/languages";
+import { getTranslationDisplay } from "lib/translator";
 import { observer } from "mobx-react-lite";
 import { type FC, useEffect } from "react";
 import { type StyleProp, Text, View, type ViewStyle } from "react-native";
@@ -25,6 +24,15 @@ export const TranslationWidget: FC<Props> = observer(({ style }) => {
 	}, []);
 
 	const index = store.ui.selectedIndex;
+	const translationLanguages = [
+		store.ui.firstTranslationLanguage,
+		store.ui.secondTranslationLanguage,
+		store.ui.thirdTranslationLanguage,
+	];
+	const translationDisplays = store.ui.translationResults.map(
+		(result, resultIndex) =>
+			getTranslationDisplay(result, translationLanguages[resultIndex] ?? ""),
+	);
 
 	return (
 		<View className="flex-1" style={style}>
@@ -48,9 +56,19 @@ export const TranslationWidget: FC<Props> = observer(({ style }) => {
 							},
 						)}
 					>
-						<Text className="flex-1 text" style={{ fontFamily: "Andale Mono" }}>
-							{store.ui.translationResults[0]}
-						</Text>
+						<View className="flex-1 gap-2">
+							<Text className="text" style={{ fontFamily: "Andale Mono" }}>
+								{translationDisplays[0]?.primary}
+							</Text>
+							{!!translationDisplays[0]?.secondary && (
+								<Text
+									className="text-sm darker-text"
+									style={{ fontFamily: "Andale Mono" }}
+								>
+									{translationDisplays[0].secondary}
+								</Text>
+							)}
+						</View>
 						<Text className="absolute bottom-2 right-2 opacity-50">
 							{store.ui.firstTranslationLanguage}
 						</Text>
@@ -64,9 +82,19 @@ export const TranslationWidget: FC<Props> = observer(({ style }) => {
 							},
 						)}
 					>
-						<Text className="flex-1 text" style={{ fontFamily: "Andale Mono" }}>
-							{store.ui.translationResults[1]}
-						</Text>
+						<View className="flex-1 gap-2">
+							<Text className="text" style={{ fontFamily: "Andale Mono" }}>
+								{translationDisplays[1]?.primary}
+							</Text>
+							{!!translationDisplays[1]?.secondary && (
+								<Text
+									className="text-sm darker-text"
+									style={{ fontFamily: "Andale Mono" }}
+								>
+									{translationDisplays[1].secondary}
+								</Text>
+							)}
+						</View>
 						<Text className="absolute bottom-2 right-2 opacity-50">
 							{store.ui.secondTranslationLanguage}
 						</Text>
@@ -81,12 +109,19 @@ export const TranslationWidget: FC<Props> = observer(({ style }) => {
 								},
 							)}
 						>
-							<Text
-								className="flex-1 text "
-								style={{ fontFamily: "Andale Mono" }}
-							>
-								{store.ui.translationResults[2]}
-							</Text>
+							<View className="flex-1 gap-2">
+								<Text className="text" style={{ fontFamily: "Andale Mono" }}>
+									{translationDisplays[2]?.primary}
+								</Text>
+								{!!translationDisplays[2]?.secondary && (
+									<Text
+										className="text-sm darker-text"
+										style={{ fontFamily: "Andale Mono" }}
+									>
+										{translationDisplays[2].secondary}
+									</Text>
+								)}
+							</View>
 							<Text className="absolute bottom-2 right-2 opacity-50">
 								{store.ui.thirdTranslationLanguage}
 							</Text>

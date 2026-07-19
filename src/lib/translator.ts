@@ -168,6 +168,103 @@ async function translate(
   return undefined
 }
 
+const SERBIAN_CYRILLIC_TO_LATIN: Record<string, string> = {
+	А: "A",
+	а: "a",
+	Б: "B",
+	б: "b",
+	В: "V",
+	в: "v",
+	Г: "G",
+	г: "g",
+	Д: "D",
+	д: "d",
+	Ђ: "Đ",
+	ђ: "đ",
+	Е: "E",
+	е: "e",
+	Ж: "Ž",
+	ж: "ž",
+	З: "Z",
+	з: "z",
+	И: "I",
+	и: "i",
+	Ј: "J",
+	ј: "j",
+	К: "K",
+	к: "k",
+	Л: "L",
+	л: "l",
+	Љ: "Lj",
+	љ: "lj",
+	М: "M",
+	м: "m",
+	Н: "N",
+	н: "n",
+	Њ: "Nj",
+	њ: "nj",
+	О: "O",
+	о: "o",
+	П: "P",
+	п: "p",
+	Р: "R",
+	р: "r",
+	С: "S",
+	с: "s",
+	Т: "T",
+	т: "t",
+	Ћ: "Ć",
+	ћ: "ć",
+	У: "U",
+	у: "u",
+	Ф: "F",
+	ф: "f",
+	Х: "H",
+	х: "h",
+	Ц: "C",
+	ц: "c",
+	Ч: "Č",
+	ч: "č",
+	Џ: "Dž",
+	џ: "dž",
+	Ш: "Š",
+	ш: "š",
+};
+
+const SERBIAN_UPPERCASE = new Set(
+	Object.keys(SERBIAN_CYRILLIC_TO_LATIN).filter(
+		(character) => character === character.toUpperCase(),
+	),
+);
+const SERBIAN_UPPERCASE_DIGRAPHS = new Set(["Љ", "Њ", "Џ"]);
+
+export function serbianCyrillicToLatin(text: string) {
+	const characters = Array.from(text);
+	return characters
+		.map((character, index) => {
+			const latin = SERBIAN_CYRILLIC_TO_LATIN[character];
+			if (!latin) return character;
+			if (
+				SERBIAN_UPPERCASE_DIGRAPHS.has(character) &&
+				SERBIAN_UPPERCASE.has(characters[index + 1] ?? "")
+			) {
+				return latin.toUpperCase();
+			}
+			return latin;
+		})
+		.join("");
+}
+
+export function getTranslationDisplay(text: string, language: string) {
+	if (language !== "sr" || !/[\u0400-\u04ff]/.test(text)) {
+		return { primary: text, secondary: null };
+	}
+	return {
+		primary: serbianCyrillicToLatin(text),
+		secondary: text,
+	};
+}
+
 export async function googleTranslate(
   lang1: string,
   lang2: string,

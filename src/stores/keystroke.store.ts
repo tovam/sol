@@ -1,5 +1,6 @@
 import { extractMeetingLink } from "lib/calendar";
 import { solNative } from "lib/SolNative";
+import { getTranslationDisplay } from "lib/translator";
 import { makeAutoObservable } from "mobx";
 import { Clipboard, type EmitterSubscription, Linking } from "react-native";
 import type { IRootStore } from "store";
@@ -247,8 +248,18 @@ export const createKeystrokeStore = (root: IRootStore) => {
 
 						case Widget.TRANSLATION: {
 							if (root.ui.translationResults) {
+								const translationLanguages = [
+									root.ui.firstTranslationLanguage,
+									root.ui.secondTranslationLanguage,
+									root.ui.thirdTranslationLanguage,
+								];
+								const selectedTranslation =
+									root.ui.translationResults[root.ui.selectedIndex];
 								Clipboard.setString(
-									root.ui.translationResults[root.ui.selectedIndex],
+									getTranslationDisplay(
+										selectedTranslation ?? "",
+										translationLanguages[root.ui.selectedIndex] ?? "",
+									).primary,
 								);
 								solNative.hideWindow();
 								root.ui.translationResults = [];
