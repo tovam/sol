@@ -436,6 +436,10 @@ class SolNative: RCTEventEmitter {
     ScreenRulerController.shared.toggle()
   }
 
+  @objc func openDailymotionPlayer(_ url: String) {
+    DailymotionPlayerController.shared.open(urlString: url)
+  }
+
   @objc func securelyStore(
     _ key: NSString,
     payload: NSString,

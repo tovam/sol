@@ -74,6 +74,7 @@ class SolNative extends NativeEventEmitter {
 	useBackgroundOverlay: (v: boolean) => void;
 	toggleDND: () => void;
 	toggleScreenRuler: () => void;
+	openDailymotionPlayer: (url: string) => void;
 	securelyStore: (key: string, value: string) => Promise<void>;
 	securelyRetrieve: (key: string) => Promise<string | null>;
 	executeBashScript: (script: string) => Promise<void>;
@@ -195,6 +196,7 @@ class SolNative extends NativeEventEmitter {
 		this.setShowWindowOn = module.setShowWindowOn;
 		this.useBackgroundOverlay = module.useBackgroundOverlay;
 		this.toggleScreenRuler = module.toggleScreenRuler;
+		this.openDailymotionPlayer = module.openDailymotionPlayer;
 
 		this.securelyRetrieve = module.securelyRetrieve;
 		this.securelyStore = module.securelyStore;

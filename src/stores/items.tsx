@@ -589,6 +589,18 @@ export function createBaseItems(store: IRootStore) {
 			preventClose: true,
 		},
 		{
+			id: "dailymotion_player",
+			icon: "▶️",
+			name: "Dailymotion Floating Player",
+			alias: "dailymotion video stream floating always on top pip flux",
+			type: ItemType.CONFIGURATION,
+			callback: () => {
+				store.ui.setQuery("");
+				store.ui.focusWidget(Widget.DAILYMOTION);
+			},
+			preventClose: true,
+		},
+		{
 			id: "downloads_folder",
 			IconComponent: (...props: any[]) => (
 				<FileIcon {...props} url="~/Downloads" className="w-6 h-6" />

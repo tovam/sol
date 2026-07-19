@@ -10,6 +10,7 @@ import {AIOneShotWidget} from 'widgets/aiOneShot.widget'
 import {ClipboardWidget} from 'widgets/clipboard.widget'
 import {ColorPickerWidget} from 'widgets/colorPicker.widget'
 import {CreateItemWidget} from 'widgets/createItem.widget'
+import {DailymotionWidget} from 'widgets/dailymotion.widget'
 import {DockerWidget} from 'widgets/docker.widget'
 import {EmojisWidget} from 'widgets/emojis.widget'
 import {FileSearchWidget} from 'widgets/fileSearch.widget'
@@ -127,6 +128,14 @@ export const RootContainer = observer(() => {
     subWindow = (
       <View className="fullWindow">
         <AIChatWidget />
+      </View>
+    )
+  }
+
+  if (widget === Widget.DAILYMOTION) {
+    subWindow = (
+      <View className="fullWindow">
+        <DailymotionWidget />
       </View>
     )
   }

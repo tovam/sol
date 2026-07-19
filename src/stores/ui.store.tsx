@@ -78,6 +78,7 @@ export enum Widget {
 	YTDLP = "YTDLP",
 	AI_ONE_SHOT = "AI_ONE_SHOT",
 	AI_CHAT = "AI_CHAT",
+	DAILYMOTION = "DAILYMOTION",
 }
 
 export enum ItemType {
