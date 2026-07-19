@@ -88,6 +88,10 @@ RCT_EXTERN_METHOD(toggleDND)
 RCT_EXTERN_METHOD(toggleScreenRuler)
 RCT_EXTERN_METHOD(openDailymotionPlayer : (NSString)url resolver : (
     RCTPromiseResolveBlock)resolve rejecter : (RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(requestOpenWebUI : (NSString)endpoint apiKey : (NSString)
+                      apiKey body : (NSString)body resolver : (
+                          RCTPromiseResolveBlock)resolve rejecter : (
+                          RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(getNetworkInfo : (RCTPromiseResolveBlock)
                       resolve rejecter : (RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(securelyStore : (NSString)key payload : (NSString)

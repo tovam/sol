@@ -5,6 +5,12 @@ import React
 import UserNotifications
 
 private let keychain = Keychain(service: "Sol")
+private let openWebUISession: URLSession = {
+  let configuration = URLSessionConfiguration.ephemeral
+  configuration.httpCookieStorage = nil
+  configuration.httpShouldSetCookies = false
+  return URLSession(configuration: configuration)
+}()
 
 @objc(SolNative)
 class SolNative: RCTEventEmitter {
@@ -444,6 +450,62 @@ class SolNative: RCTEventEmitter {
     DailymotionPlayerController.shared.open(urlString: url) { opened in
       resolve(opened)
     }
+  }
+
+  @objc func requestOpenWebUI(
+    _ endpoint: String,
+    apiKey: String,
+    body: String,
+    resolver resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    guard
+      let url = URL(string: endpoint),
+      let scheme = url.scheme?.lowercased(),
+      scheme == "http" || scheme == "https",
+      let bodyData = body.data(using: .utf8)
+    else {
+      reject("OpenWebUIRequestError", "Invalid OpenWebUI request", nil)
+      return
+    }
+
+    let normalizedKey = apiKey
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+      .replacingOccurrences(
+        of: #"^Bearer\s+"#,
+        with: "",
+        options: [.regularExpression, .caseInsensitive]
+      )
+
+    var request = URLRequest(
+      url: url,
+      cachePolicy: .reloadIgnoringLocalCacheData,
+      timeoutInterval: 300
+    )
+    request.httpMethod = "POST"
+    request.httpBody = bodyData
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.setValue("application/json", forHTTPHeaderField: "Accept")
+    if !normalizedKey.isEmpty {
+      request.setValue("Bearer \(normalizedKey)", forHTTPHeaderField: "Authorization")
+      request.setValue(normalizedKey, forHTTPHeaderField: "x-api-key")
+    }
+
+    openWebUISession.dataTask(with: request) { data, response, error in
+      if let error {
+        reject("OpenWebUIRequestError", error.localizedDescription, error)
+        return
+      }
+      guard let response = response as? HTTPURLResponse else {
+        reject("OpenWebUIRequestError", "OpenWebUI returned no HTTP response", nil)
+        return
+      }
+
+      resolve([
+        "status": response.statusCode,
+        "body": data.flatMap { String(data: $0, encoding: .utf8) } ?? "",
+      ])
+    }.resume()
   }
 
   @objc func getNetworkInfo(

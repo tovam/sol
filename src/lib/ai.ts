@@ -77,18 +77,28 @@ function extractOpenWebUIText(data: unknown) {
 		.join("\n");
 }
 
+function getAPIErrorDetail(data: unknown, fallback: string) {
+	const root = asRecord(data);
+	const apiError = asRecord(root?.error);
+	return typeof apiError?.message === "string"
+		? apiError.message
+		: typeof root?.detail === "string"
+			? root.detail
+			: fallback;
+}
+
+function openWebUIErrorDetail(data: unknown, status: number) {
+	const detail = getAPIErrorDetail(data, `OpenWebUI returned HTTP ${status}`);
+	return status === 401
+		? `${detail}. Check that API keys are enabled and allowed for /api/chat/completions.`
+		: detail;
+}
+
 function getRequestError(error: unknown, provider: AIProvider) {
 	if (!axios.isAxiosError(error)) {
 		return error instanceof Error ? error.message : "The request failed";
 	}
-	const data = asRecord(error.response?.data);
-	const apiError = asRecord(data?.error);
-	const detail =
-		typeof apiError?.message === "string"
-			? apiError.message
-			: typeof data?.detail === "string"
-				? data.detail
-				: error.message;
+	const detail = getAPIErrorDetail(error.response?.data, error.message);
 	if (provider === "openwebui" && error.response?.status === 401) {
 		return `${detail}. Check that API keys are enabled and allowed for /api/chat/completions.`;
 	}
@@ -133,16 +143,25 @@ export async function requestAI(
 			return responseText;
 		}
 
-		const response = await axios.post(
+		const response = await solNative.requestOpenWebUI(
 			openWebUIEndpoint(settings.baseURL),
-			{
+			settings.apiKey,
+			JSON.stringify({
 				model: settings.model.trim(),
 				messages,
 				stream: false,
-			},
-			{ headers },
+			}),
 		);
-		const responseText = extractOpenWebUIText(response.data);
+		let responseData: unknown = null;
+		try {
+			responseData = JSON.parse(response.body) as unknown;
+		} catch {
+			// A non-JSON response is reported with its HTTP status below.
+		}
+		if (response.status < 200 || response.status >= 300) {
+			throw new Error(openWebUIErrorDetail(responseData, response.status));
+		}
+		const responseText = extractOpenWebUIText(responseData);
 		if (!responseText) throw new Error("The API returned no text");
 		return responseText;
 	} catch (error) {
