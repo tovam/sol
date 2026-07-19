@@ -1,9 +1,8 @@
 import { BackButton } from "components/BackButton";
 import { AIProviderModelControls } from "components/AIProviderModelControls";
 import type { AIMessage } from "lib/ai";
-import { solNative } from "lib/SolNative";
 import { observer } from "mobx-react-lite";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
 	ActivityIndicator,
 	ScrollView,
@@ -15,101 +14,48 @@ import { TextInput } from "react-native-macos";
 import { useStore } from "store";
 import { Widget } from "stores/ui.store";
 
-const CONVERSATION_KEY = "@sol.ai_chat_conversation";
-
-type ChatMessage = AIMessage & { id: string };
-
-function decodeMessage(value: unknown, fallbackID: string): ChatMessage | null {
-	if (typeof value !== "object" || value === null) return null;
-	const message = value as Partial<ChatMessage>;
-	if (
-		(message.role !== "user" && message.role !== "assistant") ||
-		typeof message.content !== "string"
-	) {
-		return null;
-	}
-	return {
-		id: typeof message.id === "string" ? message.id : fallbackID,
-		role: message.role,
-		content: message.content,
-	};
-}
-
-function createMessage(role: AIMessage["role"], content: string): ChatMessage {
-	return {
-		id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-		role,
-		content,
-	};
+function createMessage(role: AIMessage["role"], content: string): AIMessage {
+	return { role, content };
 }
 
 export const AIChatWidget = observer(() => {
 	const store = useStore();
 	const scrollView = useRef<ScrollView>(null);
-	const [messages, setMessages] = useState<ChatMessage[]>([]);
 	const [input, setInput] = useState("");
 	const [error, setError] = useState("");
 	const [loading, setLoading] = useState(false);
 
-	useEffect(() => {
-		void solNative.securelyRetrieve(CONVERSATION_KEY).then((savedValue) => {
-			if (!savedValue) return;
-			try {
-				const saved = JSON.parse(savedValue) as unknown;
-				if (Array.isArray(saved)) {
-					setMessages(
-						saved
-							.map((message, index) =>
-								decodeMessage(message, `legacy-${index}`),
-							)
-							.filter((message): message is ChatMessage => message !== null),
-					);
-				}
-			} catch {
-				// Keep an empty conversation if a legacy value cannot be decoded.
-			}
-		});
-	}, []);
-
-	const persistConversation = (nextMessages: ChatMessage[]) => {
-		return solNative.securelyStore(
-			CONVERSATION_KEY,
-			JSON.stringify(nextMessages),
-		);
-	};
+	const messages = store.ai.conversation;
 
 	const clearConversation = () => {
-		setMessages([]);
+		store.ai.setConversation([]);
 		setError("");
-		void persistConversation([]);
 	};
 
 	const send = async () => {
 		const content = input.trim();
 		if (!content || loading) return;
-		const messagesWithQuestion: ChatMessage[] = [
+		const messagesWithQuestion: AIMessage[] = [
 			...messages,
 			createMessage("user", content),
 		];
-		setMessages(messagesWithQuestion);
+		store.ai.setConversation(messagesWithQuestion);
 		setInput("");
 		setError("");
 		setLoading(true);
 
 		try {
-			await persistConversation(messagesWithQuestion);
 			const answer = await store.ai.request(
 				messagesWithQuestion.map(({ role, content: messageContent }) => ({
 					role,
 					content: messageContent,
 				})),
 			);
-			const completedMessages: ChatMessage[] = [
+			const completedMessages: AIMessage[] = [
 				...messagesWithQuestion,
 				createMessage("assistant", answer),
 			];
-			setMessages(completedMessages);
-			await persistConversation(completedMessages);
+			store.ai.setConversation(completedMessages);
 		} catch (requestError) {
 			setError(
 				requestError instanceof Error
@@ -167,9 +113,9 @@ export const AIChatWidget = observer(() => {
 						</Text>
 					</View>
 				)}
-				{messages.map((message) => (
+				{messages.map((message, index) => (
 					<View
-						key={message.id}
+						key={`${message.role}-${index}`}
 						className={`max-w-[85%] px-4 py-3 rounded-2xl ${
 							message.role === "user"
 								? "self-end bg-accent-strong"

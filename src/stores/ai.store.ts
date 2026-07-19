@@ -26,6 +26,7 @@ type PersistedAISettings = {
 
 type PersistedAIState = {
 	settings?: Partial<PersistedAISettings>;
+	conversation?: unknown;
 };
 
 const cloneDefaultSettings = (): AISettings => ({
@@ -89,6 +90,21 @@ function persistentSettings(settings: AISettings): PersistedAISettings {
 	};
 }
 
+function normalizeConversation(value: unknown): AIMessage[] {
+	if (!Array.isArray(value)) return [];
+	return value.flatMap((candidate) => {
+		if (typeof candidate !== "object" || candidate === null) return [];
+		const message = candidate as Partial<AIMessage>;
+		if (
+			(message.role !== "user" && message.role !== "assistant") ||
+			typeof message.content !== "string"
+		) {
+			return [];
+		}
+		return [{ role: message.role, content: message.content }];
+	});
+}
+
 export function validateAIProviderSettings(
 	provider: AIProvider,
 	settings: AIProviderSettings,
@@ -117,6 +133,7 @@ export const createAIStore = () => {
 		if (!store.hasPersistedSettings && !store.secretsLoaded) return;
 		writePersistedStore("ai", {
 			settings: persistentSettings(store.settings),
+			conversation: store.conversation.map((message) => ({ ...message })),
 		});
 	};
 
@@ -129,6 +146,7 @@ export const createAIStore = () => {
 		secretsLoading: false,
 		secretsAttempted: false,
 		secretsError: "",
+		conversation: [] as AIMessage[],
 		modelsByProvider: {
 			openai: [] as AIModelInfo[],
 			openwebui: [] as AIModelInfo[],
@@ -200,6 +218,11 @@ export const createAIStore = () => {
 
 		setModel(provider: AIProvider, model: string) {
 			store.updateProviderSettings(provider, "model", model);
+		},
+
+		setConversation(messages: AIMessage[]) {
+			store.conversation = messages.map((message) => ({ ...message }));
+			store.hasPersistedSettings = true;
 		},
 
 		ensureSecretsLoaded: async (force = false) => {
@@ -365,6 +388,9 @@ export const createAIStore = () => {
 						persistedState?.settings,
 					);
 					store.hasPersistedSettings = persistedState?.settings != null;
+					store.conversation = normalizeConversation(
+						persistedState?.conversation,
+					);
 				});
 			} catch (error) {
 				if (disposed) return;
