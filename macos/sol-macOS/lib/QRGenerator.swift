@@ -2,7 +2,7 @@ import Foundation
 import Cocoa
 
 func QR(from string: String, size len:CGFloat) -> NSImage? {
-    let data = string.data(using: String.Encoding.ascii)
+    let data = string.data(using: String.Encoding.utf8)
     if let filter = CIFilter(name: "CIQRCodeGenerator") {
         filter.setValue(data, forKey: "inputMessage")
         let trans = CGAffineTransform(scaleX: len, y: len)

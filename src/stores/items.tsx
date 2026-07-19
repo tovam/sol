@@ -482,6 +482,66 @@ export function createBaseItems(store: IRootStore) {
 			preventClose: true,
 		},
 		{
+			id: "timer",
+			icon: "⏱️",
+			name: "Create a Timer",
+			alias: "timer countdown pomodoro minuteur chronomètre",
+			type: ItemType.CONFIGURATION,
+			callback: () => {
+				store.ui.setQuery("");
+				store.ui.focusWidget(Widget.TIMER);
+			},
+			preventClose: true,
+		},
+		{
+			id: "docker_ps",
+			icon: "🐳",
+			name: "Docker PS",
+			alias: "docker containers running conteneurs",
+			type: ItemType.CONFIGURATION,
+			callback: () => {
+				store.ui.setQuery("");
+				store.ui.focusWidget(Widget.DOCKER);
+			},
+			preventClose: true,
+		},
+		{
+			id: "tmux_cheatsheet",
+			icon: "⌨️",
+			name: "tmux Cheatsheet",
+			alias: "tmux cheat sheet shortcuts commands aide mémoire",
+			type: ItemType.CONFIGURATION,
+			callback: () => {
+				store.ui.setQuery("");
+				store.ui.focusWidget(Widget.TMUX_CHEATSHEET);
+			},
+			preventClose: true,
+		},
+		{
+			id: "password_generator",
+			icon: "🔐",
+			name: "Password Generator",
+			alias: "generate password random secure mot de passe",
+			type: ItemType.CONFIGURATION,
+			callback: () => {
+				store.ui.setQuery("");
+				store.ui.focusWidget(Widget.PASSWORD_GENERATOR);
+			},
+			preventClose: true,
+		},
+		{
+			id: "qr_code_generator",
+			icon: "▦",
+			name: "QR Code Generator",
+			alias: "qrcode qr clipboard presse papiers text url",
+			type: ItemType.CONFIGURATION,
+			callback: () => {
+				store.ui.setQuery("");
+				store.ui.focusWidget(Widget.QR_CODE);
+			},
+			preventClose: true,
+		},
+		{
 			id: "downloads_folder",
 			IconComponent: (...props: any[]) => (
 				<FileIcon {...props} url="~/Downloads" className="w-6 h-6" />

@@ -39,6 +39,8 @@ RCT_EXTERN_METHOD(executeAppleScript : (NSString)source resolve : (
     RCTPromiseResolveBlock)resolve reject : (RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(executeBashScript : (NSString)source resolver : (
     RCTPromiseResolveBlock)resolve rejecter : (RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(executeBashScriptWithOutput : (NSString)source resolver : (
+    RCTPromiseResolveBlock)resolve rejecter : (RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(getMediaInfo : (RCTPromiseResolveBlock)
                       resolve rejecter : (RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(setGlobalShortcut : (NSString)key)
@@ -106,6 +108,8 @@ RCT_EXPORT_METHOD(restart) {
   }
 }
 RCT_EXTERN_METHOD(showWifiQR : (NSString)SSID password : (NSString)password)
+RCT_EXTERN_METHOD(generateQRCode : (NSString)text resolver : (
+    RCTPromiseResolveBlock)resolve rejecter : (RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(openFilePicker : (RCTPromiseResolveBlock)
                       resolve reject : (RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(updateHotkeys : (NSDictionary)hotkeys)

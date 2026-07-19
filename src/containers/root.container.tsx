@@ -8,13 +8,18 @@ import {Widget} from 'stores/ui.store'
 import {ClipboardWidget} from 'widgets/clipboard.widget'
 import {ColorPickerWidget} from 'widgets/colorPicker.widget'
 import {CreateItemWidget} from 'widgets/createItem.widget'
+import {DockerWidget} from 'widgets/docker.widget'
 import {EmojisWidget} from 'widgets/emojis.widget'
 import {FileSearchWidget} from 'widgets/fileSearch.widget'
 import {OnboardingWidget} from 'widgets/onboarding.widget'
+import {PasswordGeneratorWidget} from 'widgets/passwordGenerator.widget'
 import {ProcessesWidget} from 'widgets/processes.widget'
+import {QRCodeWidget} from 'widgets/qrCode.widget'
 import {ScratchpadWidget} from 'widgets/scratchpad.widget'
 import {SearchWidget} from 'widgets/search.widget'
 import {SettingsWidget} from 'widgets/settings.widget'
+import {TimerWidget} from 'widgets/timer.widget'
+import {TmuxCheatsheetWidget} from 'widgets/tmuxCheatsheet.widget'
 import {TranslationWidget} from 'widgets/translation.widget'
 
 export const RootContainer = observer(() => {
@@ -55,6 +60,46 @@ export const RootContainer = observer(() => {
     subWindow = (
       <View className="fullWindow">
         <ColorPickerWidget />
+      </View>
+    )
+  }
+
+  if (widget === Widget.TIMER) {
+    subWindow = (
+      <View className="fullWindow">
+        <TimerWidget />
+      </View>
+    )
+  }
+
+  if (widget === Widget.DOCKER) {
+    subWindow = (
+      <View className="fullWindow">
+        <DockerWidget />
+      </View>
+    )
+  }
+
+  if (widget === Widget.TMUX_CHEATSHEET) {
+    subWindow = (
+      <View className="fullWindow">
+        <TmuxCheatsheetWidget />
+      </View>
+    )
+  }
+
+  if (widget === Widget.PASSWORD_GENERATOR) {
+    subWindow = (
+      <View className="fullWindow">
+        <PasswordGeneratorWidget />
+      </View>
+    )
+  }
+
+  if (widget === Widget.QR_CODE) {
+    subWindow = (
+      <View className="fullWindow">
+        <QRCodeWidget />
       </View>
     )
   }

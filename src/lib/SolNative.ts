@@ -74,6 +74,7 @@ class SolNative extends NativeEventEmitter {
 	securelyStore: (key: string, value: string) => Promise<void>;
 	securelyRetrieve: (key: string) => Promise<string | null>;
 	executeBashScript: (script: string) => Promise<void>;
+	executeBashScriptWithOutput: (script: string) => Promise<string>;
 	showToast: (
 		text: string,
 		variant: "success" | "error",
@@ -98,6 +99,7 @@ class SolNative extends NativeEventEmitter {
 	openFilePicker: () => Promise<string | null>;
 	showWindow: typeof global.__SolProxy.showWindow;
 	showWifiQR: (ssid: string, password: string) => void;
+	generateQRCode: (text: string) => Promise<string>;
 	updateHotkeys: (v: Record<string, string>) => void;
 	log: (message: string) => void;
 	getApplications: typeof global.__SolProxy.getApplications;
@@ -130,6 +132,7 @@ class SolNative extends NativeEventEmitter {
 		this.openFile = module.openFile;
 		this.toggleDarkMode = module.toggleDarkMode;
 		this.executeBashScript = module.executeBashScript;
+		this.executeBashScriptWithOutput = module.executeBashScriptWithOutput;
 		this.executeAppleScript = module.executeAppleScript;
 		this.openWithFinder = module.openWithFinder;
 		this.getMediaInfo = module.getMediaInfo;
@@ -226,6 +229,7 @@ class SolNative extends NativeEventEmitter {
 		this.showWindow = global.__SolProxy.showWindow;
 
 		this.showWifiQR = module.showWifiQR;
+		this.generateQRCode = module.generateQRCode;
 		this.updateHotkeys = module.updateHotkeys;
 
 		this.moveFrontmostToNextSpace = module.moveFrontmostToNextSpace;

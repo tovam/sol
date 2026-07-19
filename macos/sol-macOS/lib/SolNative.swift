@@ -122,6 +122,35 @@ class SolNative: RCTEventEmitter {
     resolver(output)
   }
 
+  @objc func executeBashScriptWithOutput(
+    _ source: String,
+    resolver resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    DispatchQueue.global(qos: .userInitiated).async {
+      let task = Process()
+      let pipe = Pipe()
+      task.executableURL = URL(fileURLWithPath: "/bin/zsh")
+      task.arguments = ["-l", "-c", source]
+      task.standardOutput = pipe
+      task.standardError = pipe
+
+      do {
+        try task.run()
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        task.waitUntilExit()
+        let output = String(data: data, encoding: .utf8) ?? ""
+        if task.terminationStatus == 0 {
+          resolve(output)
+        } else {
+          reject("ShellCommandError", output.trimmingCharacters(in: .whitespacesAndNewlines), nil)
+        }
+      } catch {
+        reject("ShellCommandError", error.localizedDescription, error)
+      }
+    }
+  }
+
   @objc func getMediaInfo(
     _ resolve: @escaping RCTPromiseResolveBlock,
     rejecter _: RCTPromiseRejectBlock
@@ -391,6 +420,24 @@ class SolNative: RCTEventEmitter {
       ToastManager.shared.showToast(
         wifiInfo, variant: "none", timeout: 30, image: image)
     }
+  }
+
+  @objc func generateQRCode(
+    _ text: String,
+    resolver resolve: RCTPromiseResolveBlock,
+    rejecter reject: RCTPromiseRejectBlock
+  ) {
+    guard
+      let image = QR(from: text, size: 10),
+      let tiffData = image.tiffRepresentation,
+      let bitmap = NSBitmapImageRep(data: tiffData),
+      let pngData = bitmap.representation(using: .png, properties: [:])
+    else {
+      reject("QRCodeError", "Could not generate QR code", nil)
+      return
+    }
+
+    resolve("data:image/png;base64," + pngData.base64EncodedString())
   }
 
   @objc func hasFullDiskAccess(
