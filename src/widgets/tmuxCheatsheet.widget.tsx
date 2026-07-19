@@ -25,33 +25,33 @@ const SECTIONS = [
 	{
 		title: "Windows",
 		commands: [
-			["prefix c", "Create window"],
-			["prefix n / p", "Next / previous window"],
-			["prefix 0…9", "Jump to window"],
-			["prefix ,", "Rename window"],
-			["prefix &", "Close window"],
+			["Ctrl-b c", "Create window"],
+			["Ctrl-b n / p", "Next / previous window"],
+			["Ctrl-b 0…9", "Jump to window"],
+			["Ctrl-b ,", "Rename window"],
+			["Ctrl-b &", "Close window"],
 		],
 	},
 	{
 		title: "Panes",
 		commands: [
-			['prefix "', "Split vertically"],
-			["prefix %", "Split horizontally"],
-			["prefix arrows", "Move between panes"],
-			["prefix z", "Zoom current pane"],
-			["prefix x", "Close pane"],
-			["prefix { / }", "Move pane left / right"],
+			['Ctrl-b "', "Split vertically"],
+			["Ctrl-b %", "Split horizontally"],
+			["Ctrl-b arrows", "Move between panes"],
+			["Ctrl-b z", "Zoom current pane"],
+			["Ctrl-b x", "Close pane"],
+			["Ctrl-b { / }", "Move pane left / right"],
 		],
 	},
 	{
 		title: "Copy & utility",
 		commands: [
-			["prefix [", "Enter copy mode"],
-			["prefix ]", "Paste buffer"],
-			["prefix d", "Detach"],
-			["prefix ?", "Show all key bindings"],
-			["prefix :", "Open command prompt"],
-			["prefix t", "Show clock"],
+			["Ctrl-b [", "Enter copy mode"],
+			["Ctrl-b ]", "Paste buffer"],
+			["Ctrl-b d", "Detach"],
+			["Ctrl-b ?", "Show all key bindings"],
+			["Ctrl-b :", "Open command prompt"],
+			["Ctrl-b t", "Show clock"],
 		],
 	},
 ] as const;
@@ -70,7 +70,7 @@ export const TmuxCheatsheetWidget: FC = () => {
 				<View className="flex-1">
 					<Text className="text-xl font-semibold text">tmux Cheatsheet</Text>
 					<Text className="text-xs darker-text">
-						Default prefix is Ctrl-b · click any command to copy
+						Prefix: Ctrl-b · click any command to copy
 					</Text>
 				</View>
 			</View>
