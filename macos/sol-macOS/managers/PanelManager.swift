@@ -41,7 +41,7 @@ enum PreferredScreen {
     }
 
     let yOffset = screen.visibleFrame.height * 0.3
-    let x = screen.visibleFrame.midX - baseSize.width / 2
+    let x = screen.visibleFrame.midX - mainWindow.frame.width / 2
     let y = screen.visibleFrame.midY - mainWindow.frame.height + yOffset
     mainWindow.setFrameOrigin(NSPoint(x: floor(x), y: floor(y)))
 
@@ -60,9 +60,10 @@ enum PreferredScreen {
 
   @objc func resetSize() {
     let origin = CGPoint(x: 0, y: 0)
-    let size = baseSize
+    let size = mainWindow.windowSize(forContentSize: baseSize)
     let frame = NSRect(origin: origin, size: size)
     mainWindow.setFrame(frame, display: false)
+    mainWindow.layoutInstalledRootView()
     mainWindow.center()
   }
 
@@ -72,7 +73,8 @@ enum PreferredScreen {
       finalHeight = Int(baseSize.height)
     }
 
-    let size = NSSize(width: Int(baseSize.width), height: finalHeight)
+    let contentSize = NSSize(width: Int(baseSize.width), height: finalHeight)
+    let windowSize = mainWindow.windowSize(forContentSize: contentSize)
     guard
       let screen =
         (preferredScreen == .frontmost ? getFrontmostScreen() : getScreenWithMouse())
@@ -81,15 +83,16 @@ enum PreferredScreen {
     }
 
     let yOffset = screen.visibleFrame.height * 0.3
-    let y = screen.visibleFrame.midY - CGFloat(finalHeight) + yOffset
+    let y = floor(screen.visibleFrame.midY - windowSize.height + yOffset)
 
     let frame = NSRect(
-      x: mainWindow.frame.minX, y: y, width: baseSize.width, height: CGFloat(finalHeight))
+      x: mainWindow.frame.minX,
+      y: y,
+      width: windowSize.width,
+      height: windowSize.height
+    )
     self.mainWindow.setFrame(frame, display: true)
-
-    self.rootView?.setFrameSize(size)
-
-    self.rootView?.setFrameOrigin(NSPoint(x: 0, y: 0))
+    self.mainWindow.layoutInstalledRootView()
   }
 
   @objc func setRelativeSize(_ proportion: Double) {
@@ -98,13 +101,15 @@ enum PreferredScreen {
     }
 
     let origin = CGPoint(x: 0, y: 0)
-    let size = CGSize(
+    let contentSize = CGSize(
       width: screenSize.width * CGFloat(proportion),
       height: screenSize.height * CGFloat(proportion)
     )
+    let size = mainWindow.windowSize(forContentSize: contentSize)
 
     let frame = NSRect(origin: origin, size: size)
     mainWindow.setFrame(frame, display: false)
+    mainWindow.layoutInstalledRootView()
     mainWindow.center()
   }
 

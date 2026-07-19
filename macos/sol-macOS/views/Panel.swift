@@ -1,5 +1,52 @@
 import AppKit
 
+@available(macOS 26.0, *)
+private final class SpotlightGlassHostView: NSView {
+  static let glassInset: CGFloat = 2
+  let glassView = NSGlassEffectView(frame: .zero)
+  var requestedCornerRadius: CGFloat = 24 {
+    didSet {
+      updateResolvedCornerRadius()
+    }
+  }
+
+  override init(frame frameRect: NSRect) {
+    super.init(frame: frameRect)
+    addSubview(glassView)
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) has not been implemented")
+  }
+
+  override func layout() {
+    super.layout()
+    let inset = Self.glassInset
+    glassView.frame = NSRect(
+      x: inset,
+      y: inset,
+      width: max(0, bounds.width - inset * 2),
+      height: max(0, bounds.height - inset * 2)
+    )
+    updateResolvedCornerRadius()
+  }
+
+  private func updateResolvedCornerRadius() {
+    guard glassView.bounds.width > 0, glassView.bounds.height > 0 else { return }
+    // Avoid the exact half-height degeneracy that can turn the regular
+    // style's inner highlight into a cusp on the collapsed 64 pt bar.
+    let maximumRadius = max(
+      0,
+      min(glassView.bounds.width, glassView.bounds.height) / 2 - 0.5
+    )
+    let resolvedRadius = min(requestedCornerRadius, maximumRadius)
+    if abs(glassView.cornerRadius - resolvedRadius) > 0.01 {
+      glassView.cornerRadius = resolvedRadius
+    }
+  }
+}
+
 private final class SpotlightFallbackBackgroundView: NSVisualEffectView {
   private let tintOverlay = NSView(frame: .zero)
 
@@ -39,6 +86,8 @@ private final class SpotlightFallbackBackgroundView: NSVisualEffectView {
 }
 
 final class Panel: NSPanel, NSWindowDelegate {
+  private weak var installedRootView: NSView?
+
   init(contentRect: NSRect) {
     super.init(
       contentRect: contentRect,
@@ -59,12 +108,14 @@ final class Panel: NSPanel, NSWindowDelegate {
     self.backgroundColor = .clear
 
     if #available(macOS 26.0, *) {
-      let glassView = NSGlassEffectView(frame: .zero)
-      glassView.autoresizingMask = [.width, .height]
-      glassView.style = .clear
-      glassView.tintColor = nil
-      glassView.cornerRadius = 24
-      self.contentView = glassView
+      let hostView = SpotlightGlassHostView(frame: .zero)
+      hostView.glassView.style = .clear
+      hostView.glassView.tintColor = nil
+      hostView.requestedCornerRadius = 24
+      self.contentView = hostView
+      // NSGlassEffectView supplies its own elevation. A second NSWindow shadow
+      // creates a dirty double rim around the stronger regular style.
+      self.hasShadow = false
     } else {
       let effectView = SpotlightFallbackBackgroundView(frame: .zero)
       effectView.autoresizingMask = [.width, .height]
@@ -76,12 +127,38 @@ final class Panel: NSPanel, NSWindowDelegate {
   }
 
   func installRootView(_ rootView: NSView) {
+    installedRootView = rootView
     rootView.autoresizingMask = [.width, .height]
 
-    if #available(macOS 26.0, *), let glassView = contentView as? NSGlassEffectView {
-      glassView.contentView = rootView
+    if #available(macOS 26.0, *), let hostView = contentView as? SpotlightGlassHostView {
+      rootView.frame = hostView.glassView.bounds
+      hostView.glassView.contentView = rootView
     } else {
+      rootView.frame = contentView?.bounds ?? .zero
       contentView?.addSubview(rootView)
+    }
+  }
+
+  func windowSize(forContentSize contentSize: NSSize) -> NSSize {
+    if #available(macOS 26.0, *), contentView is SpotlightGlassHostView {
+      let padding = SpotlightGlassHostView.glassInset * 2
+      return NSSize(
+        width: contentSize.width + padding,
+        height: contentSize.height + padding
+      )
+    }
+    return contentSize
+  }
+
+  func layoutInstalledRootView() {
+    contentView?.layoutSubtreeIfNeeded()
+    guard let installedRootView else { return }
+
+    if #available(macOS 26.0, *), let hostView = contentView as? SpotlightGlassHostView {
+      hostView.layoutSubtreeIfNeeded()
+      installedRootView.frame = hostView.glassView.bounds
+    } else {
+      installedRootView.frame = contentView?.bounds ?? .zero
     }
   }
 
@@ -105,10 +182,13 @@ final class Panel: NSPanel, NSWindowDelegate {
       tintColor = nil
     }
 
-    if #available(macOS 26.0, *), let glassView = contentView as? NSGlassEffectView {
+    if #available(macOS 26.0, *), let hostView = contentView as? SpotlightGlassHostView {
+      let glassView = hostView.glassView
       glassView.style = style == "regular" ? .regular : .clear
-      glassView.cornerRadius = safeRadius
+      hostView.requestedCornerRadius = safeRadius
       glassView.tintColor = tintColor
+      hostView.needsLayout = true
+      hostView.layoutSubtreeIfNeeded()
       glassView.needsDisplay = true
     } else if let effectView = contentView as? SpotlightFallbackBackgroundView {
       effectView.applyGlassAppearance(
@@ -117,9 +197,8 @@ final class Panel: NSPanel, NSWindowDelegate {
         tintColor: tintColor
       )
       effectView.needsDisplay = true
+      invalidateShadow()
     }
-
-    invalidateShadow()
   }
 
   override var canBecomeKey: Bool {
