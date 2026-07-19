@@ -158,6 +158,7 @@ import power from "./assets/power.png";
 import restart from "./assets/restart.png";
 import toggle from "./assets/toggle.png";
 import terminal from "./assets/terminal.png";
+import gun from "./assets/gun.png";
 
 export const Assets = {
 	Calendar,
@@ -206,6 +207,7 @@ export const Assets = {
 	restart,
 	toggle,
 	terminal,
+	gun,
 };
 
 export const Icons = {

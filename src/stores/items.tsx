@@ -453,7 +453,7 @@ export function createBaseItems(store: IRootStore) {
 		},
 		{
 			id: "process_manager",
-			icon: "🔫",
+			iconImage: Assets.gun,
 			name: "Kill process",
 			type: ItemType.CONFIGURATION,
 			callback: () => {

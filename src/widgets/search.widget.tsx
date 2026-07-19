@@ -174,8 +174,24 @@ function getItemMetadata(item: Item, username: string) {
 	return details.join(" · ");
 }
 
-function ItemIcon({ item }: { item: Item }) {
+function ItemIcon({
+	item,
+	isActive,
+	isDarkMode,
+}: {
+	item: Item;
+	isActive: boolean;
+	isDarkMode: boolean;
+}) {
 	let icon = null;
+	const adaptiveTint =
+		item.id === "process_manager"
+			? isActive
+				? "#ffffff"
+				: isDarkMode
+					? "#ffffffb8"
+					: "#000000b8"
+			: undefined;
 
 	if (item.type === ItemType.BOOKMARK && item.url) {
 		icon = (
@@ -202,7 +218,12 @@ function ItemIcon({ item }: { item: Item }) {
 		);
 	} else if (item.iconImage) {
 		icon = (
-			<Image source={item.iconImage} className="w-6 h-6" resizeMode="contain" />
+			<Image
+				source={item.iconImage}
+				className="w-6 h-6"
+				resizeMode="contain"
+				style={adaptiveTint ? { tintColor: adaptiveTint } : undefined}
+			/>
 		);
 	} else if (
 		(Platform.OS === "macos" || Platform.OS === "ios") &&
@@ -259,7 +280,11 @@ const ItemRow = observer(({ item, index }: { item: Item; index: number }) => {
 					"bg-accent-strong": isActive,
 				})}
 			>
-				<ItemIcon item={item} />
+				<ItemIcon
+					item={item}
+					isActive={isActive}
+					isDarkMode={store.ui.isDarkMode}
+				/>
 				<Text
 					numberOfLines={1}
 					className={clsx("ml-3 text flex-1", {

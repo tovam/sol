@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Pistol">
+  <path
+    fill="#111111"
+    fill-rule="evenodd"
+    d="M7 12a3 3 0 0 0-3 3v13a3 3 0 0 0 3 3h22l-2.4 7.1A5 5 0 0 0 31.3 45H34l-2.8 7.5A3 3 0 0 0 34 56h11.2a3 3 0 0 0 2.9-2.2l6-22.8H57a3 3 0 0 0 3-3V18a3 3 0 0 0-3-3h-5v-1a2 2 0 0 0-2-2H7Zm4 6h35v4H11v-4Zm24 13h12l-4.7 18H38l2.6-7A3 3 0 0 0 37.8 38h-4.4l1.6-7Zm-3 1.5a8 8 0 0 1 8 8h-5a3 3 0 0 0-3-3v-5Z"
+  />
+</svg>
