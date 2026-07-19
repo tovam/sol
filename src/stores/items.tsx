@@ -1,4 +1,4 @@
-import { Assets } from "assets";
+import { Assets, Icons } from "assets";
 import Chance from "chance";
 import { FileIcon } from "components/FileIcon";
 import { solNative } from "lib/SolNative";
@@ -448,6 +448,18 @@ export function createBaseItems(store: IRootStore) {
 			type: ItemType.CONFIGURATION,
 			callback: () => {
 				store.ui.showClipboardManager();
+			},
+			preventClose: true,
+		},
+		{
+			id: "search_history",
+			iconImage: Icons.Clock,
+			name: "Search History",
+			alias: "history recent searches historique recherches récentes",
+			type: ItemType.CONFIGURATION,
+			callback: () => {
+				store.ui.setQuery("");
+				store.ui.focusWidget(Widget.HISTORY);
 			},
 			preventClose: true,
 		},

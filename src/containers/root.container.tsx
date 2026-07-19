@@ -14,6 +14,7 @@ import {DailymotionWidget} from 'widgets/dailymotion.widget'
 import {DockerWidget} from 'widgets/docker.widget'
 import {EmojisWidget} from 'widgets/emojis.widget'
 import {FileSearchWidget} from 'widgets/fileSearch.widget'
+import {HistoryWidget} from 'widgets/history.widget'
 import {OnboardingWidget} from 'widgets/onboarding.widget'
 import {PasswordGeneratorWidget} from 'widgets/passwordGenerator.widget'
 import {ProcessesWidget} from 'widgets/processes.widget'
@@ -49,6 +50,13 @@ export const RootContainer = observer(() => {
     subWindow = (
       <View className="fullWindow">
         <FileSearchWidget />
+      </View>
+    )
+  }
+  if (widget === Widget.HISTORY) {
+    subWindow = (
+      <View className="fullWindow">
+        <HistoryWidget />
       </View>
     )
   }

@@ -85,6 +85,7 @@ export enum Widget {
 	AI_ONE_SHOT = "AI_ONE_SHOT",
 	AI_CHAT = "AI_CHAT",
 	DAILYMOTION = "DAILYMOTION",
+	HISTORY = "HISTORY",
 }
 
 export enum ItemType {
@@ -466,7 +467,6 @@ export const createUIStore = (root: IRootStore) => {
 		targetHeight: 64,
 		isDarkMode: Appearance.getColorScheme() === "dark",
 		history: [] as string[],
-		historyPointer: 0,
 		showUpcomingEvent: true,
 		scratchPadColor: ScratchPadColor.SYSTEM,
 		searchFolders: [] as string[],
@@ -583,6 +583,12 @@ export const createUIStore = (root: IRootStore) => {
 		},
 		get currentItem(): Item | undefined {
 			return store.searchItems[store.selectedIndex];
+		},
+		get filteredHistory(): string[] {
+			const entries = [...store.history].reverse();
+			const filter = store.query.trim().toLowerCase();
+			if (!filter) return entries;
+			return entries.filter((entry) => entry.toLowerCase().includes(filter));
 		},
 		//                _   _
 		//      /\       | | (_)
@@ -967,7 +973,6 @@ export const createUIStore = (root: IRootStore) => {
 			}
 			store.selectedIndex = 0;
 			store.translationResults = [];
-			store.historyPointer = 0;
 		},
 		cleanUp: () => {
 			onShowListener?.remove();
@@ -1212,14 +1217,7 @@ export const createUIStore = (root: IRootStore) => {
 		},
 
 		addToHistory: (query: string) => {
-			store.history.push(query);
-		},
-
-		setHistoryPointer: (pointer: number) => {
-			if (pointer > store.history.length - 1) {
-				return;
-			}
-			store.historyPointer = pointer;
+			if (query.trim()) store.history.push(query);
 		},
 
 		showFileSearch: () => {
