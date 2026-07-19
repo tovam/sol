@@ -2,6 +2,9 @@ import AppKit
 
 private final class SpotlightBackgroundView: NSVisualEffectView {
   static let cornerRadius: CGFloat = 24
+  private let glassTintLayer = CAGradientLayer()
+  private let edgeHighlightLayer = CAGradientLayer()
+  private let edgeHighlightMask = CAShapeLayer()
 
   override init(frame frameRect: NSRect) {
     super.init(frame: frameRect)
@@ -15,7 +18,12 @@ private final class SpotlightBackgroundView: NSVisualEffectView {
 
   override func viewDidChangeEffectiveAppearance() {
     super.viewDidChangeEffectiveAppearance()
-    updateBorderColor()
+    updateGlassAppearance()
+  }
+
+  override func layout() {
+    super.layout()
+    updateGlassFrames()
   }
 
   private func configureLayer() {
@@ -23,13 +31,64 @@ private final class SpotlightBackgroundView: NSVisualEffectView {
     layer?.cornerRadius = Self.cornerRadius
     layer?.cornerCurve = .continuous
     layer?.masksToBounds = true
-    layer?.borderWidth = 0.5
-    updateBorderColor()
+    layer?.borderWidth = 0.65
+
+    glassTintLayer.startPoint = CGPoint(x: 0, y: 1)
+    glassTintLayer.endPoint = CGPoint(x: 1, y: 0)
+    glassTintLayer.locations = [0, 0.48, 1]
+    layer?.insertSublayer(glassTintLayer, at: 0)
+
+    edgeHighlightLayer.startPoint = CGPoint(x: 0, y: 1)
+    edgeHighlightLayer.endPoint = CGPoint(x: 1, y: 0)
+    edgeHighlightLayer.locations = [0, 0.45, 1]
+    edgeHighlightLayer.mask = edgeHighlightMask
+    layer?.addSublayer(edgeHighlightLayer)
+
+    edgeHighlightMask.fillColor = NSColor.clear.cgColor
+    edgeHighlightMask.strokeColor = NSColor.white.cgColor
+    edgeHighlightMask.lineWidth = 1.15
+
+    updateGlassFrames()
+    updateGlassAppearance()
   }
 
-  private func updateBorderColor() {
+  private func updateGlassFrames() {
+    glassTintLayer.frame = bounds
+    edgeHighlightLayer.frame = bounds
+    edgeHighlightMask.frame = bounds
+    edgeHighlightMask.path = CGPath(
+      roundedRect: bounds.insetBy(dx: 0.6, dy: 0.6),
+      cornerWidth: Self.cornerRadius - 0.6,
+      cornerHeight: Self.cornerRadius - 0.6,
+      transform: nil
+    )
+  }
+
+  private func updateGlassAppearance() {
     effectiveAppearance.performAsCurrentDrawingAppearance {
-      layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.55).cgColor
+      let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+      layer?.borderColor = (
+        isDark
+          ? NSColor.white.withAlphaComponent(0.16)
+          : NSColor.black.withAlphaComponent(0.11)
+      ).cgColor
+
+      glassTintLayer.colors = isDark
+        ? [
+          NSColor.white.withAlphaComponent(0.105).cgColor,
+          NSColor.white.withAlphaComponent(0.025).cgColor,
+          NSColor.black.withAlphaComponent(0.075).cgColor,
+        ]
+        : [
+          NSColor.white.withAlphaComponent(0.30).cgColor,
+          NSColor.white.withAlphaComponent(0.08).cgColor,
+          NSColor.white.withAlphaComponent(0.17).cgColor,
+        ]
+      edgeHighlightLayer.colors = [
+        NSColor.white.withAlphaComponent(isDark ? 0.38 : 0.72).cgColor,
+        NSColor.white.withAlphaComponent(isDark ? 0.08 : 0.18).cgColor,
+        NSColor.white.withAlphaComponent(isDark ? 0.16 : 0.34).cgColor,
+      ]
     }
   }
 }
