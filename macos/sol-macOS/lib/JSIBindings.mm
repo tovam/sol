@@ -14,6 +14,7 @@
 #import <React/RCTEventEmitter.h>
 #import <React/RCTRootView.h>
 #import <React/RCTViewManager.h>
+#import <UserNotifications/UserNotifications.h>
 #import <iostream>
 #ifdef DEBUG
 #import <sol_debug-Swift.h>
