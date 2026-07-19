@@ -3,10 +3,11 @@ import Foundation
 import React
 import React_RCTAppDelegate
 import Sparkle
+import UserNotifications
 
 @NSApplicationMain
 @objc
-class AppDelegate: RCTAppDelegate {
+class AppDelegate: RCTAppDelegate, UNUserNotificationCenterDelegate {
   private var updaterController: SPUStandardUpdaterController!
   private var mediaKeyForwarder: MediaKeyForwarder!
   private let imagesPasteboardDirectory: URL = {
@@ -73,6 +74,8 @@ class AppDelegate: RCTAppDelegate {
 
     super.applicationDidFinishLaunching(notification)
 
+    UNUserNotificationCenter.current().delegate = self
+
     let rootView = self.rootViewFactory().view(withModuleName: "sol")
 
     PanelManager.shared.setRootView(rootView)
@@ -82,6 +85,14 @@ class AppDelegate: RCTAppDelegate {
     mediaKeyForwarder = MediaKeyForwarder()
 
     PanelManager.shared.showWindow()
+  }
+
+  func userNotificationCenter(
+    _ center: UNUserNotificationCenter,
+    willPresent notification: UNNotification,
+    withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+  ) {
+    completionHandler([.banner, .list])
   }
 
   func checkForUpdates() {

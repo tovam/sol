@@ -10,6 +10,8 @@ class SolNative extends NativeEventEmitter {
 		Array<{ name: string; url: string; isRunning: boolean }>
 	>;
 	toggleDarkMode: () => void;
+	prepareTimerNotifications: () => void;
+	notifyTimerFinished: () => void;
 	executeAppleScript: (source: string) => void;
 	getMediaInfo: () => Promise<
 		| {
@@ -132,6 +134,8 @@ class SolNative extends NativeEventEmitter {
 		this.getApps = module.getApps;
 		this.openFile = module.openFile;
 		this.toggleDarkMode = module.toggleDarkMode;
+		this.prepareTimerNotifications = module.prepareTimerNotifications;
+		this.notifyTimerFinished = module.notifyTimerFinished;
 		this.executeBashScript = module.executeBashScript;
 		this.executeBashScriptWithOutput = module.executeBashScriptWithOutput;
 		this.executeAppleScript = module.executeAppleScript;

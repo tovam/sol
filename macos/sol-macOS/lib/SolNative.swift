@@ -2,6 +2,7 @@ import Foundation
 import HotKey
 import LaunchAtLogin
 import React
+import UserNotifications
 
 private let keychain = Keychain(service: "Sol")
 
@@ -94,6 +95,58 @@ class SolNative: RCTEventEmitter {
 
   @objc func toggleDarkMode() {
     DarkMode.isEnabled = !DarkMode.isEnabled
+  }
+
+  @objc func prepareTimerNotifications() {
+    UNUserNotificationCenter.current().requestAuthorization(options: [.alert]) { _, error in
+      if let error {
+        print("Could not request timer notification permission: \(error.localizedDescription)")
+      }
+    }
+  }
+
+  @objc func notifyTimerFinished() {
+    DispatchQueue.main.async {
+      if NSSound(named: NSSound.Name("Glass"))?.play() != true {
+        NSSound.beep()
+      }
+    }
+
+    let center = UNUserNotificationCenter.current()
+    let deliverNotification = {
+      let content = UNMutableNotificationContent()
+      content.title = "Sol Timer"
+      content.body = "Time is up"
+      let request = UNNotificationRequest(
+        identifier: "sol-timer-\(UUID().uuidString)",
+        content: content,
+        trigger: nil
+      )
+      center.add(request) { error in
+        if let error {
+          print("Could not show timer notification: \(error.localizedDescription)")
+        }
+      }
+    }
+
+    center.getNotificationSettings { settings in
+      switch settings.authorizationStatus {
+      case .authorized, .provisional:
+        deliverNotification()
+      case .notDetermined:
+        center.requestAuthorization(options: [.alert]) { granted, error in
+          if granted {
+            deliverNotification()
+          } else if let error {
+            print("Could not authorize timer notification: \(error.localizedDescription)")
+          }
+        }
+      case .denied:
+        break
+      @unknown default:
+        break
+      }
+    }
   }
 
   @objc func executeAppleScript(

@@ -70,6 +70,7 @@ export const createTimerStore = () => {
 
 		start: (seconds = store.durationSeconds) => {
 			stopInterval();
+			solNative.prepareTimerNotifications();
 			store.durationSeconds = Math.max(1, Math.round(seconds));
 			store.remainingSeconds = store.durationSeconds;
 			store.status = "running";
@@ -105,9 +106,7 @@ export const createTimerStore = () => {
 			stopInterval();
 			store.status = "finished";
 			void solNative.showToast("Timer finished", "success", 10);
-			solNative.executeAppleScript(
-				'display notification "Time is up" with title "Sol Timer" sound name "Glass"',
-			);
+			solNative.notifyTimerFinished();
 		},
 
 		cleanUp: stopInterval,

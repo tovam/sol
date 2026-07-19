@@ -35,6 +35,8 @@ RCT_EXTERN_METHOD(getApps : (RCTPromiseResolveBlock)
 RCT_EXTERN_METHOD(openFile : (NSString)path)
 RCT_EXTERN_METHOD(openWithFinder : (NSString)path)
 RCT_EXTERN_METHOD(toggleDarkMode)
+RCT_EXTERN_METHOD(prepareTimerNotifications)
+RCT_EXTERN_METHOD(notifyTimerFinished)
 RCT_EXTERN_METHOD(executeAppleScript : (NSString)source resolve : (
     RCTPromiseResolveBlock)resolve reject : (RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(executeBashScript : (NSString)source resolver : (
