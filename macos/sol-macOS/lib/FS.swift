@@ -28,14 +28,56 @@ import Foundation
 
     if !FileManager.default.fileExists(atPath: parentDir.path) {
       do {
-        try FileManager.default.createDirectory(at: parentDir, withIntermediateDirectories: true, attributes: nil)
+        try FileManager.default.createDirectory(
+          at: parentDir,
+          withIntermediateDirectories: true,
+          attributes: [.posixPermissions: 0o700])
       } catch {
         return false
       }
     }
 
     do {
-      try contents.write(to: url, atomically: true, encoding: .utf8)
+      try FileManager.default.setAttributes(
+        [.posixPermissions: 0o700],
+        ofItemAtPath: parentDir.path)
+    } catch {
+      return false
+    }
+
+    guard let data = contents.data(using: .utf8) else {
+      return false
+    }
+
+    let temporaryURL = parentDir.appendingPathComponent(
+      ".\(url.lastPathComponent).\(UUID().uuidString).tmp")
+    guard
+      FileManager.default.createFile(
+        atPath: temporaryURL.path,
+        contents: data,
+        attributes: [.posixPermissions: 0o600])
+    else {
+      return false
+    }
+
+    defer {
+      try? FileManager.default.removeItem(at: temporaryURL)
+    }
+
+    do {
+      if FileManager.default.fileExists(atPath: path) {
+        try FileManager.default.setAttributes(
+          [.posixPermissions: 0o600],
+          ofItemAtPath: path)
+        _ = try FileManager.default.replaceItemAt(
+          url,
+          withItemAt: temporaryURL)
+      } else {
+        try FileManager.default.moveItem(at: temporaryURL, to: url)
+      }
+      try FileManager.default.setAttributes(
+        [.posixPermissions: 0o600],
+        ofItemAtPath: path)
       return true
     } catch {
       return false

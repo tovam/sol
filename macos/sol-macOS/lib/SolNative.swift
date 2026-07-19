@@ -483,19 +483,27 @@ class SolNative: RCTEventEmitter {
     _ key: NSString,
     payload: NSString,
     resolver: RCTPromiseResolveBlock,
-    rejecter _: RCTPromiseRejectBlock
+    rejecter reject: RCTPromiseRejectBlock
   ) {
-    keychain[key as String] = payload as String
-    resolver(true)
+    do {
+      try keychain.set(payload as String, key: key as String)
+      resolver(true)
+    } catch {
+      reject("KeychainStoreError", error.localizedDescription, error)
+    }
   }
 
   @objc func securelyRetrieve(
     _ key: NSString,
     resolver resolve: RCTPromiseResolveBlock,
-    rejecter _: RCTPromiseRejectBlock
+    rejecter reject: RCTPromiseRejectBlock
   ) {
-    let value = keychain[key as String]
-    return resolve(value)
+    do {
+      let value = try keychain.get(key as String)
+      resolve(value)
+    } catch {
+      reject("KeychainRetrieveError", error.localizedDescription, error)
+    }
   }
 
   @objc func showToast(_ text: String, variant: String, timeout: NSNumber) {

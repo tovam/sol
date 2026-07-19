@@ -1,13 +1,15 @@
 import { captureException } from "@sentry/react-native";
 import { solNative } from "lib/SolNative";
 import MiniSearch from "minisearch";
-import { autorun, makeAutoObservable, runInAction } from "mobx";
+import { makeAutoObservable, reaction, runInAction } from "mobx";
 import type { EmitterSubscription } from "react-native";
 import type { IRootStore } from "store";
 import { readPersistedStore, writePersistedStore } from "./persisted-config";
 import { Widget } from "./ui.store";
 
 const MAX_ITEMS = 1000;
+const CLIPBOARD_STORAGE_VERSION = 2;
+const LEGACY_KEYCHAIN_KEY = "@sol.clipboard_history_v2";
 const MANAGED_PASTEBOARD_IMAGES_PATH = `/Users/${solNative.userName()}/.config/sol/images_pasteboard`;
 
 let onTextCopiedListener: EmitterSubscription | undefined;
@@ -22,6 +24,50 @@ export type PasteItem = {
 	bundle?: string | null;
 	datetime: number; // Unix timestamp when copied
 };
+
+type PersistedClipboardState = {
+	saveHistory?: boolean;
+	items?: unknown;
+	storageVersion?: number;
+};
+
+function normalizePersistedItems(value: unknown): PasteItem[] {
+	if (!Array.isArray(value)) {
+		return [];
+	}
+
+	return value
+		.filter(
+			(item): item is Record<string, unknown> => {
+				if (item == null || typeof item !== "object") {
+					return false;
+				}
+				const candidate = item as Record<string, unknown>;
+				return (
+					typeof candidate.text === "string" &&
+					Number.isFinite(Number(candidate.id))
+				);
+			},
+		)
+		.slice(0, MAX_ITEMS)
+		.map((item) => {
+			const id = Number(item.id);
+			const datetime = Number(item.datetime);
+			return {
+				id,
+				text: item.text as string,
+				url:
+					typeof item.url === "string" || item.url === null
+						? item.url
+						: undefined,
+				bundle:
+					typeof item.bundle === "string" || item.bundle === null
+						? item.bundle
+						: undefined,
+				datetime: Number.isFinite(datetime) ? datetime : id || Date.now(),
+			};
+		});
+}
 
 const minisearch = new MiniSearch({
 	fields: ["text"],
@@ -73,6 +119,10 @@ function cleanupOrphanedManagedImageFiles(items: PasteItem[]) {
 }
 
 export const createClipboardStore = (root: IRootStore) => {
+	let stopPersisting: (() => void) | undefined;
+	let disposed = false;
+	let cleanupAfterNextSuccessfulPersist = false;
+
 	const store = makeAutoObservable({
 		deleteItem: (index: number) => {
 			if (index >= 0 && index < store.items.length) {
@@ -200,11 +250,11 @@ export const createClipboardStore = (root: IRootStore) => {
 		},
 		setSaveHistory: (v: boolean) => {
 			store.saveHistory = v;
-			if (!v) {
-				solNative.securelyStore("@sol.clipboard_history_v2", "[]");
-			}
 		},
 		cleanUp: () => {
+			disposed = true;
+			stopPersisting?.();
+			stopPersisting = undefined;
 			onTextCopiedListener?.remove();
 			onTextCopiedListener = undefined;
 			onFileCopiedListener?.remove();
@@ -221,79 +271,115 @@ export const createClipboardStore = (root: IRootStore) => {
 		store.onFileCopied,
 	);
 
-	const hydrate = async () => {
-		const persistedState = await readPersistedStore<{
-			saveHistory?: boolean;
-		}>("clipboard");
+	const hydrate = async (): Promise<{
+		canPersist: boolean;
+		persistImmediately: boolean;
+	}> => {
+		const persistedState =
+			await readPersistedStore<PersistedClipboardState>("clipboard");
+		if (disposed) {
+			return { canPersist: false, persistImmediately: false };
+		}
 
 		if (persistedState) {
 			store.saveHistory = persistedState.saveHistory ?? false;
 		}
 
+		let items: PasteItem[] = [];
+		let shouldWriteMigratedState = false;
+		let migrationFailed = false;
+
 		if (store.saveHistory) {
-			const entry = await solNative.securelyRetrieve(
-				"@sol.clipboard_history_v2",
-			);
-
-			if (entry) {
-				let items = JSON.parse(entry);
-				// Ensure all items have datetime
-				items = items.map((item: any) => ({
-					...item,
-					datetime:
-						typeof item.datetime === "number" && !Number.isNaN(item.datetime)
-							? item.datetime
-							: item.id || Date.now(), // fallback: use id or now
-				}));
-				runInAction(() => {
-					store.items = items;
-					minisearch.addAll(store.items);
-				});
-
-				cleanupOrphanedManagedImageFiles(items);
+			if (persistedState?.storageVersion === CLIPBOARD_STORAGE_VERSION) {
+				items = normalizePersistedItems(persistedState.items);
 			} else {
-				cleanupOrphanedManagedImageFiles([]);
+				// One-time migration from the old Keychain-backed clipboard history.
+				// Once state.json has storageVersion 2, startup never touches Keychain.
+				try {
+					const entry = await solNative.securelyRetrieve(LEGACY_KEYCHAIN_KEY);
+					items = normalizePersistedItems(entry ? JSON.parse(entry) : []);
+				} catch (error) {
+					captureException(error);
+					migrationFailed = true;
+				}
+				shouldWriteMigratedState = !migrationFailed;
 			}
-		} else {
-			cleanupOrphanedManagedImageFiles([]);
 		}
+		if (disposed || migrationFailed) {
+			return { canPersist: false, persistImmediately: false };
+		}
+
+		runInAction(() => {
+			store.items = items;
+			minisearch.removeAll();
+			if (items.length > 0) {
+				minisearch.addAll(items);
+			}
+		});
+		let migrationWasPersisted = true;
+		if (
+			shouldWriteMigratedState ||
+			(persistedState != null &&
+				persistedState.storageVersion !== CLIPBOARD_STORAGE_VERSION)
+		) {
+			migrationWasPersisted = writePersistedStore("clipboard", {
+				saveHistory: store.saveHistory,
+				items: store.saveHistory ? items : [],
+				storageVersion: CLIPBOARD_STORAGE_VERSION,
+			});
+		}
+
+		if (migrationWasPersisted) {
+			cleanupOrphanedManagedImageFiles(items);
+		} else {
+			cleanupAfterNextSuccessfulPersist = true;
+			console.warn("Could not migrate clipboard history to local storage");
+		}
+
+		return {
+			canPersist: true,
+			persistImmediately: !migrationWasPersisted,
+		};
 	};
 
-	const persist = async () => {
-		if (store.saveHistory) {
-			// Ensure all items have datetime before persisting
-			const itemsToPersist = store.items.map((item) => ({
-				...item,
-				datetime:
-					typeof item.datetime === "number" && !Number.isNaN(item.datetime)
-						? item.datetime
-						: item.id || Date.now(),
-			}));
-			try {
-				await solNative.securelyStore(
-					"@sol.clipboard_history_v2",
-					JSON.stringify(itemsToPersist),
-				);
-			} catch (e) {
-				console.warn("Could not persist data", e);
-			}
-		}
-
-		const storeWithoutItems = { ...store };
-		storeWithoutItems.items = [];
-
+	const persist = (state: PersistedClipboardState): boolean => {
 		try {
-			writePersistedStore("clipboard", {
-				saveHistory: storeWithoutItems.saveHistory,
-			});
+			const succeeded = writePersistedStore("clipboard", state);
+			if (!succeeded) {
+				console.warn("Could not persist clipboard store config");
+				return false;
+			}
+			if (cleanupAfterNextSuccessfulPersist) {
+				cleanupAfterNextSuccessfulPersist = false;
+				cleanupOrphanedManagedImageFiles(
+					normalizePersistedItems(state.items),
+				);
+			}
+			return true;
 		} catch {
 			console.warn("Could not persist clipboard store config");
+			return false;
 		}
 	};
 
-	hydrate().then(() => {
-		autorun(persist);
-	});
+	hydrate()
+		.then(({ canPersist, persistImmediately }) => {
+			if (disposed || !canPersist) {
+				return;
+			}
+			stopPersisting = reaction(
+				() => ({
+					saveHistory: store.saveHistory,
+					items: store.saveHistory
+						? normalizePersistedItems(store.items)
+						: [],
+					storageVersion: CLIPBOARD_STORAGE_VERSION,
+				}),
+				persist,
+				{ delay: 250, fireImmediately: persistImmediately },
+			);
+		})
+		.catch(captureException);
 
 	return store;
 };
