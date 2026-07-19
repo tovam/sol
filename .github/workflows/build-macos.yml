@@ -151,6 +151,11 @@ jobs:
         run: |
           APP_PATH="$RUNNER_TEMP/DerivedData/Build/Products/Release/sol.app"
           test -d "$APP_PATH"
+          codesign --force --deep --sign - \
+            --options runtime \
+            --timestamp=none \
+            "$APP_PATH"
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
           ditto -c -k --sequesterRsrc --keepParent \
             "$APP_PATH" \
             Sol-macOS-unsigned.zip
