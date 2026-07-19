@@ -12,7 +12,7 @@ enum PreferredScreen {
   @objc static public let shared = PanelManager()
 
   public func setRootView(_ rootView: NSView) {
-    mainWindow.contentView!.addSubview(rootView)
+    mainWindow.installRootView(rootView)
     self.rootView = rootView
   }
 

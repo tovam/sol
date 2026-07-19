@@ -1,7 +1,7 @@
 import AppKit
 
-private final class SpotlightBackgroundView: NSVisualEffectView {
-  static let cornerRadius: CGFloat = 32
+private final class SpotlightFallbackBackgroundView: NSVisualEffectView {
+  static let cornerRadius: CGFloat = 24
 
   override init(frame frameRect: NSRect) {
     super.init(frame: frameRect)
@@ -16,10 +16,8 @@ private final class SpotlightBackgroundView: NSVisualEffectView {
   private func configureLayer() {
     wantsLayer = true
     layer?.cornerRadius = Self.cornerRadius
-    layer?.cornerCurve = .continuous
+    layer?.cornerCurve = .circular
     layer?.masksToBounds = true
-    layer?.borderWidth = 0.5
-    layer?.borderColor = NSColor.white.withAlphaComponent(0.14).cgColor
   }
 }
 
@@ -27,7 +25,7 @@ final class Panel: NSPanel, NSWindowDelegate {
   init(contentRect: NSRect) {
     super.init(
       contentRect: contentRect,
-      styleMask: [.titled, .fullSizeContentView, .nonactivatingPanel],
+      styleMask: [.borderless, .nonactivatingPanel],
       backing: .buffered,
       defer: false
     )
@@ -36,8 +34,6 @@ final class Panel: NSPanel, NSWindowDelegate {
     self.level = .floating
     self.collectionBehavior.insert(.fullScreenAuxiliary)
     self.collectionBehavior.insert(.canJoinAllSpaces)
-    self.titleVisibility = .hidden
-    self.titlebarAppearsTransparent = true
     self.isMovableByWindowBackground = true
     self.isReleasedWhenClosed = false
     self.isOpaque = false
@@ -45,20 +41,31 @@ final class Panel: NSPanel, NSWindowDelegate {
     self.delegate = self
     self.backgroundColor = .clear
 
-    if #available(macOS 11.0, *) {
-      self.titlebarSeparatorStyle = .none
+    if #available(macOS 26.0, *) {
+      let glassView = NSGlassEffectView(frame: .zero)
+      glassView.autoresizingMask = [.width, .height]
+      glassView.style = .clear
+      glassView.tintColor = nil
+      glassView.cornerRadius = 24
+      self.contentView = glassView
+    } else {
+      let effectView = SpotlightFallbackBackgroundView(frame: .zero)
+      effectView.autoresizingMask = [.width, .height]
+      effectView.material = .popover
+      effectView.blendingMode = .behindWindow
+      effectView.state = .active
+      self.contentView = effectView
     }
+  }
 
-    let effectView = SpotlightBackgroundView(
-      frame: .zero
-    )
-    effectView.autoresizingMask = [.width, .height]
-    effectView.material = .underWindowBackground
-    effectView.blendingMode = .behindWindow
-    effectView.state = .active
+  func installRootView(_ rootView: NSView) {
+    rootView.autoresizingMask = [.width, .height]
 
-    self.contentView = effectView
-    self.contentView!.wantsLayer = true
+    if #available(macOS 26.0, *), let glassView = contentView as? NSGlassEffectView {
+      glassView.contentView = rootView
+    } else {
+      contentView?.addSubview(rootView)
+    }
   }
 
   override var canBecomeKey: Bool {
