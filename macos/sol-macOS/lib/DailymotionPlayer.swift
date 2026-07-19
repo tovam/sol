@@ -182,15 +182,9 @@ private final class DailymotionControlsView: NSVisualEffectView {
   override init(frame frameRect: NSRect) {
     super.init(frame: frameRect)
 
-    material = .hudWindow
+    material = .headerView
     blendingMode = .withinWindow
     state = .active
-    wantsLayer = true
-    layer?.cornerRadius = 11
-    layer?.cornerCurve = .continuous
-    layer?.masksToBounds = true
-    layer?.borderWidth = 0.5
-    layer?.borderColor = NSColor.white.withAlphaComponent(0.2).cgColor
 
     configureButton(
       playButton,
@@ -602,7 +596,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     }
 
     let panel = FloatingVideoPanel(
-      contentRect: NSRect(x: 0, y: 0, width: 640, height: 360),
+      contentRect: NSRect(x: 0, y: 0, width: 640, height: 404),
       styleMask: [.titled, .closable, .miniaturizable, .resizable, .utilityWindow],
       backing: .buffered,
       defer: false
@@ -613,8 +607,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     panel.hasShadow = true
     panel.isReleasedWhenClosed = false
     panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-    panel.minSize = NSSize(width: 480, height: 270)
-    panel.aspectRatio = NSSize(width: 16, height: 9)
+    panel.contentMinSize = NSSize(width: 480, height: 314)
     panel.center()
 
     self.panel = panel
@@ -665,26 +658,17 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     controlsView.delegate = self
 
     let contentView = NSView(frame: panel.contentView?.bounds ?? .zero)
-    contentView.addSubview(webView)
     contentView.addSubview(controlsView)
+    contentView.addSubview(webView)
     NSLayoutConstraint.activate([
+      controlsView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+      controlsView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+      controlsView.topAnchor.constraint(equalTo: contentView.topAnchor),
+      controlsView.heightAnchor.constraint(equalToConstant: 44),
       webView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
       webView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-      webView.topAnchor.constraint(equalTo: contentView.topAnchor),
+      webView.topAnchor.constraint(equalTo: controlsView.bottomAnchor),
       webView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
-      controlsView.leadingAnchor.constraint(
-        equalTo: contentView.leadingAnchor,
-        constant: 10
-      ),
-      controlsView.trailingAnchor.constraint(
-        equalTo: contentView.trailingAnchor,
-        constant: -10
-      ),
-      controlsView.topAnchor.constraint(
-        equalTo: contentView.topAnchor,
-        constant: 10
-      ),
-      controlsView.heightAnchor.constraint(equalToConstant: 42),
     ])
     panel.contentView = contentView
 
@@ -1177,7 +1161,19 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width,initial-scale=1">
         <style>
-          html,body,#sol-player{width:100%;height:100%;margin:0;background:#000;overflow:hidden}
+          html,body{
+            width:100%;height:100%;margin:0;padding:0;background:#000;overflow:hidden
+          }
+          #sol-player{
+            position:relative!important;inset:0!important;width:100%!important;
+            height:100%!important;margin:0!important;padding:0!important;
+            aspect-ratio:auto!important;background:#000;overflow:hidden
+          }
+          #sol-player iframe{
+            position:absolute!important;inset:0!important;width:100%!important;
+            height:100%!important;margin:0!important;padding:0!important;
+            border:0!important;display:block!important;transform:none!important
+          }
         </style>
       </head>
       <body>
