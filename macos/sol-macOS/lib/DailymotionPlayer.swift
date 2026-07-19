@@ -2,6 +2,7 @@ import AppKit
 import WebKit
 
 private let dailymotionBridgeName = "solDailymotion"
+private let dailymotionMinimumDVRWindow = 10.0
 
 private final class FloatingVideoPanel: NSPanel {
   override var canBecomeKey: Bool { true }
@@ -98,13 +99,30 @@ private struct DailymotionPlayerSource {
   }
 }
 
+private enum DailymotionContentMode: Equatable {
+  case unknown
+  case vod
+  case live
+}
+
+private struct DailymotionVideoMetadata {
+  let mode: DailymotionContentMode
+  let isOnAir: Bool?
+  let title: String?
+}
+
 private struct DailymotionBridgeState {
   var backend = "loading"
+  var contentMode = DailymotionContentMode.unknown
+  var isOnAir: Bool?
+  var videoTitle: String?
+  var hasReliableAdState = false
   var ready = false
   var isPlaying = false
   var isBuffering = false
   var isMuted = false
   var currentTime = 0.0
+  var mediaCurrentTime: Double?
   var duration: Double?
   var seekableStart: Double?
   var seekableEnd: Double?
@@ -294,7 +312,23 @@ private final class DailymotionControlsView: NSVisualEffectView {
 
     playButton.isEnabled = ready
     volumeSlider.isEnabled = ready
+    backwardButton.isHidden = false
+    forwardButton.isHidden = false
+    seekSlider.isHidden = false
     liveButton.isHidden = true
+    timeLabel.textColor = .secondaryLabelColor
+
+    if state.contentMode == .live, state.isOnAir == false {
+      setTimeline(start: 0, end: 1, position: 0, enabled: false)
+      playButton.isEnabled = false
+      backwardButton.isHidden = true
+      forwardButton.isHidden = true
+      seekSlider.isHidden = true
+      ratePopUp.isEnabled = false
+      volumeSlider.isEnabled = false
+      timeLabel.stringValue = "OFF AIR"
+      return
+    }
 
     if state.isAdPlaying {
       let duration = state.adDuration ?? 0
@@ -324,12 +358,17 @@ private final class DailymotionControlsView: NSVisualEffectView {
       return
     }
 
-    ratePopUp.isEnabled = true
-    timeLabel.textColor = .secondaryLabelColor
+    if state.contentMode == .live {
+      renderLive(state)
+      return
+    }
+
+    ratePopUp.isEnabled = state.hasReliableAdState
     guard let duration = state.duration, duration > 0 else {
       setTimeline(start: 0, end: 1, position: 0, enabled: false)
-      backwardButton.isEnabled = false
-      forwardButton.isEnabled = false
+      backwardButton.isHidden = true
+      forwardButton.isHidden = true
+      seekSlider.isHidden = true
       timeLabel.stringValue = state.isBuffering ? "Buffering…" : "Playing"
       return
     }
@@ -338,11 +377,48 @@ private final class DailymotionControlsView: NSVisualEffectView {
       start: 0,
       end: duration,
       position: state.currentTime,
-      enabled: true
+      enabled: state.hasReliableAdState
     )
-    backwardButton.isEnabled = true
-    forwardButton.isEnabled = true
+    backwardButton.isEnabled = state.hasReliableAdState
+    forwardButton.isEnabled = state.hasReliableAdState
     timeLabel.stringValue = "\(formatTime(state.currentTime)) / \(formatTime(duration))"
+  }
+
+  private func renderLive(_ state: DailymotionBridgeState) {
+    let position = state.mediaCurrentTime ?? state.currentTime
+    guard
+      let rangeStart = state.seekableStart,
+      let rangeEnd = state.seekableEnd,
+      rangeStart.isFinite,
+      rangeEnd.isFinite,
+      rangeEnd - rangeStart >= dailymotionMinimumDVRWindow
+    else {
+      setTimeline(start: 0, end: 1, position: 1, enabled: false)
+      backwardButton.isHidden = true
+      forwardButton.isHidden = true
+      seekSlider.isHidden = true
+      liveButton.isHidden = false
+      liveButton.isEnabled = false
+      ratePopUp.isEnabled = false
+      timeLabel.textColor = .systemRed
+      timeLabel.stringValue = state.isBuffering ? "LIVE · Buffering…" : "LIVE"
+      return
+    }
+
+    let delay = max(0, rangeEnd - position)
+    setTimeline(
+      start: rangeStart,
+      end: rangeEnd,
+      position: position,
+      enabled: state.hasReliableAdState
+    )
+    backwardButton.isEnabled = state.hasReliableAdState
+    forwardButton.isEnabled = state.hasReliableAdState
+    liveButton.isHidden = false
+    liveButton.isEnabled = state.hasReliableAdState && delay > 3
+    ratePopUp.isEnabled = state.hasReliableAdState
+    timeLabel.textColor = delay <= 3 ? .systemRed : .secondaryLabelColor
+    timeLabel.stringValue = delay <= 3 ? "LIVE" : "−\(formatTime(delay))"
   }
 
   private func configureButton(
@@ -492,6 +568,9 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
   private var mediaFrameLastSeen = Date.distantPast
   private var sdkFallbackWorkItem: DispatchWorkItem?
   private var sdkFallbackDidStart = false
+  private var metadataTask: URLSessionDataTask?
+  private var metadataRequestGeneration = 0
+  private var liveMetadataTimer: Timer?
   private var state = DailymotionBridgeState()
 
   func open(urlString: String, completion: @escaping (Bool) -> Void) {
@@ -558,6 +637,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     mediaFrameLastSeen = .distantPast
     sdkFallbackDidStart = false
     state = DailymotionBridgeState()
+    state.isMuted = source.startsMuted
 
     let contentController = WKUserContentController()
     contentController.add(self, name: dailymotionBridgeName)
@@ -611,6 +691,8 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     self.userContentController = contentController
     self.webView = webView
     self.controlsView = controlsView
+    refreshVideoMetadata(for: source)
+    startMetadataTimerIfNeeded()
 
     switch source.backend {
     case let .sdk(playerID):
@@ -636,7 +718,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
         }
         self.sdkFallbackDidStart = true
         self.clearMediaFrame()
-        self.state = DailymotionBridgeState(backend: "media")
+        self.state = self.playbackResetState(backend: "media")
         self.notifyStateChange()
         webView.load(URLRequest(url: source.url))
       }
@@ -655,6 +737,11 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
   private func teardownWebView() {
     sdkFallbackWorkItem?.cancel()
     sdkFallbackWorkItem = nil
+    metadataTask?.cancel()
+    metadataTask = nil
+    metadataRequestGeneration += 1
+    liveMetadataTimer?.invalidate()
+    liveMetadataTimer = nil
     webView?.stopLoading()
     webView?.navigationDelegate = nil
     webView?.uiDelegate = nil
@@ -679,11 +766,155 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
 
   private func notifyStateChange() {
     controlsView?.render(state)
+    var titleParts = ["Dailymotion"]
+    if state.contentMode == .live {
+      titleParts.append(state.isOnAir == false ? "OFF AIR" : "LIVE")
+    }
+    if let videoTitle = state.videoTitle, !videoTitle.isEmpty {
+      titleParts.append(videoTitle)
+    }
+    panel?.title = titleParts.joined(separator: " · ")
+  }
+
+  private func playbackResetState(backend: String) -> DailymotionBridgeState {
+    var resetState = DailymotionBridgeState(backend: backend)
+    resetState.contentMode = state.contentMode
+    resetState.isOnAir = state.isOnAir
+    resetState.videoTitle = state.videoTitle
+    resetState.isMuted = source?.startsMuted ?? state.isMuted
+    return resetState
+  }
+
+  private func refreshVideoMetadata(for source: DailymotionPlayerSource) {
+    metadataTask?.cancel()
+    metadataRequestGeneration += 1
+    let expectedGeneration = metadataRequestGeneration
+
+    var components = URLComponents()
+    components.scheme = "https"
+    components.host = "api.dailymotion.com"
+    components.path = "/video/\(source.videoID)"
+    components.queryItems = [
+      URLQueryItem(name: "fields", value: "id,title,mode,onair"),
+    ]
+    guard let url = components.url else { return }
+
+    let expectedSessionID = sessionID
+    let expectedVideoID = source.videoID
+    var request = URLRequest(url: url)
+    request.timeoutInterval = 10
+    request.cachePolicy = .reloadRevalidatingCacheData
+
+    let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+      guard
+        error == nil,
+        let response = response as? HTTPURLResponse,
+        (200..<300).contains(response.statusCode),
+        let data,
+        let object = try? JSONSerialization.jsonObject(with: data),
+        let fields = object as? [String: Any]
+      else {
+        return
+      }
+
+      let mode: DailymotionContentMode
+      switch (fields["mode"] as? String)?.lowercased() {
+      case "vod":
+        mode = .vod
+      case "live":
+        mode = .live
+      default:
+        mode = .unknown
+      }
+      let isOnAir = (fields["onair"] as? NSNumber)?.boolValue
+        ?? (fields["onair"] as? Bool)
+      let title = (fields["title"] as? String)?.trimmingCharacters(
+        in: .whitespacesAndNewlines
+      )
+      let metadata = DailymotionVideoMetadata(
+        mode: mode,
+        isOnAir: isOnAir,
+        title: title
+      )
+
+      DispatchQueue.main.async {
+        guard
+          let self,
+          self.sessionID == expectedSessionID,
+          self.source?.videoID == expectedVideoID,
+          self.metadataRequestGeneration == expectedGeneration
+        else {
+          return
+        }
+        self.metadataTask = nil
+        self.applyVideoMetadata(metadata)
+      }
+    }
+    metadataTask = task
+    task.resume()
+  }
+
+  private func applyVideoMetadata(_ metadata: DailymotionVideoMetadata) {
+    let previousOnAir = state.isOnAir
+    if metadata.mode != .unknown {
+      state.contentMode = metadata.mode
+    }
+    if state.contentMode == .live {
+      if let isOnAir = metadata.isOnAir {
+        state.isOnAir = isOnAir
+      }
+    } else {
+      // Dailymotion also reports onair=false for ordinary VODs. It only has
+      // playback semantics when mode is live.
+      state.isOnAir = nil
+    }
+    if let title = metadata.title, !title.isEmpty {
+      state.videoTitle = title
+    }
+
+    if state.contentMode == .vod {
+      liveMetadataTimer?.invalidate()
+      liveMetadataTimer = nil
+    } else {
+      startMetadataTimerIfNeeded()
+    }
+
+    if state.contentMode == .live, state.isOnAir == false {
+      state.isPlaying = false
+      state.isBuffering = false
+      state.isAdPlaying = false
+      state.adTime = 0
+      state.adDuration = nil
+    }
+    notifyStateChange()
+
+    if
+      state.contentMode == .live,
+      previousOnAir == false,
+      state.isOnAir == true,
+      let source,
+      let panel
+    {
+      // Recreate the whole backend so the SDK fallback, frame identity and
+      // player bootstrap are all fresh when a scheduled stream goes on air.
+      load(source, in: panel)
+    }
+  }
+
+  private func startMetadataTimerIfNeeded() {
+    guard liveMetadataTimer == nil else { return }
+    let timer = Timer(timeInterval: 20, repeats: true) { [weak self] _ in
+      guard let self, let source = self.source else { return }
+      self.refreshVideoMetadata(for: source)
+    }
+    liveMetadataTimer = timer
+    RunLoop.main.add(timer, forMode: .common)
   }
 
   private func handleSDKState(_ body: [String: Any]) {
     guard !sdkFallbackDidStart else { return }
     state.backend = "sdk"
+    state.hasReliableAdState = true
     state.ready = bool(body["ready"]) ?? state.ready
     state.isPlaying = bool(body["isPlaying"]) ?? state.isPlaying
     state.isBuffering = bool(body["isBuffering"]) ?? state.isBuffering
@@ -740,6 +971,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     mediaFrameLastSeen = Date()
 
     if !(state.backend == "sdk" && state.isAdPlaying) {
+      state.mediaCurrentTime = finiteDouble(body["time"])
       let seekableStart = finiteDouble(body["seekableStart"])
       let seekableEnd = finiteDouble(body["seekableEnd"])
       if
@@ -792,6 +1024,9 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     mediaFrameIsPlaying = false
     mediaFrameArea = 0
     mediaFrameLastSeen = .distantPast
+    state.mediaCurrentTime = nil
+    state.seekableStart = nil
+    state.seekableEnd = nil
   }
 
   private func bool(_ value: Any?) -> Bool? {
@@ -848,10 +1083,14 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
       normalizedValue = nil
     }
 
-    // A live edge comes from HTMLMediaElement.seekable, so execute that seek
-    // in the exact frame that supplied the range instead of assuming the SDK
-    // and media timelines use identical coordinates.
-    let primaryFrame: WKFrameInfo? = command == "goLive" && mediaFrame != nil
+    // Live positions come from HTMLMediaElement.seekable, so execute live
+    // timeline commands in the exact frame that supplied those coordinates.
+    let isTimelineCommand = ["seek", "seekBy", "goLive"].contains(command)
+    let usesLiveMediaTimeline = state.contentMode == .live
+      && isTimelineCommand
+      && mediaFrame != nil
+    let primaryFrame: WKFrameInfo? = usesLiveMediaTimeline
+      || command == "goLive" && mediaFrame != nil
       ? mediaFrame
       : state.backend == "sdk" ? nil : mediaFrame
     executeCommand(
@@ -1003,7 +1242,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
                   setTimeout(report, 0);
                   return true;
                 } catch (error) {
-                  post({type: "error", message: String(error)});
+                  post({type: "commandError", message: String(error)});
                   return false;
                 }
               },
@@ -1094,9 +1333,10 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
       function seekableRange(video) {
         try {
           if (!video?.seekable?.length) return [null, null];
+          const lastRange = video.seekable.length - 1;
           return [
-            finite(video.seekable.start(0)),
-            finite(video.seekable.end(video.seekable.length - 1)),
+            finite(video.seekable.start(lastRange)),
+            finite(video.seekable.end(lastRange)),
           ];
         } catch (_) {
           return [null, null];
@@ -1183,7 +1423,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
           setTimeout(report, 0);
           return true;
         } catch (error) {
-          post({type: "error", message: String(error)});
+          post({type: "commandError", message: String(error)});
           return false;
         }
       }
@@ -1204,9 +1444,29 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
 }
 
 extension DailymotionPlayerController: DailymotionControlsViewDelegate {
+  private var controlsCanSeek: Bool {
+    guard state.hasReliableAdState else { return false }
+    if state.contentMode == .live, state.isOnAir == false {
+      return false
+    }
+    if state.contentMode != .live {
+      return state.duration != nil
+    }
+    guard
+      let start = state.seekableStart,
+      let end = state.seekableEnd
+    else {
+      return false
+    }
+    return start.isFinite
+      && end.isFinite
+      && end - start >= dailymotionMinimumDVRWindow
+  }
+
   fileprivate func controlsDidTogglePlayback(
     _ controls: DailymotionControlsView
   ) {
+    guard state.contentMode != .live || state.isOnAir != false else { return }
     sendCommand(state.isPlaying ? "pause" : "play")
   }
 
@@ -1214,7 +1474,7 @@ extension DailymotionPlayerController: DailymotionControlsViewDelegate {
     _ controls: DailymotionControlsView,
     seekBy seconds: Double
   ) {
-    guard !state.isAdPlaying else { return }
+    guard !state.isAdPlaying, controlsCanSeek else { return }
     sendCommand("seekBy", value: seconds)
   }
 
@@ -1222,7 +1482,7 @@ extension DailymotionPlayerController: DailymotionControlsViewDelegate {
     _ controls: DailymotionControlsView,
     seekTo seconds: Double
   ) {
-    guard !state.isAdPlaying else { return }
+    guard !state.isAdPlaying, controlsCanSeek else { return }
     sendCommand("seek", value: seconds)
   }
 
@@ -1231,18 +1491,40 @@ extension DailymotionPlayerController: DailymotionControlsViewDelegate {
   ) {
     guard
       !state.isAdPlaying,
-      let liveEdge = state.seekableEnd
+      state.contentMode == .live,
+      controlsCanSeek
     else {
       return
     }
-    sendCommand("goLive", value: max(0, liveEdge - 0.25))
+    let expectedSessionID = sessionID
+    sendCommand("rate", value: 1) { [weak self] _ in
+      guard
+        let self,
+        self.sessionID == expectedSessionID,
+        !self.state.isAdPlaying,
+        self.state.contentMode == .live,
+        self.state.isOnAir != false,
+        self.controlsCanSeek,
+        let liveEdge = self.state.seekableEnd
+      else {
+        return
+      }
+      let target = max(self.state.seekableStart ?? 0, liveEdge - 0.25)
+      self.sendCommand("goLive", value: target)
+    }
   }
 
   fileprivate func controls(
     _ controls: DailymotionControlsView,
     didSelectRate rate: Double
   ) {
-    guard !state.isAdPlaying else { return }
+    guard
+      !state.isAdPlaying,
+      state.hasReliableAdState,
+      state.contentMode != .live || controlsCanSeek
+    else {
+      return
+    }
     sendCommand("rate", value: rate)
   }
 
