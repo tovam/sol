@@ -173,7 +173,7 @@ export const TranslationWidget: FC<Props> = observer(({ style, className }) => {
 			<View className="h-9 px-4 flex-row items-center justify-end gap-2 subBg border-t border-color">
 				<Text className="text-xs darker-text">← → Select</Text>
 				<View className="w-px h-4 bg-neutral-400/30" />
-				<Text className="text-xs darker-text">↵ Copy</Text>
+				<Text className="text-xs darker-text">↵ / ⇧↵ Translate again</Text>
 			</View>
 		</View>
 	);
