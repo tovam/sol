@@ -29,6 +29,23 @@ function TemporaryResultView({
 	isActive: boolean;
 }) {
 	if (result.kind === "comparison") {
+		if (result.layout === "inline") {
+			return (
+				<View className="flex-1 px-4 flex-row items-center justify-between gap-4">
+					<Text className="flex-1 text-2xl font-semibold" numberOfLines={1}>
+						{result.left.value}
+					</Text>
+					<Text className="text-lg darker-text">→</Text>
+					<Text
+						className="flex-1 text-2xl font-semibold text-right"
+						numberOfLines={1}
+					>
+						{result.right.value}
+					</Text>
+				</View>
+			);
+		}
+
 		return (
 			<View className="flex-1 px-4">
 				<View className="flex-row items-center justify-between gap-4">

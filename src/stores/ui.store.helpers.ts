@@ -16,6 +16,7 @@ export type TemporaryResult =
 			right: { label: string; value: string };
 			footer?: string;
 			copyValue?: string;
+			layout?: "labeled" | "inline";
 	  }
 	| {
 			kind: "flight";
@@ -301,14 +302,15 @@ export function parseUnitConversion(query: string): TemporaryResult | null {
 		return {
 			kind: "comparison",
 			left: {
-				label: "Expression",
+				label: "",
 				value: expressionResult.expression,
 			},
 			right: {
-				label: expressionResult.targetUnit,
-				value: expressionResult.formattedValue,
+				label: "",
+				value: `${expressionResult.formattedValue} ${expressionResult.targetUnit}`,
 			},
 			copyValue: `${expressionResult.formattedValue} ${expressionResult.targetUnit}`,
+			layout: "inline",
 		};
 	}
 
@@ -335,13 +337,15 @@ export function parseUnitConversion(query: string): TemporaryResult | null {
 		return {
 			kind: "comparison",
 			left: {
-				label: fromUnit,
-				value: formatConvertedValue(value),
+				label: "",
+				value: `${formatConvertedValue(value)} ${match.groups.from}`,
 			},
 			right: {
-				label: toUnit,
-				value: formatConvertedValue(converted),
+				label: "",
+				value: `${formatConvertedValue(converted)} ${match.groups.to}`,
 			},
+			copyValue: `${formatConvertedValue(converted)} ${match.groups.to}`,
+			layout: "inline",
 		};
 	} catch {
 		return null;
