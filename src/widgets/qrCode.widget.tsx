@@ -42,9 +42,21 @@ export const QRCodeWidget: FC = () => {
 		Clipboard.getString().then((clipboardText) => {
 			if (!clipboardText) return;
 			setText(clipboardText);
-			void generate(clipboardText);
 		});
-	}, [generate]);
+	}, []);
+
+	useEffect(() => {
+		if (!text.trim()) {
+			setQrData("");
+			setError("");
+			return;
+		}
+
+		const debounce = setTimeout(() => {
+			void generate(text);
+		}, 180);
+		return () => clearTimeout(debounce);
+	}, [generate, text]);
 
 	return (
 		<View className="fullWindow">
@@ -58,7 +70,7 @@ export const QRCodeWidget: FC = () => {
 				<View className="flex-1">
 					<Text className="text-xl font-semibold text">QR Code Generator</Text>
 					<Text className="text-xs darker-text">
-						Starts with the current clipboard text
+						Starts with the clipboard and updates as you type
 					</Text>
 				</View>
 			</View>
