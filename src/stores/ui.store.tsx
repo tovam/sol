@@ -99,6 +99,20 @@ export enum ItemType {
 	PREFERENCE_PANE = "PREFERENCE_PANE",
 }
 
+export enum SearchTab {
+	ALL = "ALL",
+	APPLICATIONS = "APPLICATIONS",
+	FILES = "FILES",
+	ACTIONS = "ACTIONS",
+}
+
+export const SEARCH_TAB_ORDER = [
+	SearchTab.ALL,
+	SearchTab.APPLICATIONS,
+	SearchTab.FILES,
+	SearchTab.ACTIONS,
+] as const;
+
 export enum ScratchPadColor {
 	SYSTEM = "SYSTEM",
 	BLUE = "BLUE",
@@ -170,6 +184,7 @@ type RankedItem = Item & {
 export const createUIStore = (root: IRootStore) => {
 	// Guards against spurious writes during hydrate/reload
 	let isHydrating = false;
+	let fileSearchRequestId = 0;
 
 	const getSelectionCount = (item: Pick<Item, "id" | "name">) => {
 		const countById = store.frequencies[item.id];
@@ -441,6 +456,7 @@ export const createUIStore = (root: IRootStore) => {
 		query: "",
 		selectedIndex: 0,
 		focusedWidget: Widget.SEARCH,
+		searchTab: SearchTab.ALL as SearchTab,
 		settingsSection: "GENERAL" as SettingsSection,
 		events: [] as INativeEvent[],
 		customItems: [] as Item[],
@@ -495,7 +511,12 @@ export const createUIStore = (root: IRootStore) => {
 			return store.indexedFileResults;
 		},
 		runFileSearch: async (query: string) => {
-			if (!query || store.focusedWidget !== Widget.FILE_SEARCH) {
+			const requestId = ++fileSearchRequestId;
+			const isDedicatedFileSearch = store.focusedWidget === Widget.FILE_SEARCH;
+			const isFileTab =
+				store.focusedWidget === Widget.SEARCH && store.searchTab === SearchTab.FILES;
+
+			if (!query.trim() || (!isDedicatedFileSearch && !isFileTab)) {
 				runInAction(() => {
 					store.indexedFileResults = [];
 					store.isLoading = false;
@@ -504,17 +525,34 @@ export const createUIStore = (root: IRootStore) => {
 			}
 			runInAction(() => {
 				store.isLoading = true;
+				store.indexedFileResults = [];
 			});
-			const results = await solNative.searchFilesIndexed(query);
-			runInAction(() => {
-				store.indexedFileResults = results.map((f) => ({
-					id: f.path,
-					type: ItemType.FILE,
-					name: f.name,
-					url: f.path,
-				}));
-				store.isLoading = false;
-			});
+			try {
+				const results = await solNative.searchFilesIndexed(query);
+				const requestIsCurrent =
+					requestId === fileSearchRequestId &&
+					store.query === query &&
+					(store.focusedWidget === Widget.FILE_SEARCH ||
+						(store.focusedWidget === Widget.SEARCH &&
+							store.searchTab === SearchTab.FILES));
+				if (!requestIsCurrent) return;
+
+				runInAction(() => {
+					store.indexedFileResults = results.map((f) => ({
+						id: f.path,
+						type: ItemType.FILE,
+						name: f.name,
+						url: f.path,
+					}));
+					store.isLoading = false;
+				});
+			} catch {
+				if (requestId !== fileSearchRequestId) return;
+				runInAction(() => {
+					store.indexedFileResults = [];
+					store.isLoading = false;
+				});
+			}
 		},
 		get items(): Item[] {
 			const allItems = [
@@ -579,7 +617,29 @@ export const createUIStore = (root: IRootStore) => {
 			return finalResults;
 		},
 		get searchItems(): Item[] {
-			return store.items.filter((item) => !store.isItemDisabled(item.id));
+			if (store.searchTab === SearchTab.FILES) {
+				return store.indexedFileResults;
+			}
+
+			const enabledItems = store.items.filter(
+				(item) => !store.isItemDisabled(item.id),
+			);
+			if (store.searchTab === SearchTab.APPLICATIONS) {
+				return enabledItems.filter((item) => item.type === ItemType.APPLICATION);
+			}
+			if (store.searchTab === SearchTab.ACTIONS) {
+				return enabledItems.filter((item) =>
+					[
+						ItemType.CONFIGURATION,
+						ItemType.CUSTOM,
+						ItemType.USER_SCRIPT,
+						ItemType.PREFERENCE_PANE,
+						ItemType.TEMPORARY_RESULT,
+					].includes(item.type),
+				);
+			}
+
+			return enabledItems;
 		},
 		get currentItem(): Item | undefined {
 			return store.searchItems[store.selectedIndex];
@@ -662,6 +722,24 @@ export const createUIStore = (root: IRootStore) => {
 		},
 		setSelectedIndex: (idx: number) => {
 			store.selectedIndex = idx;
+		},
+		setSearchTab: (tab: SearchTab) => {
+			if (store.searchTab === tab) return;
+			fileSearchRequestId += 1;
+			store.searchTab = tab;
+			store.selectedIndex = 0;
+			store.indexedFileResults = [];
+			store.isLoading = false;
+			if (tab !== SearchTab.FILES && store.query) {
+				store.setQuery(store.query);
+			}
+		},
+		cycleSearchTab: (direction: 1 | -1) => {
+			const currentIndex = SEARCH_TAB_ORDER.indexOf(store.searchTab);
+			const nextIndex =
+				(currentIndex + direction + SEARCH_TAB_ORDER.length) %
+				SEARCH_TAB_ORDER.length;
+			store.setSearchTab(SEARCH_TAB_ORDER[nextIndex]);
 		},
 		setNote: (note: string) => {
 			store.note = note;
@@ -754,6 +832,11 @@ export const createUIStore = (root: IRootStore) => {
 			store.showWindowOn = on;
 		},
 		focusWidget: (widget: Widget) => {
+			if (store.searchTab === SearchTab.FILES && widget !== Widget.SEARCH) {
+				fileSearchRequestId += 1;
+				store.indexedFileResults = [];
+				store.isLoading = false;
+			}
 			store.selectedIndex = 0;
 			store.focusedWidget = widget;
 		},
@@ -764,12 +847,24 @@ export const createUIStore = (root: IRootStore) => {
 			store.query = query.replace("\n", " ");
 			store.selectedIndex = 0;
 			store.temporaryResult = null;
+			if (
+				store.focusedWidget === Widget.FILE_SEARCH ||
+				(store.focusedWidget === Widget.SEARCH &&
+					store.searchTab === SearchTab.FILES)
+			) {
+				fileSearchRequestId += 1;
+				store.indexedFileResults = [];
+				store.isLoading = false;
+			}
 
 			if (store.query === "") {
 				return;
 			}
 
-			if (store.focusedWidget === Widget.SEARCH) {
+			if (
+				store.focusedWidget === Widget.SEARCH &&
+				store.searchTab !== SearchTab.FILES
+			) {
 				if (store.query.trim().toLowerCase() === "ip") {
 					const querySnapshot = store.query;
 					store.temporaryResult = createTextTemporaryResult(
@@ -965,8 +1060,12 @@ export const createUIStore = (root: IRootStore) => {
 			});
 		},
 		onHide: () => {
+			fileSearchRequestId += 1;
 			store.isVisible = false;
 			store.focusedWidget = Widget.SEARCH;
+			store.searchTab = SearchTab.ALL;
+			store.indexedFileResults = [];
+			store.isLoading = false;
 			store.editingCustomItem = null;
 			if (store.temporaryResult == null) {
 				store.setQuery("");

@@ -19,8 +19,19 @@ import {
 	View,
 } from "react-native";
 import { useStore } from "store";
-import { ItemType, Widget } from "stores/ui.store";
+import { ItemType, SearchTab, Widget } from "stores/ui.store";
 import type { TemporaryResult } from "stores/ui.store.helpers";
+
+const SEARCH_TABS = [
+	{ value: SearchTab.ALL, label: "All", placeholder: "Search" },
+	{
+		value: SearchTab.APPLICATIONS,
+		label: "Applications",
+		placeholder: "Search applications",
+	},
+	{ value: SearchTab.FILES, label: "Files", placeholder: "Search files" },
+	{ value: SearchTab.ACTIONS, label: "Actions", placeholder: "Search actions" },
+];
 
 function TemporaryResultView({
 	result,
@@ -316,11 +327,11 @@ const ItemRow = observer(({ item, index }: { item: Item; index: number }) => {
 	);
 });
 
-const EmptyComponent = () => {
+const EmptyComponent = ({ message = "No Results" }: { message?: string }) => {
 	return (
 		<View className="flex-1 items-center justify-center">
 			<Text className="text-neutral-400 dark:text-neutral-500 text-base">
-				No Results
+				{message}
 			</Text>
 		</View>
 	);
@@ -332,7 +343,13 @@ export const SearchWidget: FC = observer(() => {
 	const selectedIndex = store.ui.selectedIndex;
 	const listRef = useRef<LegendListRef | null>(null);
 	const items = store.ui.searchItems;
-	const showNetworkPanel = isNetworkQuery(store.ui.query);
+	const activeTab = store.ui.searchTab;
+	const activeTabConfig =
+		SEARCH_TABS.find((tab) => tab.value === activeTab) ?? SEARCH_TABS[0];
+	const showResults = !!store.ui.query || activeTab !== SearchTab.ALL;
+	const showNetworkPanel =
+		(activeTab === SearchTab.ALL || activeTab === SearchTab.ACTIONS) &&
+		isNetworkQuery(store.ui.query);
 	const temporaryActionLabel =
 		store.ui.temporaryResult?.kind === "text"
 			? store.ui.temporaryResult.actionLabel
@@ -360,21 +377,55 @@ export const SearchWidget: FC = observer(() => {
 		}
 	}, [focused, selectedIndex, items]);
 
+	useEffect(() => {
+		if (activeTab !== SearchTab.FILES) return;
+		const timer = setTimeout(() => {
+			void store.ui.runFileSearch(store.ui.query);
+		}, 150);
+		return () => clearTimeout(timer);
+	}, [activeTab, store.ui.query, store.ui.runFileSearch]);
+
 	return (
 		<View
 			className={clsx({
-				"flex-1": !!store.ui.query,
+				"flex-1": showResults,
 			})}
 		>
-			<View
-				className={clsx("flex-row items-center", {
-					"border-b border-color": !!store.ui.query,
-				})}
-			>
-				<MainInput className="flex-1" />
+			<View className="flex-row items-center">
+				<MainInput
+					className="flex-1"
+					placeholder={activeTabConfig.placeholder}
+				/>
 			</View>
 
-			{!!store.ui.query && (
+			<View className="h-9 px-3 flex-row items-center border-b border-color">
+				{SEARCH_TABS.map((tab) => {
+					const isActive = tab.value === activeTab;
+					return (
+						<TouchableOpacity
+							key={tab.value}
+							onPress={() => store.ui.setSearchTab(tab.value)}
+						>
+							<View className="h-full px-3 items-center justify-center relative">
+								<Text
+									className={clsx("text-xs darker-text", {
+										"text font-semibold": isActive,
+									})}
+								>
+									{tab.label}
+								</Text>
+								{isActive && (
+									<View className="absolute bottom-0 left-3 right-3 h-[2px] bg-accent-strong" />
+								)}
+							</View>
+						</TouchableOpacity>
+					);
+				})}
+				<View className="flex-1" />
+				<Text className="text-xs darker-text px-2">⌃⇥</Text>
+			</View>
+
+			{showResults && (
 				<>
 					<LoadingBar />
 					<View className="flex-1 flex-row">
@@ -397,7 +448,15 @@ export const SearchWidget: FC = observer(() => {
 									setListOffset(event.nativeEvent.contentOffset.y);
 								}}
 								scrollEventThrottle={16}
-								ListEmptyComponent={EmptyComponent}
+								ListEmptyComponent={
+									<EmptyComponent
+										message={
+											activeTab === SearchTab.FILES && !store.ui.query
+												? "Type to search files"
+												: "No Results"
+										}
+									/>
+								}
 								recycleItems
 								maintainVisibleContentPosition={false}
 							/>
@@ -438,10 +497,12 @@ export const SearchWidget: FC = observer(() => {
 								? (temporaryActionLabel ?? "Copy")
 								: items.length
 									? "Open"
-									: "Search the web"}
+									: activeTab === SearchTab.ALL
+										? "Search the web"
+										: "No result"}
 						</Text>
 						<Key symbol={"⏎"} primary />
-						{!!items.length && (
+						{!!store.ui.query && (
 							<>
 								<View className="mx-2" />
 								<Text className="text-xs darker-text mr-1">Web</Text>

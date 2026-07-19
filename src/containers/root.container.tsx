@@ -4,7 +4,7 @@ import {PermissionsBar} from 'components/PermissionsBar'
 import {observer} from 'mobx-react-lite'
 import {Text, TouchableOpacity, View} from 'react-native'
 import {useStore} from 'store'
-import {Widget} from 'stores/ui.store'
+import {SearchTab, Widget} from 'stores/ui.store'
 import {AIChatWidget} from 'widgets/aiChat.widget'
 import {AIOneShotWidget} from 'widgets/aiOneShot.widget'
 import {ClipboardWidget} from 'widgets/clipboard.widget'
@@ -36,13 +36,16 @@ export const RootContainer = observer(() => {
       className={clsx({
         fullWindow:
           !!store.ui.query ||
+          store.ui.searchTab !== SearchTab.ALL ||
           (store.ui.calendarEnabled && store.calendar.events.length > 0),
       })}>
       <SearchWidget />
 
-      {!store.ui.query && store.ui.calendarEnabled && <FullCalendar />}
+      {!store.ui.query &&
+        store.ui.searchTab === SearchTab.ALL &&
+        store.ui.calendarEnabled && <FullCalendar />}
 
-      <PermissionsBar />
+      {store.ui.searchTab === SearchTab.ALL && <PermissionsBar />}
     </View>
   )
 

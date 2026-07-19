@@ -5,7 +5,7 @@ import { Clipboard, type EmitterSubscription, Linking } from "react-native";
 import type { IRootStore } from "store";
 import { isValidCustomSearchEngineUrl } from "widgets/settings/general";
 import { EMOJI_ROW_SIZE } from "./emoji.store";
-import { ItemType, Widget } from "./ui.store";
+import { ItemType, SearchTab, Widget } from "./ui.store";
 import { formatTemporaryResultForClipboard } from "./ui.store.helpers";
 
 let keyDownListener: EmitterSubscription | undefined;
@@ -40,10 +40,12 @@ export const createKeystrokeStore = (root: IRootStore) => {
 			keyCode,
 			meta,
 			shift,
+			control = false,
 		}: {
 			keyCode: number;
 			meta: boolean;
 			shift: boolean;
+			control?: boolean;
 		}) => {
 			switch (keyCode) {
 				// "j" key
@@ -96,6 +98,11 @@ export const createKeystrokeStore = (root: IRootStore) => {
 				}
 				// tab key
 				case 48: {
+					if (root.ui.focusedWidget === Widget.SEARCH && control) {
+						root.ui.cycleSearchTab(shift ? -1 : 1);
+						break;
+					}
+
 					switch (root.ui.focusedWidget) {
 						//   case Widget.SEARCH:
 						//     if (!!root.calendar.filteredEvents.length) {
@@ -261,8 +268,10 @@ export const createKeystrokeStore = (root: IRootStore) => {
 						}
 
 						case Widget.SEARCH: {
+							const isDefaultEmptySearch =
+								!root.ui.query && root.ui.searchTab === SearchTab.ALL;
 							if (
-								!root.ui.query &&
+								isDefaultEmptySearch &&
 								root.ui.calendarAuthorizationStatus === "notDetermined"
 							) {
 								solNative
@@ -277,13 +286,13 @@ export const createKeystrokeStore = (root: IRootStore) => {
 								return;
 							}
 
-							if (!root.ui.query && !root.ui.isAccessibilityTrusted) {
+							if (isDefaultEmptySearch && !root.ui.isAccessibilityTrusted) {
 								solNative.requestAccessibilityAccess();
 								solNative.hideWindow();
 								return;
 							}
 
-							if (!root.ui.query) {
+							if (isDefaultEmptySearch) {
 								if (!root.ui.hasDismissedGettingStarted) {
 									Linking.openURL(
 										"https://sol.ospfranco.com/getting_started",
@@ -323,13 +332,17 @@ export const createKeystrokeStore = (root: IRootStore) => {
 
 							root.ui.addToHistory(root.ui.query);
 
-							if (shift) {
+							if (shift && root.ui.query) {
 								root.ui.translateQuery();
 								return;
 							}
 
-							// If there are no visible items, or if the query is a meta (⌘ is pressed) query, open a browser search
-							if (!root.ui.searchItems.length || meta) {
+							// Web search is the fallback only in All, or an explicit ⌘-Enter action.
+							if (
+								(root.ui.searchTab === SearchTab.ALL &&
+									!root.ui.searchItems.length) ||
+								(meta && !!root.ui.query)
+							) {
 								switch (root.ui.searchEngine) {
 									case "google":
 										Linking.openURL(
@@ -401,6 +414,8 @@ export const createKeystrokeStore = (root: IRootStore) => {
 								return;
 							}
 
+							if (!root.ui.searchItems.length) return;
+
 							const item = root.ui.searchItems[root.ui.selectedIndex];
 
 							if (item == null) {
@@ -439,6 +454,15 @@ export const createKeystrokeStore = (root: IRootStore) => {
 
 							if (item.callback) {
 								item.callback();
+								return;
+							}
+
+							if (item.type === ItemType.FILE && item.url && shift) {
+								const directoryPath = item.url.substring(
+									0,
+									item.url.lastIndexOf("/"),
+								);
+								solNative.openFinderAt(directoryPath);
 								return;
 							}
 
