@@ -6,6 +6,7 @@ import { FileIcon } from "components/FileIcon";
 import { Key } from "components/Key";
 import { LoadingBar } from "components/LoadingBar";
 import { MainInput } from "components/MainInput";
+import { isNetworkQuery, NetworkPanel } from "components/NetworkPanel";
 import { renderToKeys } from "lib/shortcuts";
 import { observer } from "mobx-react-lite";
 import { type FC, useEffect, useRef, useState } from "react";
@@ -289,6 +290,7 @@ export const SearchWidget: FC = observer(() => {
 	const selectedIndex = store.ui.selectedIndex;
 	const listRef = useRef<LegendListRef | null>(null);
 	const items = store.ui.searchItems;
+	const showNetworkPanel = isNetworkQuery(store.ui.query);
 	const temporaryActionLabel =
 		store.ui.temporaryResult?.kind === "text"
 			? store.ui.temporaryResult.actionLabel
@@ -333,43 +335,46 @@ export const SearchWidget: FC = observer(() => {
 			{!!store.ui.query && (
 				<>
 					<LoadingBar />
-					<View className="flex-1 relative">
-						<LegendList
-							style={STYLES.list}
-							contentContainerStyle={STYLES.contentContainer}
-							ref={listRef}
-							data={items}
-							keyExtractor={(item) => item.id}
-							renderItem={ItemRow}
-							showsVerticalScrollIndicator={false}
-							onLayout={(event) => {
-								setListViewportHeight(event.nativeEvent.layout.height);
-							}}
-							onContentSizeChange={(_width, height) => {
-								setListContentHeight(height);
-							}}
-							onScroll={(event) => {
-								setListOffset(event.nativeEvent.contentOffset.y);
-							}}
-							scrollEventThrottle={16}
-							ListEmptyComponent={EmptyComponent}
-							recycleItems
-							maintainVisibleContentPosition={false}
-						/>
-						{hasOverflow && (
-							<View
-								pointerEvents="none"
-								className="absolute right-1.5 top-3 bottom-3 w-1 rounded-full bg-neutral-300/70 dark:bg-neutral-700/70"
-							>
+					<View className="flex-1 flex-row">
+						<View className="flex-1 relative">
+							<LegendList
+								style={STYLES.list}
+								contentContainerStyle={STYLES.contentContainer}
+								ref={listRef}
+								data={items}
+								keyExtractor={(item) => item.id}
+								renderItem={ItemRow}
+								showsVerticalScrollIndicator={false}
+								onLayout={(event) => {
+									setListViewportHeight(event.nativeEvent.layout.height);
+								}}
+								onContentSizeChange={(_width, height) => {
+									setListContentHeight(height);
+								}}
+								onScroll={(event) => {
+									setListOffset(event.nativeEvent.contentOffset.y);
+								}}
+								scrollEventThrottle={16}
+								ListEmptyComponent={EmptyComponent}
+								recycleItems
+								maintainVisibleContentPosition={false}
+							/>
+							{hasOverflow && (
 								<View
-									className="w-1 rounded-full bg-neutral-600 dark:bg-neutral-300"
-									style={{
-										height: scrollThumbHeight,
-										transform: [{ translateY: scrollThumbOffset }],
-									}}
-								/>
-							</View>
-						)}
+									pointerEvents="none"
+									className="absolute right-1.5 top-3 bottom-3 w-1 rounded-full bg-neutral-300/70 dark:bg-neutral-700/70"
+								>
+									<View
+										className="w-1 rounded-full bg-neutral-600 dark:bg-neutral-300"
+										style={{
+											height: scrollThumbHeight,
+											transform: [{ translateY: scrollThumbOffset }],
+										}}
+									/>
+								</View>
+							)}
+						</View>
+						{showNetworkPanel && <NetworkPanel />}
 					</View>
 
 					<View className="h-9 px-4 flex-row items-center justify-end gap-1 subBg border-t border-color">

@@ -17,6 +17,7 @@
 		700A99F22C33D6E30049831F /* QRGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 700A99F12C33D6E30049831F /* QRGenerator.swift */; };
 		A11CE0020000000000000001 /* ScreenRuler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11CE0010000000000000001 /* ScreenRuler.swift */; };
 		D41100020000000000000001 /* DailymotionPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D41100010000000000000001 /* DailymotionPlayer.swift */; };
+		A91100020000000000000001 /* NetworkInfoProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91100010000000000000001 /* NetworkInfoProvider.swift */; };
 		700DF99A28266F0B00C5FD0B /* ClipboardHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 700DF99928266F0B00C5FD0B /* ClipboardHelper.swift */; };
 		700F266729F501C8002CA8F1 /* BlurView.m in Sources */ = {isa = PBXBuildFile; fileRef = 700F266629F501C8002CA8F1 /* BlurView.m */; };
 		700F266929F5026B002CA8F1 /* BlurView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 700F266829F5026B002CA8F1 /* BlurView.swift */; };
@@ -92,6 +93,7 @@
 		700A99F12C33D6E30049831F /* QRGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRGenerator.swift; sourceTree = "<group>"; };
 		A11CE0010000000000000001 /* ScreenRuler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenRuler.swift; sourceTree = "<group>"; };
 		D41100010000000000000001 /* DailymotionPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailymotionPlayer.swift; sourceTree = "<group>"; };
+		A91100010000000000000001 /* NetworkInfoProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkInfoProvider.swift; sourceTree = "<group>"; };
 		700DF99928266F0B00C5FD0B /* ClipboardHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardHelper.swift; sourceTree = "<group>"; };
 		700F266629F501C8002CA8F1 /* BlurView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = BlurView.m; sourceTree = "<group>"; };
 		700F266829F5026B002CA8F1 /* BlurView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlurView.swift; sourceTree = "<group>"; };
@@ -318,6 +320,7 @@
 				700A99F12C33D6E30049831F /* QRGenerator.swift */,
 				A11CE0010000000000000001 /* ScreenRuler.swift */,
 				D41100010000000000000001 /* DailymotionPlayer.swift */,
+				A91100010000000000000001 /* NetworkInfoProvider.swift */,
 			);
 			path = lib;
 			sourceTree = "<group>";
@@ -654,6 +657,7 @@
 				700A99F22C33D6E30049831F /* QRGenerator.swift in Sources */,
 				A11CE0020000000000000001 /* ScreenRuler.swift in Sources */,
 				D41100020000000000000001 /* DailymotionPlayer.swift in Sources */,
+				A91100020000000000000001 /* NetworkInfoProvider.swift in Sources */,
 				70E80B5F294C6EDE0094F1B5 /* MetadataExtractorError.swift in Sources */,
 				70B2D5902824254B0005D80A /* WindowManager.swift in Sources */,
 			);

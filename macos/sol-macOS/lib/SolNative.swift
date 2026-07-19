@@ -440,6 +440,15 @@ class SolNative: RCTEventEmitter {
     DailymotionPlayerController.shared.open(urlString: url)
   }
 
+  @objc func getNetworkInfo(
+    _ resolve: RCTPromiseResolveBlock,
+    rejecter _: RCTPromiseRejectBlock
+  ) {
+    DispatchQueue.global(qos: .userInitiated).async {
+      resolve(NetworkInfoProvider.current())
+    }
+  }
+
   @objc func securelyStore(
     _ key: NSString,
     payload: NSString,
