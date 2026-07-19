@@ -49,84 +49,101 @@ export const AIOneShotWidget = observer(() => {
 
 	return (
 		<View className="fullWindow">
-			<View className="h-16 px-5 flex-row items-center gap-3 border-b border-color">
+			<View
+				className="h-14 px-4 flex-row items-center gap-2 border-b border-color"
+				style={{ zIndex: 20 }}
+			>
 				<BackButton
 					onPress={() => {
 						store.ui.setQuery("");
 						store.ui.focusWidget(Widget.SEARCH);
 					}}
 				/>
-				<View className="flex-1">
-					<Text className="text-xl font-semibold text">Ask AI</Text>
-					<Text className="text-xs darker-text">
-						One question, one answer — no conversation history
-					</Text>
+				<View className="flex-1 flex-row items-center gap-2">
+					<Text className="text-lg font-semibold text">Ask AI</Text>
+					<Text className="text-xs darker-text">one-shot</Text>
 				</View>
 				<AIProviderModelControls compact />
 				<TouchableOpacity
-					className="px-3 py-2 rounded-lg subBg border border-color"
+					className="px-2.5 py-1.5 rounded-lg subBg border border-color"
 					onPress={() => store.ui.showSettings("AI")}
 				>
-					<Text className="text text-sm">AI Settings</Text>
+					<Text className="text text-xs">Settings</Text>
 				</TouchableOpacity>
 			</View>
 
-			<View className="flex-1 px-6 py-5 gap-4">
-				<View className="flex-1 flex-row gap-4">
-					<View className="flex-1 rounded-xl border border-color subBg p-4">
-						<Text className="text-xs font-semibold darker-text mb-2">
-							QUESTION
-						</Text>
+			<View className="flex-1 px-4 py-3 gap-2">
+				<View className="flex-row items-center px-1">
+					<Text className="flex-1 text-xs font-semibold darker-text">
+						Response
+					</Text>
+					{!!answer && !loading && (
+						<TouchableOpacity
+							className="px-2 py-1"
+							onPress={() => {
+								Clipboard.setString(answer);
+								void solNative.showToast("Answer copied", "success");
+							}}
+						>
+							<Text className="text-xs text-accent">Copy</Text>
+						</TouchableOpacity>
+					)}
+				</View>
+				<View className="flex-1 rounded-lg border border-color subBg overflow-hidden">
+					<ScrollView
+						className="flex-1"
+						contentContainerStyle={
+							answer
+								? { padding: 14 }
+								: {
+										flexGrow: 1,
+										alignItems: "center",
+										justifyContent: "center",
+										padding: 14,
+									}
+						}
+					>
+						{loading ? (
+							<View className="items-center gap-2">
+								<ActivityIndicator />
+								<Text className="text-xs darker-text">Thinking…</Text>
+							</View>
+						) : (
+							<Text
+								selectable
+								className={answer ? "text-sm text leading-5" : "text-sm darker-text"}
+							>
+								{answer || "Your answer will appear here."}
+							</Text>
+						)}
+					</ScrollView>
+				</View>
+
+				{!!error && <Text className="text-sm text-red-500">{error}</Text>}
+				<View className="flex-row gap-2 items-end">
+					<View className="flex-1 rounded-lg border border-color subBg px-3 py-2">
 						<TextInput
 							autoFocus
 							multiline
 							enableFocusRing={false}
-							className="flex-1 text-base text"
+							className="text-sm text max-h-20"
 							value={question}
 							onChangeText={setQuestion}
-							placeholder="What do you want to know?"
-							textAlignVertical="top"
+							placeholder="Ask a question…"
 						/>
 					</View>
-
-					<View className="flex-1 rounded-xl border border-color subBg p-4">
-						<View className="flex-row items-center mb-2">
-							<Text className="flex-1 text-xs font-semibold darker-text">
-								ANSWER
-							</Text>
-							{!!answer && (
-								<TouchableOpacity
-									onPress={() => {
-										Clipboard.setString(answer);
-										void solNative.showToast("Answer copied", "success");
-									}}
-								>
-									<Text className="text-xs text-accent">Copy</Text>
-								</TouchableOpacity>
-							)}
-						</View>
-						<ScrollView className="flex-1">
-							<Text className="text-base text leading-6">
-								{answer || "The answer will appear here."}
-							</Text>
-						</ScrollView>
-					</View>
+					<TouchableOpacity
+						className={`px-4 py-2 rounded-lg items-center ${
+							loading || !question.trim()
+								? "bg-neutral-500"
+								: "bg-accent-strong"
+						}`}
+						disabled={loading || !question.trim()}
+						onPress={() => void ask()}
+					>
+						<Text className="text-white text-sm font-semibold">Ask</Text>
+					</TouchableOpacity>
 				</View>
-
-				{!!error && <Text className="text-sm text-red-500">{error}</Text>}
-				<TouchableOpacity
-					className={`py-3 rounded-xl items-center ${
-						loading ? "bg-neutral-500" : "bg-accent-strong"
-					}`}
-					disabled={loading}
-					onPress={() => void ask()}
-				>
-					{loading ? (
-						<ActivityIndicator color="white" />
-					) : (
-						<Text className="text-white font-semibold">Ask</Text>
-					)}
-				</TouchableOpacity>
 			</View>
 		</View>
 	);
