@@ -379,6 +379,10 @@ class SolNative: RCTEventEmitter {
     DoNotDisturb.toggle()
   }
 
+  @objc func toggleScreenRuler() {
+    ScreenRulerController.shared.toggle()
+  }
+
   @objc func securelyStore(
     _ key: NSString,
     payload: NSString,

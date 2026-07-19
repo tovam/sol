@@ -542,6 +542,16 @@ export function createBaseItems(store: IRootStore) {
 			preventClose: true,
 		},
 		{
+			id: "screen_ruler",
+			icon: "📏",
+			name: "Screen Ruler",
+			alias: "ruler measure pixels points règle écran",
+			type: ItemType.CONFIGURATION,
+			callback: () => {
+				solNative.toggleScreenRuler();
+			},
+		},
+		{
 			id: "downloads_folder",
 			IconComponent: (...props: any[]) => (
 				<FileIcon {...props} url="~/Downloads" className="w-6 h-6" />

@@ -71,6 +71,7 @@ class SolNative extends NativeEventEmitter {
 	setShowWindowOn: (on: "screenWithFrontmost" | "screenWithCursor") => void;
 	useBackgroundOverlay: (v: boolean) => void;
 	toggleDND: () => void;
+	toggleScreenRuler: () => void;
 	securelyStore: (key: string, value: string) => Promise<void>;
 	securelyRetrieve: (key: string) => Promise<string | null>;
 	executeBashScript: (script: string) => Promise<void>;
@@ -189,6 +190,7 @@ class SolNative extends NativeEventEmitter {
 		this.hideWindow = global.__SolProxy.hideWindow;
 		this.setShowWindowOn = module.setShowWindowOn;
 		this.useBackgroundOverlay = module.useBackgroundOverlay;
+		this.toggleScreenRuler = module.toggleScreenRuler;
 
 		this.securelyRetrieve = module.securelyRetrieve;
 		this.securelyStore = module.securelyStore;
