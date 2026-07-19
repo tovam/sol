@@ -583,7 +583,7 @@ export function createBaseItems(store: IRootStore) {
 			icon: "✦",
 			name: "Ask AI (one shot)",
 			alias:
-				"ai chatgpt openai openwebui question ask intelligence artificielle",
+				"ai ia chatgpt openai openwebui question ask intelligence artificielle",
 			type: ItemType.CONFIGURATION,
 			callback: () => {
 				store.ui.setQuery("");
@@ -595,7 +595,8 @@ export function createBaseItems(store: IRootStore) {
 			id: "ai_chat",
 			icon: "💬",
 			name: "AI Conversation",
-			alias: "ai chat conversation chatgpt openai openwebui assistant history",
+			alias:
+				"ai ia chat conversation chatgpt openai openwebui assistant history",
 			type: ItemType.CONFIGURATION,
 			callback: () => {
 				store.ui.setQuery("");
