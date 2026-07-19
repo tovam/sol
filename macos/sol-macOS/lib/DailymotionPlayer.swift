@@ -65,16 +65,42 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
   }
 
   private func isAllowedEmbedURL(_ url: URL) -> Bool {
-    guard
-      url.scheme == "https",
-      url.host?.lowercased() == "www.dailymotion.com"
-    else {
+    guard url.scheme == "https", let host = url.host?.lowercased() else {
       return false
     }
+
     let components = url.path.split(separator: "/")
-    guard components.count == 3, components[0] == "embed", components[1] == "video" else {
-      return false
+    if host == "www.dailymotion.com" {
+      guard components.count == 3, components[0] == "embed", components[1] == "video" else {
+        return false
+      }
+      return components[2].allSatisfy { $0.isLetter || $0.isNumber }
     }
-    return components[2].allSatisfy { $0.isLetter || $0.isNumber }
+
+    if host == "geo.dailymotion.com" {
+      guard components.count == 2, components[0] == "player" else {
+        return false
+      }
+      let playerFile = String(components[1])
+      guard playerFile.hasSuffix(".html") else {
+        return false
+      }
+      let playerID = playerFile.dropLast(5)
+      guard
+        !playerID.isEmpty,
+        playerID.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" || $0 == "-" }),
+        let videoID = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+          .queryItems?
+          .first(where: { $0.name == "video" })?
+          .value,
+        !videoID.isEmpty,
+        videoID.allSatisfy({ $0.isLetter || $0.isNumber })
+      else {
+        return false
+      }
+      return true
+    }
+
+    return false
   }
 }

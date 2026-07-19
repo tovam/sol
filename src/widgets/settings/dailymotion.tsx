@@ -1,5 +1,5 @@
 import {
-	dailymotionEmbedURL,
+	dailymotionPlayerURL,
 	extractDailymotionVideoID,
 } from "lib/dailymotion";
 import { solNative } from "lib/SolNative";
@@ -21,7 +21,7 @@ export const DailymotionSettings = observer(() => {
 
 	const save = () => {
 		if (!store.ui.saveDailymotionStream(name, url)) {
-			setError("Paste a valid Dailymotion video or dai.ly URL");
+			setError("Paste a valid Dailymotion video, dai.ly, or player URL");
 			return;
 		}
 		setError("");
@@ -30,9 +30,9 @@ export const DailymotionSettings = observer(() => {
 	};
 
 	const preview = (streamURL: string) => {
-		const videoID = extractDailymotionVideoID(streamURL);
-		if (!videoID) return;
-		solNative.openDailymotionPlayer(dailymotionEmbedURL(videoID));
+		const playerURL = dailymotionPlayerURL(streamURL);
+		if (!playerURL) return;
+		solNative.openDailymotionPlayer(playerURL);
 	};
 
 	return (

@@ -1,6 +1,6 @@
 import { BackButton } from "components/BackButton";
 import {
-	dailymotionEmbedURL,
+	dailymotionPlayerURL,
 	extractDailymotionVideoID,
 } from "lib/dailymotion";
 import { solNative } from "lib/SolNative";
@@ -30,13 +30,13 @@ export const DailymotionWidget: FC = () => {
 	}, []);
 
 	const openPlayer = (sourceURL: string) => {
-		const videoID = extractDailymotionVideoID(sourceURL);
-		if (!videoID) {
-			setError("Paste a Dailymotion video or dai.ly URL");
+		const playerURL = dailymotionPlayerURL(sourceURL);
+		if (!playerURL) {
+			setError("Paste a Dailymotion video, dai.ly, or player URL");
 			return;
 		}
 		setError("");
-		solNative.openDailymotionPlayer(dailymotionEmbedURL(videoID));
+		solNative.openDailymotionPlayer(playerURL);
 		void solNative.showToast("Floating player opened", "success");
 	};
 	const openCurrent = () => openPlayer(url);
