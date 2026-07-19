@@ -298,9 +298,7 @@ private final class DailymotionControlsView: NSVisualEffectView {
     setPlaySymbol(state.isPlaying ? "pause.fill" : "play.fill")
     selectNearestRate(to: state.playbackRate)
     if !volumeSlider.isUserTracking {
-      volumeSlider.doubleValue = state.isMuted
-        ? 0
-        : clamped(state.volume, lower: 0, upper: 1)
+      volumeSlider.doubleValue = clamped(state.volume, lower: 0, upper: 1)
     }
     setVolumeSymbol(muted: state.isMuted, volume: state.volume)
 
@@ -974,9 +972,6 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     // The SDK is canonical for playback and advertising. The media bridge is
     // still useful there because the public SDK does not expose DVR ranges.
     if state.backend == "sdk" {
-      if !state.isAdPlaying {
-        state.isMuted = bool(body["isMuted"]) ?? state.isMuted
-      }
       notifyStateChange()
       return
     }
@@ -1189,6 +1184,9 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
               });
             };
             const number = (value) => Number.isFinite(value) ? value : null;
+            const nullableBoolean = (value) => typeof value === "boolean"
+              ? value
+              : null;
             let player = null;
             let pollingTimer = null;
 
@@ -1201,7 +1199,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
                   ready: Boolean(state.playerIsCriticalPathReady),
                   isPlaying: Boolean(state.playerIsPlaying),
                   isBuffering: Boolean(state.playerIsBuffering),
-                  isMuted: Boolean(state.playerIsMuted),
+                  isMuted: nullableBoolean(state.playerIsMuted),
                   time: number(state.videoTime),
                   duration: number(state.videoDuration),
                   rate: number(state.playerPlaybackSpeed),
