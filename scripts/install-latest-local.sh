@@ -52,7 +52,15 @@ readonly WORK_DIRECTORY="$(mktemp -d "${TMPDIR:-/tmp}/sol-local-sign.XXXXXX")"
 readonly DOWNLOAD_DIRECTORY="$WORK_DIRECTORY/download"
 readonly EXTRACT_DIRECTORY="$WORK_DIRECTORY/extracted"
 readonly BACKUP_APP="$WORK_DIRECTORY/previous-Sol.app"
-readonly LOGIN_KEYCHAIN="$(security default-keychain -d user | tr -d '"')"
+readonly LOGIN_KEYCHAIN="$(
+  security default-keychain -d user \
+    | sed -E 's/^[[:space:]]*"?//; s/"?[[:space:]]*$//'
+)"
+
+if [[ -z "$LOGIN_KEYCHAIN" ]] || ! security show-keychain-info "$LOGIN_KEYCHAIN" >/dev/null 2>&1; then
+  print -u2 "Could not resolve the default login keychain."
+  exit 1
+fi
 
 INSTALLATION_IN_PROGRESS=0
 HAD_PREVIOUS_APP=0
