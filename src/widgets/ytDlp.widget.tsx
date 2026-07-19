@@ -4,6 +4,7 @@ import prettyBytes from "pretty-bytes";
 import { type FC, useCallback, useEffect, useRef, useState } from "react";
 import {
 	Clipboard,
+	Image,
 	ScrollView,
 	Text,
 	TouchableOpacity,
@@ -40,6 +41,12 @@ type VideoMetadata = FormatInfo & {
 	height?: number;
 	fps?: number;
 	view_count?: number;
+	thumbnail?: string;
+	thumbnails?: Array<{
+		url?: string;
+		width?: number;
+		height?: number;
+	}>;
 	requested_formats?: FormatInfo[];
 };
 
@@ -94,7 +101,7 @@ function liveStatus(metadata?: VideoMetadata) {
 		return "Live now";
 	if (metadata?.live_status === "was_live") return "Replay";
 	if (metadata?.live_status === "is_upcoming") return "Upcoming";
-	return "No";
+	return undefined;
 }
 
 function pickedDirectoryPath(value: string) {
@@ -104,19 +111,6 @@ function pickedDirectoryPath(value: string) {
 	} catch {
 		return value.replace(/^file:\/\//, "");
 	}
-}
-
-function InfoCell({ label, value }: { label: string; value?: string }) {
-	return (
-		<View className="w-[48%] gap-0.5">
-			<Text className="text-[10px] uppercase tracking-wide darker-text">
-				{label}
-			</Text>
-			<Text className="text-sm font-medium" numberOfLines={2} selectable>
-				{value || "—"}
-			</Text>
-		</View>
-	);
 }
 
 const STATUS_LABELS: Record<JobStatus, string> = {
@@ -259,6 +253,20 @@ export const YtDlpWidget: FC = () => {
 
 	const size = estimatedSize(metadata);
 	const creator = metadata?.uploader ?? metadata?.channel;
+	const previewURL =
+		metadata?.thumbnail ??
+		metadata?.thumbnails?.filter(({ url: candidate }) => Boolean(candidate)).at(-1)
+			?.url;
+	const metadataFacts = [
+		mode === "audio" ? "MP3" : resolution(metadata),
+		formatDuration(metadata?.duration),
+		size ? prettyBytes(size) : undefined,
+		metadata?.fps ? `${metadata.fps} fps` : undefined,
+		metadata?.view_count != null
+			? `${metadata.view_count.toLocaleString()} views`
+			: undefined,
+		liveStatus(metadata),
+	].filter((fact): fact is string => Boolean(fact));
 	const statusColor =
 		status === "completed"
 			? "bg-green-500"
@@ -291,12 +299,14 @@ export const YtDlpWidget: FC = () => {
 				contentContainerClassName="px-8 py-5 gap-4"
 				showsVerticalScrollIndicator
 			>
-				<View className="rounded-xl border border-color subBg p-4">
-					<Text className="text-xs font-semibold darker-text mb-2">URL</Text>
+				<View className="border-b border-color pb-3">
+					<Text className="text-[10px] font-semibold tracking-wide darker-text">
+						VIDEO URL
+					</Text>
 					<TextInput
 						autoFocus
 						enableFocusRing={false}
-						className="text-base text"
+						className="text-lg text mt-1"
 						value={url}
 						onChangeText={setURL}
 						editable={status !== "downloading"}
@@ -305,21 +315,23 @@ export const YtDlpWidget: FC = () => {
 					/>
 				</View>
 
-				<View className="flex-row gap-3">
+				<View className="flex-row border-b border-color">
 					{(["video", "audio"] as const).map((nextMode) => (
 						<TouchableOpacity
 							key={nextMode}
 							disabled={status === "downloading"}
-							className={`flex-1 py-3 rounded-xl border items-center ${
+							className={`flex-1 py-3 border-b-2 items-center ${
 								mode === nextMode
-									? "bg-accent-strong border-transparent"
-									: "subBg border-color"
+									? "border-accent-strong"
+									: "border-transparent"
 							}`}
 							onPress={() => setMode(nextMode)}
 						>
 							<Text
 								className={
-									mode === nextMode ? "text-white font-semibold" : "text"
+									mode === nextMode
+										? "text-accent font-semibold"
+										: "darker-text"
 								}
 							>
 								{nextMode === "video" ? "Best video" : "MP3 audio"}
@@ -328,9 +340,41 @@ export const YtDlpWidget: FC = () => {
 					))}
 				</View>
 
-				<View className="rounded-xl border border-color subBg p-4 gap-3">
+				{metadata && (
+					<View className="flex-row gap-5 py-2 min-h-36">
+						{previewURL ? (
+							<Image
+								source={{ uri: previewURL }}
+								className="w-60 h-36 rounded-md bg-neutral-200 dark:bg-neutral-800"
+								resizeMode="cover"
+								accessibilityLabel={metadata.title || "Video thumbnail"}
+							/>
+						) : (
+							<View className="w-60 h-36 rounded-md bg-neutral-200 dark:bg-neutral-800 items-center justify-center">
+								<Text className="text-3xl darker-text">▶</Text>
+							</View>
+						)}
+						<View className="flex-1 py-1">
+							<Text className="text-xl font-semibold text" numberOfLines={3}>
+								{metadata.title || "Untitled media"}
+							</Text>
+							{!!creator && (
+								<Text className="text-sm darker-text mt-1" numberOfLines={1}>
+									{creator}
+								</Text>
+							)}
+							{!!metadataFacts.length && (
+								<Text className="text-sm darker-text mt-auto" selectable>
+									{metadataFacts.join("  ·  ")}
+								</Text>
+							)}
+						</View>
+					</View>
+				)}
+
+				<View className="py-3 border-y border-color">
 					<View className="flex-row items-center justify-between gap-3">
-						<View className="flex-1">
+						<View className="flex-1 gap-0.5">
 							<Text className="text-[10px] uppercase tracking-wide darker-text">
 								Destination
 							</Text>
@@ -343,7 +387,7 @@ export const YtDlpWidget: FC = () => {
 							</Text>
 						</View>
 						<TouchableOpacity
-							className="px-3 py-2 rounded-lg bg-neutral-200 dark:bg-neutral-700"
+							className="px-3 py-2 rounded-md border border-color"
 							disabled={status === "downloading"}
 							onPress={() => void pickDestination()}
 						>
@@ -352,39 +396,9 @@ export const YtDlpWidget: FC = () => {
 					</View>
 				</View>
 
-				{metadata && (
-					<View className="rounded-xl border border-color subBg p-4 gap-3">
-						<Text className="text-base font-semibold" numberOfLines={2}>
-							{metadata.title || "Untitled media"}
-						</Text>
-						<View className="flex-row flex-wrap justify-between gap-y-3">
-							<InfoCell label="Creator" value={creator} />
-							<InfoCell
-								label="Duration"
-								value={formatDuration(metadata.duration)}
-							/>
-							<InfoCell
-								label="Estimated size"
-								value={size ? prettyBytes(size) : undefined}
-							/>
-							<InfoCell label="Live" value={liveStatus(metadata)} />
-							<InfoCell label="Format" value={resolution(metadata)} />
-							<InfoCell
-								label="FPS / Views"
-								value={[
-									metadata.fps ? `${metadata.fps} fps` : undefined,
-									metadata.view_count?.toLocaleString(),
-								]
-									.filter(Boolean)
-									.join(" · ")}
-							/>
-						</View>
-					</View>
-				)}
-
 				{!!downloadedPath && (
 					<TouchableOpacity
-						className="rounded-xl border border-green-500/40 bg-green-500/10 p-4"
+						className="border-l-2 border-green-500 pl-3 py-1"
 						onPress={() => solNative.openWithFinder(downloadedPath)}
 					>
 						<Text className="text-sm font-semibold text-green-600 dark:text-green-400">
@@ -396,9 +410,13 @@ export const YtDlpWidget: FC = () => {
 					</TouchableOpacity>
 				)}
 
-				{!!error && <Text className="text-sm text-red-500">{error}</Text>}
+				{!!error && (
+					<View className="border-l-2 border-red-500 pl-3 py-1">
+						<Text className="text-sm text-red-500">{error}</Text>
+					</View>
+				)}
 				{isAvailable === false && (
-					<View className="rounded-xl border border-orange-500/40 bg-orange-500/10 p-4 gap-2">
+					<View className="border-t border-orange-500/40 pt-4 gap-2">
 						<Text className="text font-semibold">yt-dlp is not installed</Text>
 						<Text className="text-sm darker-text">
 							Install it with Homebrew, then check again.
@@ -425,7 +443,7 @@ export const YtDlpWidget: FC = () => {
 
 			<View className="px-8 py-4 border-t border-color">
 				<TouchableOpacity
-					className={`py-3 rounded-xl items-center ${
+					className={`py-3 rounded-md items-center ${
 						isAvailable && isSupportedURL(url) && status !== "downloading"
 							? "bg-accent-strong"
 							: "bg-neutral-500"
