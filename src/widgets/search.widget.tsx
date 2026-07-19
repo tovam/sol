@@ -8,7 +8,7 @@ import { LoadingBar } from "components/LoadingBar";
 import { MainInput } from "components/MainInput";
 import { renderToKeys } from "lib/shortcuts";
 import { observer } from "mobx-react-lite";
-import { type FC, useEffect, useRef } from "react";
+import { type FC, useEffect, useRef, useState } from "react";
 import {
 	Image,
 	Platform,
@@ -289,6 +289,19 @@ export const SearchWidget: FC = observer(() => {
 	const selectedIndex = store.ui.selectedIndex;
 	const listRef = useRef<LegendListRef | null>(null);
 	const items = store.ui.searchItems;
+	const [listViewportHeight, setListViewportHeight] = useState(0);
+	const [listContentHeight, setListContentHeight] = useState(0);
+	const [listOffset, setListOffset] = useState(0);
+	const scrollTrackHeight = Math.max(0, listViewportHeight - 24);
+	const scrollThumbHeight = Math.max(
+		28,
+		(listViewportHeight / Math.max(listContentHeight, 1)) * scrollTrackHeight,
+	);
+	const maxScrollOffset = Math.max(1, listContentHeight - listViewportHeight);
+	const scrollThumbOffset =
+		(Math.min(Math.max(listOffset, 0), maxScrollOffset) / maxScrollOffset) *
+		Math.max(0, scrollTrackHeight - scrollThumbHeight);
+	const hasOverflow = listContentHeight > listViewportHeight + 1;
 
 	useEffect(() => {
 		if (focused && items.length && selectedIndex < items.length) {
@@ -316,18 +329,44 @@ export const SearchWidget: FC = observer(() => {
 			{!!store.ui.query && (
 				<>
 					<LoadingBar />
-					<LegendList
-						style={STYLES.list}
-						contentContainerStyle={STYLES.contentContainer}
-						ref={listRef}
-						data={items}
-						keyExtractor={(item) => item.id}
-						renderItem={ItemRow}
-						showsVerticalScrollIndicator={false}
-						ListEmptyComponent={EmptyComponent}
-						recycleItems
-						maintainVisibleContentPosition={false}
-					/>
+					<View className="flex-1 relative">
+						<LegendList
+							style={STYLES.list}
+							contentContainerStyle={STYLES.contentContainer}
+							ref={listRef}
+							data={items}
+							keyExtractor={(item) => item.id}
+							renderItem={ItemRow}
+							showsVerticalScrollIndicator={false}
+							onLayout={(event) => {
+								setListViewportHeight(event.nativeEvent.layout.height);
+							}}
+							onContentSizeChange={(_width, height) => {
+								setListContentHeight(height);
+							}}
+							onScroll={(event) => {
+								setListOffset(event.nativeEvent.contentOffset.y);
+							}}
+							scrollEventThrottle={16}
+							ListEmptyComponent={EmptyComponent}
+							recycleItems
+							maintainVisibleContentPosition={false}
+						/>
+						{hasOverflow && (
+							<View
+								pointerEvents="none"
+								className="absolute right-1.5 top-3 bottom-3 w-1 rounded-full bg-neutral-300/70 dark:bg-neutral-700/70"
+							>
+								<View
+									className="w-1 rounded-full bg-neutral-600 dark:bg-neutral-300"
+									style={{
+										height: scrollThumbHeight,
+										transform: [{ translateY: scrollThumbOffset }],
+									}}
+								/>
+							</View>
+						)}
+					</View>
 
 					<View className="h-9 px-4 flex-row items-center justify-end gap-1 subBg border-t border-color">
 						{store.ui.currentItem?.type === ItemType.CUSTOM && (
