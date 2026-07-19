@@ -75,11 +75,6 @@ class SolNative extends NativeEventEmitter {
 	toggleDND: () => void;
 	toggleScreenRuler: () => void;
 	openDailymotionPlayer: (url: string) => Promise<boolean>;
-	requestOpenWebUI: (
-		endpoint: string,
-		apiKey: string,
-		body: string,
-	) => Promise<{ status: number; body: string }>;
 	getNetworkInfo: () => Promise<{
 		connection?: string;
 		ssid?: string;
@@ -211,7 +206,6 @@ class SolNative extends NativeEventEmitter {
 		this.useBackgroundOverlay = module.useBackgroundOverlay;
 		this.toggleScreenRuler = module.toggleScreenRuler;
 		this.openDailymotionPlayer = module.openDailymotionPlayer;
-		this.requestOpenWebUI = module.requestOpenWebUI;
 		this.getNetworkInfo = module.getNetworkInfo;
 
 		this.securelyRetrieve = module.securelyRetrieve;
