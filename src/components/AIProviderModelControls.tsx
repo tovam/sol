@@ -57,10 +57,14 @@ export const AIProviderModelControls = observer(
 			lifetimeCost.unpricedRequests > 0 || lifetimeCost.partialRequests > 0;
 
 		useEffect(() => {
-			if (ai.initialized) {
+			if (
+				ai.initialized &&
+				ai.modelsByProvider[provider].length === 0 &&
+				!ai.modelsLoading[provider]
+			) {
 				void ai.refreshModels(provider);
 			}
-			// Refresh once when the controls appear and whenever the provider changes.
+			// Load uncached models when the controls appear or the provider changes.
 			// URL/key edits use the explicit refresh button to avoid a request per keypress.
 			// eslint-disable-next-line react-hooks/exhaustive-deps
 		}, [ai.initialized, provider]);

@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { TextInput } from "react-native-macos";
 import { useStore } from "store";
+import type { QueuedAIConversation } from "stores/ai.store";
 import { Widget } from "stores/ui.store";
 
 function createMessage(role: AIMessage["role"], content: string): AIMessage {
@@ -25,7 +26,9 @@ export const AIChatWidget = observer(() => {
 	const [input, setInput] = useState("");
 	const [error, setError] = useState("");
 	const [loading, setLoading] = useState(false);
-	const sendRef = useRef<() => void>(() => undefined);
+	const sendRef = useRef<(queued?: QueuedAIConversation) => void>(
+		() => undefined,
+	);
 	const submittingRef = useRef(false);
 
 	const messages = store.ai.conversation;
@@ -39,8 +42,8 @@ export const AIChatWidget = observer(() => {
 		setError("");
 	};
 
-	const send = async () => {
-		const content = input.trim();
+	const send = async (queued?: QueuedAIConversation) => {
+		const content = (queued?.prompt ?? input).trim();
 		if (!content || submittingRef.current) return;
 		if (
 			store.ai.activeConversationID &&
@@ -66,6 +69,9 @@ export const AIChatWidget = observer(() => {
 					role,
 					content: messageContent,
 				})),
+				queued
+					? { provider: queued.provider, model: queued.model }
+					: undefined,
 			);
 			const completedMessages: AIMessage[] = [
 				...messagesWithQuestion,
@@ -87,7 +93,7 @@ export const AIChatWidget = observer(() => {
 		}
 	};
 
-	sendRef.current = () => void send();
+	sendRef.current = (queued) => void send(queued);
 
 	useEffect(() => {
 		solNative.turnOffEnterListener();
@@ -103,6 +109,11 @@ export const AIChatWidget = observer(() => {
 			solNative.turnOnEnterListener();
 		};
 	}, []);
+
+	useEffect(() => {
+		const queuedConversation = store.ai.consumeQueuedConversation();
+		if (queuedConversation) sendRef.current(queuedConversation);
+	}, [store.ai]);
 
 	return (
 		<View className="fullWindow">
@@ -120,7 +131,7 @@ export const AIChatWidget = observer(() => {
 					<Text className="text-lg font-semibold text">AI Chat</Text>
 					<Text className="text-xs darker-text">saved locally</Text>
 				</View>
-				<AIProviderModelControls compact />
+				<AIProviderModelControls compact disabled={isConversationLoading} />
 				<TouchableOpacity
 					className="px-2.5 py-1.5 rounded-lg subBg border border-color"
 					onPress={() => store.ui.openAIHistory()}
@@ -130,7 +141,10 @@ export const AIChatWidget = observer(() => {
 					</Text>
 				</TouchableOpacity>
 				<TouchableOpacity
-					className="px-2.5 py-1.5 rounded-lg subBg border border-color"
+					disabled={isConversationLoading}
+					className={`px-2.5 py-1.5 rounded-lg subBg border border-color ${
+						isConversationLoading ? "opacity-50" : ""
+					}`}
 					onPress={() => store.ui.showSettings("AI")}
 				>
 					<Text className="text text-xs">Settings</Text>

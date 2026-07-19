@@ -507,6 +507,10 @@ export const SearchWidget: FC = observer(() => {
 						{!!store.ui.query && (
 							<>
 								<View className="mx-2" />
+								<Text className="text-xs darker-text mr-1">AI</Text>
+								<Key symbol={"⌃"} />
+								<Key symbol={"⏎"} />
+								<View className="mx-2" />
 								<Text className="text-xs darker-text mr-1">Web</Text>
 								<Key symbol={"⌘"} />
 								<Key symbol={"⏎"} />

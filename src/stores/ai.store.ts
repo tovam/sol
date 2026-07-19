@@ -52,6 +52,12 @@ export type AIConversation = {
 	model?: string;
 };
 
+export type QueuedAIConversation = {
+	prompt: string;
+	provider: AIProvider;
+	model: string;
+};
+
 const CONVERSATION_TITLE_LIMIT = 64;
 
 const cloneDefaultSettings = (): AISettings => ({
@@ -246,6 +252,7 @@ export const createAIStore = () => {
 		conversations: [] as AIConversation[],
 		activeConversationID: null as string | null,
 		pendingConversationIDs: [] as string[],
+		queuedConversation: null as QueuedAIConversation | null,
 		openAILifetimeCost: createEmptyOpenAILifetimeCost(),
 		modelsByProvider: {
 			openai: [] as AIModelInfo[],
@@ -360,6 +367,20 @@ export const createAIStore = () => {
 				: store.pendingConversationIDs.filter(
 						(candidate) => candidate !== conversationID,
 					);
+		},
+
+		queueConversation(
+			prompt: string,
+			provider: AIProvider,
+			model: string,
+		) {
+			store.queuedConversation = { prompt, provider, model };
+		},
+
+		consumeQueuedConversation() {
+			const queuedConversation = store.queuedConversation;
+			store.queuedConversation = null;
+			return queuedConversation;
 		},
 
 		saveCurrentConversation(messages: AIMessage[]) {
@@ -601,10 +622,16 @@ export const createAIStore = () => {
 			}
 		},
 
-		request: async (messages: AIMessage[]) => {
+		request: async (
+			messages: AIMessage[],
+			selection?: Pick<QueuedAIConversation, "provider" | "model">,
+		) => {
 			await store.ensureSecretsLoaded();
-			const provider = store.settings.provider;
-			const settings = { ...store.settings[provider] };
+			const provider = selection?.provider ?? store.settings.provider;
+			const settings = {
+				...store.settings[provider],
+				...(selection ? { model: selection.model } : {}),
+			};
 			const validationError = validateAIProviderSettings(provider, settings);
 			if (validationError) throw new Error(validationError);
 			const result = await requestAI(provider, settings, messages);

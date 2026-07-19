@@ -268,6 +268,11 @@ export const createKeystrokeStore = (root: IRootStore) => {
 						}
 
 						case Widget.SEARCH: {
+							if (control && !shift && !meta && root.ui.query.trim()) {
+								root.ui.focusWidget(Widget.AI_MODEL_PICKER);
+								return;
+							}
+
 							const isDefaultEmptySearch =
 								!root.ui.query && root.ui.searchTab === SearchTab.ALL;
 							if (
@@ -508,6 +513,11 @@ export const createKeystrokeStore = (root: IRootStore) => {
 				case 53: {
 					if (root.ui.confirmDialogShown) {
 						root.ui.closeConfirm();
+						return;
+					}
+
+					if (root.ui.focusedWidget === Widget.AI_MODEL_PICKER) {
+						root.ui.focusWidget(Widget.SEARCH);
 						return;
 					}
 
