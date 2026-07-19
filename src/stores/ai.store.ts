@@ -10,6 +10,14 @@ import {
 	type AISettings,
 } from "lib/ai";
 import type { AIModelInfo } from "lib/aiModels";
+import { isOfficialOpenAIAPIBaseURL } from "lib/aiHttp";
+import {
+	accumulateOpenAIRequestWithoutUsage,
+	accumulateOpenAIUsageCost,
+	accumulateUnpricedOpenAIUsage,
+	createEmptyOpenAILifetimeCost,
+	restoreOpenAILifetimeCost,
+} from "lib/openaiPricing";
 import { autorun, makeAutoObservable, runInAction, toJS } from "mobx";
 import { readPersistedStore, writePersistedStore } from "./persisted-config";
 
@@ -27,6 +35,7 @@ type PersistedAISettings = {
 type PersistedAIState = {
 	settings?: Partial<PersistedAISettings>;
 	conversation?: unknown;
+	openAILifetimeCost?: unknown;
 };
 
 const cloneDefaultSettings = (): AISettings => ({
@@ -134,6 +143,7 @@ export const createAIStore = () => {
 		writePersistedStore("ai", {
 			settings: persistentSettings(store.settings),
 			conversation: store.conversation.map((message) => ({ ...message })),
+			openAILifetimeCost: toJS(store.openAILifetimeCost),
 		});
 	};
 
@@ -147,6 +157,7 @@ export const createAIStore = () => {
 		secretsAttempted: false,
 		secretsError: "",
 		conversation: [] as AIMessage[],
+		openAILifetimeCost: createEmptyOpenAILifetimeCost(),
 		modelsByProvider: {
 			openai: [] as AIModelInfo[],
 			openwebui: [] as AIModelInfo[],
@@ -364,7 +375,32 @@ export const createAIStore = () => {
 			const settings = { ...store.settings[provider] };
 			const validationError = validateAIProviderSettings(provider, settings);
 			if (validationError) throw new Error(validationError);
-			return requestAI(provider, settings, messages);
+			const result = await requestAI(provider, settings, messages);
+			if (provider === "openai") {
+				const { lifetime } = result.usage
+					? isOfficialOpenAIAPIBaseURL(settings.baseURL) &&
+						(result.serviceTier == null || result.serviceTier === "default")
+						? accumulateOpenAIUsageCost(
+								store.openAILifetimeCost,
+								result.usage,
+							)
+						: accumulateUnpricedOpenAIUsage(
+								store.openAILifetimeCost,
+								result.usage,
+								isOfficialOpenAIAPIBaseURL(settings.baseURL)
+									? "non-standard-service-tier"
+									: "non-official-endpoint",
+							)
+					: accumulateOpenAIRequestWithoutUsage(
+							store.openAILifetimeCost,
+							result.model,
+						);
+				runInAction(() => {
+					store.openAILifetimeCost = lifetime;
+				});
+			}
+			if (!result.text) throw new Error("The API returned no text");
+			return result.text;
 		},
 
 		saveSecureSettings: async () => {
@@ -390,6 +426,9 @@ export const createAIStore = () => {
 					store.hasPersistedSettings = persistedState?.settings != null;
 					store.conversation = normalizeConversation(
 						persistedState?.conversation,
+					);
+					store.openAILifetimeCost = restoreOpenAILifetimeCost(
+						persistedState?.openAILifetimeCost,
 					);
 				});
 			} catch (error) {

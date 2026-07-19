@@ -1,4 +1,5 @@
 import { AIProviderModelControls } from "components/AIProviderModelControls";
+import { OpenAICostSummary } from "components/OpenAICostSummary";
 import type { AIProviderSettings } from "lib/ai";
 import { observer } from "mobx-react-lite";
 import { useState } from "react";
@@ -105,6 +106,7 @@ export const AI = observer(() => {
 				disabled={busy}
 				onSelectionChange={resetTestState}
 			/>
+			<OpenAICostSummary />
 
 			<View className="rounded-xl border border-color subBg p-4 gap-4">
 				<View>

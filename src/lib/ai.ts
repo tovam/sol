@@ -1,6 +1,7 @@
 import axios from "axios";
 import {
 	createAIHeaders,
+	isOfficialOpenAIAPIBaseURL,
 	openAIEndpoint,
 	openAIModelsEndpoint,
 	openWebUIEndpoint,
@@ -11,6 +12,7 @@ import {
 	filterOpenWebUITextModels,
 	parseAIModelsResponse,
 } from "lib/aiModels";
+import type { OpenAITokenUsage } from "lib/openaiPricing";
 import { solNative } from "lib/SolNative";
 
 export type AIProvider = "openai" | "openwebui";
@@ -30,6 +32,14 @@ export type AISettings = {
 	provider: AIProvider;
 	openai: AIProviderSettings;
 	openwebui: AIProviderSettings;
+};
+
+export type AIRequestResult = {
+	text: string;
+	provider: AIProvider;
+	model: string;
+	serviceTier?: string;
+	usage?: OpenAITokenUsage;
 };
 
 const SETTINGS_KEY = "@sol.ai_one_shot_settings";
@@ -86,6 +96,45 @@ function extractOpenWebUIText(data: unknown) {
 		.map((part) => asRecord(part)?.text)
 		.filter((part): part is string => typeof part === "string")
 		.join("\n");
+}
+
+function tokenCount(value: unknown) {
+	return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+		? value
+		: null;
+}
+
+function responseModel(data: unknown, fallback: string) {
+	const model = asRecord(data)?.model;
+	return typeof model === "string" && model.trim() ? model.trim() : fallback;
+}
+
+function responseServiceTier(data: unknown) {
+	const serviceTier = asRecord(data)?.service_tier;
+	return typeof serviceTier === "string" ? serviceTier : undefined;
+}
+
+function extractOpenAIUsage(
+	data: unknown,
+	fallbackModel: string,
+): OpenAITokenUsage | undefined {
+	const root = asRecord(data);
+	const usage = asRecord(root?.usage);
+	const inputTokens = tokenCount(usage?.input_tokens);
+	const outputTokens = tokenCount(usage?.output_tokens);
+	if (inputTokens == null || outputTokens == null) return undefined;
+
+	const inputDetails = asRecord(usage?.input_tokens_details);
+	return {
+		model: responseModel(data, fallbackModel),
+		inputTokens,
+		outputTokens,
+		cachedInputTokens: tokenCount(inputDetails?.cached_tokens) ?? 0,
+		cacheWriteTokens:
+			tokenCount(inputDetails?.cache_write_tokens) ??
+			tokenCount(usage?.cache_write_tokens) ??
+			0,
+	};
 }
 
 function getRequestError(error: unknown, provider: AIProvider) {
@@ -212,25 +261,38 @@ export async function requestAI(
 	provider: AIProvider,
 	settings: AIProviderSettings,
 	messages: AIMessage[],
-) {
+): Promise<AIRequestResult> {
 	const headers = createAIHeaders(provider, settings.apiKey);
+	const requestedModel = settings.model.trim();
 
 	try {
 		if (provider === "openai") {
+			const requestBody = {
+				model: requestedModel,
+				input: messages,
+				...(isOfficialOpenAIAPIBaseURL(settings.baseURL)
+					? { service_tier: "default" }
+					: {}),
+			};
 			const response = await axios.post(
 				openAIEndpoint(settings.baseURL),
-				{ model: settings.model.trim(), input: messages },
+				requestBody,
 				{ headers },
 			);
 			const responseText = extractOpenAIText(response.data);
-			if (!responseText) throw new Error("The API returned no text");
-			return responseText;
+			return {
+				text: responseText,
+				provider,
+				model: responseModel(response.data, requestedModel),
+				serviceTier: responseServiceTier(response.data),
+				usage: extractOpenAIUsage(response.data, requestedModel),
+			};
 		}
 
 		const response = await axios.post(
 			openWebUIEndpoint(settings.baseURL),
 			{
-				model: settings.model.trim(),
+				model: requestedModel,
 				messages,
 				stream: false,
 			},
@@ -238,7 +300,11 @@ export async function requestAI(
 		);
 		const responseText = extractOpenWebUIText(response.data);
 		if (!responseText) throw new Error("The API returned no text");
-		return responseText;
+		return {
+			text: responseText,
+			provider,
+			model: responseModel(response.data, requestedModel),
+		};
 	} catch (error) {
 		throw new Error(getRequestError(error, provider));
 	}

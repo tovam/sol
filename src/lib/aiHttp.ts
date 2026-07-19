@@ -4,6 +4,15 @@ function trimTrailingSlashes(value: string) {
 	return value.trim().replace(/\/+$/, "");
 }
 
+export function isOfficialOpenAIAPIBaseURL(baseURL: string) {
+	try {
+		const parsed = new URL(baseURL.trim());
+		return parsed.protocol === "https:" && parsed.hostname === "api.openai.com";
+	} catch {
+		return false;
+	}
+}
+
 export function openAIEndpoint(baseURL: string) {
 	const base = trimTrailingSlashes(baseURL);
 	if (base.endsWith("/responses")) return base;

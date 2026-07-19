@@ -1,5 +1,6 @@
 import { Dropdown } from "components/Dropdown";
 import type { AIProvider } from "lib/ai";
+import { formatOpenAIUSD } from "lib/openaiPricing";
 import { observer } from "mobx-react-lite";
 import { useEffect } from "react";
 import {
@@ -51,6 +52,9 @@ export const AIProviderModelControls = observer(
 					? `${model.name} — ${model.id}`
 					: model.id,
 		}));
+		const lifetimeCost = ai.openAILifetimeCost;
+		const hasIncompleteCost =
+			lifetimeCost.unpricedRequests > 0 || lifetimeCost.partialRequests > 0;
 
 		useEffect(() => {
 			if (ai.initialized) {
@@ -108,7 +112,7 @@ export const AIProviderModelControls = observer(
 						placeholder={loading ? "Loading models…" : "Choose a model"}
 						disabled={controlsDisabled || loading || modelOptions.length === 0}
 						className={compact ? "h-7" : "h-8"}
-						style={{ width: compact ? 210 : 300 }}
+						style={{ width: compact ? 175 : 300 }}
 					/>
 
 					<TouchableOpacity
@@ -124,6 +128,25 @@ export const AIProviderModelControls = observer(
 							<Text className={error ? "text-red-500" : "text"}>↻</Text>
 						)}
 					</TouchableOpacity>
+
+					{provider === "openai" && (
+						<View
+							className="px-1"
+							accessibilityLabel="OpenAI via Sol lifetime estimated cost"
+						>
+							<Text
+								numberOfLines={1}
+								className={`text-xs ${
+									hasIncompleteCost
+										? "text-amber-600 dark:text-amber-400"
+										: "darker-text"
+								}`}
+							>
+								{hasIncompleteCost ? "≥" : "≈"}
+								{formatOpenAIUSD(lifetimeCost.pricedSubtotalUSD)}
+							</Text>
+						</View>
+					)}
 				</View>
 
 				{showError && !!error && (
