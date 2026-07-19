@@ -379,14 +379,6 @@ export const General = observer(() => {
 				</View>
 				<View className="border-t border-lightBorder dark:border-darkBorder" />
 				<View className="flex-row items-center">
-					<Text className="flex-1">Save clipboard history</Text>
-					<MySwitch
-						value={store.clipboard.saveHistory}
-						onValueChange={store.clipboard.setSaveHistory}
-					/>
-				</View>
-				<View className="border-t border-lightBorder dark:border-darkBorder" />
-				<View className="flex-row items-center">
 					<Text className="flex-1">Forward Media Keys to Music Player</Text>
 					<MySwitch
 						value={store.ui.mediaKeyForwardingEnabled}

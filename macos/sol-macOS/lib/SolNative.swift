@@ -506,6 +506,19 @@ class SolNative: RCTEventEmitter {
     }
   }
 
+  @objc func securelyRemove(
+    _ key: NSString,
+    resolver resolve: RCTPromiseResolveBlock,
+    rejecter reject: RCTPromiseRejectBlock
+  ) {
+    do {
+      try keychain.remove(key as String)
+      resolve(true)
+    } catch {
+      reject("KeychainRemoveError", error.localizedDescription, error)
+    }
+  }
+
   @objc func showToast(_ text: String, variant: String, timeout: NSNumber) {
     DispatchQueue.main.async {
       ToastManager.shared.showToast(

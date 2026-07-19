@@ -172,6 +172,33 @@ export const readPersistedStore = async <T>(
 	return Object.keys(nextStoreState).length > 0 ? (nextStoreState as T) : null;
 };
 
+export const readPersistedRuntimeStore = <T>(
+	storeKey: PersistedStoreKey,
+): T | null => {
+	const existingStoreState = getRuntimeState()[storeKey];
+	if (existingStoreState == null || typeof existingStoreState !== "object") {
+		return null;
+	}
+
+	return { ...existingStoreState } as T;
+};
+
+export const replacePersistedStore = (
+	storeKey: PersistedStoreKey,
+	data: Record<string, any>,
+): boolean => {
+	const config = getPersistedConfig();
+	const runtimeState = getRuntimeState();
+	const nextConfig = { ...config };
+	delete nextConfig[storeKey];
+
+	if (!writeJsonRuntimeState({ ...runtimeState, [storeKey]: data })) {
+		return false;
+	}
+
+	return writeJsonConfig(nextConfig);
+};
+
 export const writePersistedStore = (
 	storeKey: PersistedStoreKey,
 	data: Record<string, any>,

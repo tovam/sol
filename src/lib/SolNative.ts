@@ -96,6 +96,7 @@ class SolNative extends NativeEventEmitter {
 	}>;
 	securelyStore: (key: string, value: string) => Promise<void>;
 	securelyRetrieve: (key: string) => Promise<string | null>;
+	securelyRemove: (key: string) => Promise<void>;
 	executeBashScript: (script: string) => Promise<void>;
 	executeBashScriptWithOutput: (script: string) => Promise<string>;
 	showToast: (
@@ -223,6 +224,7 @@ class SolNative extends NativeEventEmitter {
 
 		this.securelyRetrieve = module.securelyRetrieve;
 		this.securelyStore = module.securelyStore;
+		this.securelyRemove = module.securelyRemove;
 
 		this.showToast = (text: string, variant = "success", timeout = 4) =>
 			module.showToast(text, variant, timeout);
