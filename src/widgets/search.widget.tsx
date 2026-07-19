@@ -122,9 +122,110 @@ function TemporaryResultView({
 	);
 }
 
+function compactPath(path: string, username: string) {
+	const home = `/Users/${username}`;
+	if (path === home) return "~";
+	if (path.startsWith(`${home}/`)) return `~${path.slice(home.length)}`;
+	return path;
+}
+
+function parentDirectory(path: string, username: string) {
+	const normalized = path.replace(/\/+$/, "");
+	const separatorIndex = normalized.lastIndexOf("/");
+	if (separatorIndex <= 0) return "/";
+	return compactPath(normalized.slice(0, separatorIndex), username);
+}
+
+function getItemMetadata(item: Item, username: string) {
+	const details: string[] = [];
+
+	switch (item.type) {
+		case ItemType.APPLICATION:
+			details.push("Application");
+			if (item.url) details.push(parentDirectory(item.url, username));
+			if (item.isRunning) details.push("Running");
+			break;
+		case ItemType.FILE:
+			details.push("File");
+			if (item.url) details.push(parentDirectory(item.url, username));
+			break;
+		case ItemType.CONFIGURATION:
+			details.push("Action");
+			break;
+		case ItemType.PREFERENCE_PANE:
+			details.push("System setting");
+			break;
+		case ItemType.CUSTOM:
+			details.push("Quick link");
+			break;
+		case ItemType.USER_SCRIPT:
+			details.push("Script");
+			break;
+		case ItemType.BOOKMARK:
+			details.push("Browser bookmark");
+			if (item.bookmarkFolder) details.push(item.bookmarkFolder);
+			break;
+		case ItemType.TEMPORARY_RESULT:
+			details.push("Result");
+			break;
+	}
+
+	if (item.subName) details.push(item.subName);
+	return details.join(" · ");
+}
+
+function ItemIcon({ item }: { item: Item }) {
+	let icon = null;
+
+	if (item.type === ItemType.BOOKMARK && item.url) {
+		icon = (
+			<Favicon
+				url={item.url}
+				fallback={item.faviconFallback}
+				className="w-6 h-6"
+			/>
+		);
+	} else if (
+		(item.type === ItemType.APPLICATION || item.type === ItemType.FILE) &&
+		item.url
+	) {
+		icon = <FileIcon url={item.url} className="w-6 h-6" />;
+	} else if (item.type === ItemType.CUSTOM && item.icon) {
+		icon = (
+			<View className="w-6 h-6 rounded items-center justify-center bg-white dark:bg-black">
+				<Image
+					// @ts-expect-error custom icon names are validated when the item is created
+					source={Icons[item.icon]}
+					style={{ tintColor: item.color, height: 16, width: 16 }}
+				/>
+			</View>
+		);
+	} else if (item.iconImage) {
+		icon = (
+			<Image source={item.iconImage} className="w-6 h-6" resizeMode="contain" />
+		);
+	} else if (
+		(Platform.OS === "macos" || Platform.OS === "ios") &&
+		item.IconComponent
+	) {
+		icon = <item.IconComponent />;
+	} else if (item.icon) {
+		icon = (
+			<Text style={{ fontSize: 19, lineHeight: 24, textAlign: "center" }}>
+				{item.icon}
+			</Text>
+		);
+	}
+
+	return (
+		<View className="w-8 h-8 shrink-0 items-center justify-center">{icon}</View>
+	);
+}
+
 const ItemRow = observer(({ item, index }: { item: Item; index: number }) => {
 	const store = useStore();
 	const isActive = index === store.ui.selectedIndex;
+	const metadata = getItemMetadata(item, store.ui.username);
 
 	// this is used for things like calculator results
 	if (item.type === ItemType.TEMPORARY_RESULT) {
@@ -158,116 +259,32 @@ const ItemRow = observer(({ item, index }: { item: Item; index: number }) => {
 					"bg-accent-strong": isActive,
 				})}
 			>
-				{item.isRunning && (
-					<View
-						className={clsx(
-							"absolute bottom-1 left-[19px] h-[3px] w-[3px] rounded-full bg-neutral-600 dark:bg-neutral-400",
-						)}
-					/>
-				)}
-				{!!item.url && item.type !== ItemType.BOOKMARK && (
-					<FileIcon url={item.url} className={"w-6 h-6"} />
-				)}
-				{item.type !== ItemType.CUSTOM && !!item.icon && (
-					<Text>{item.icon}</Text>
-				)}
-				{item.type === ItemType.CUSTOM && !!item.icon && (
-					<View className="w-6 h-6 rounded items-center justify-center bg-white dark:bg-black">
-						<Image
-							// @ts-expect-error
-							source={Icons[item.icon]}
-							style={{
-								tintColor: item.color,
-								height: 16,
-								width: 16,
-							}}
-						/>
-					</View>
-				)}
-				{!!item.iconImage && (
-					<Image
-						source={item.iconImage}
-						className="w-6 h-6"
-						resizeMode="contain"
-					/>
-				)}
-
-				{item.type === ItemType.BOOKMARK && !!item.url && (
-					<Favicon url={item.url} fallback={item.faviconFallback} />
-				)}
-
-				{(Platform.OS === "macos" || Platform.OS === "ios") &&
-					!!item.IconComponent && <item.IconComponent />}
+				<ItemIcon item={item} />
 				<Text
 					numberOfLines={1}
-					className={clsx("ml-3 text max-w-xl", {
+					className={clsx("ml-3 text flex-1", {
 						"text-white": isActive,
 					})}
 				>
 					{item.name}
 				</Text>
 
-				<View className="flex-1" />
-
-				{item.type === ItemType.BOOKMARK && (
+				{!!metadata && (
 					<Text
+						numberOfLines={1}
 						className={clsx("darker-text text-xs", {
 							"text-white dark:text-neutral-200": isActive,
 						})}
+						style={{ maxWidth: 300, marginLeft: 16, textAlign: "right" }}
 					>
-						Browser Bookmark
-					</Text>
-				)}
-				{item.type === ItemType.USER_SCRIPT && (
-					<Text
-						className={clsx("darker-text text-xs", {
-							"text-white dark:text-neutral-200": isActive,
-						})}
-					>
-						Script
-					</Text>
-				)}
-
-				{item.type === ItemType.CUSTOM && (
-					<Text
-						className={clsx("darker-text text-xs", {
-							"text-white dark:text-neutral-200": isActive,
-						})}
-					>
-						Custom
-					</Text>
-				)}
-
-				{!!item.subName && (
-					<Text
-						className={clsx("darker-text text-xs", {
-							"text-white dark:text-white": isActive,
-						})}
-					>
-						{item.subName}
-					</Text>
-				)}
-
-				{item.type === ItemType.FILE && !!item.url && (
-					<Text
-						className={clsx("darker-text text-xs", {
-							"text-white dark:text-white": isActive,
-						})}
-					>
-						{item.url.slice(0, 45)}
+						{metadata}
 					</Text>
 				)}
 
 				{!!store.ui.shortcuts[item.id] && (
-					<View className="flex-row gap-1 items-center">
+					<View className="ml-3 flex-row gap-1 items-center shrink-0">
 						{renderToKeys(store.ui.shortcuts[item.id])}
 					</View>
-				)}
-				{item.type === ItemType.BOOKMARK && !!item.bookmarkFolder && (
-					<Text className="flex-row gap-1 items-center">{`${item.bookmarkFolder.substring(
-						0,
-						16,
-					)}${item.bookmarkFolder.length > 16 ? "..." : ""}`}</Text>
 				)}
 			</View>
 		</TouchableOpacity>
