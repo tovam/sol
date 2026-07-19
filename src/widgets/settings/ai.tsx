@@ -37,6 +37,7 @@ export function AI() {
 	const [saving, setSaving] = useState(false);
 	const [testState, setTestState] = useState<TestState>("idle");
 	const [message, setMessage] = useState("");
+	const [editingAPIKey, setEditingAPIKey] = useState(false);
 
 	useEffect(() => {
 		void loadAISettings().then((loadedSettings) => {
@@ -49,6 +50,7 @@ export function AI() {
 
 	const selectProvider = (provider: AIProvider) => {
 		setSettings((previous) => ({ ...previous, provider }));
+		setEditingAPIKey(false);
 		setTestState("idle");
 		setMessage("");
 	};
@@ -182,17 +184,51 @@ export function AI() {
 				</View>
 
 				<View>
-					<Text className="text-xs font-semibold darker-text mb-1">
-						API key{settings.provider === "openwebui" ? " (optional)" : ""}
-					</Text>
-					<TextInput
-						enableFocusRing={false}
-						secureTextEntry
-						className="text-sm text px-3 py-2 rounded-lg border border-color"
-						value={current.apiKey}
-						onChangeText={(value) => updateCurrent("apiKey", value)}
-						placeholder="Stored in Keychain"
-					/>
+					<View className="flex-row items-center mb-1">
+						<Text className="flex-1 text-xs font-semibold darker-text">
+							API key{settings.provider === "openwebui" ? " (optional)" : ""}
+						</Text>
+						{!!current.apiKey && !editingAPIKey && (
+							<Text className="text-xs darker-text">
+								{current.apiKey.length} characters
+							</Text>
+						)}
+					</View>
+
+					{editingAPIKey ? (
+						<View className="flex-row items-center gap-2">
+							<TextInput
+								autoFocus
+								enableFocusRing={false}
+								autoCapitalize="none"
+								autoCorrect={false}
+								spellCheck={false}
+								className="flex-1 text-sm text px-3 py-2 rounded-lg border border-color"
+								value={current.apiKey}
+								onChangeText={(value) => updateCurrent("apiKey", value)}
+								onSubmitEditing={() => setEditingAPIKey(false)}
+								placeholder="Paste the API key"
+							/>
+							<TouchableOpacity
+								className="px-3 py-2"
+								onPress={() => setEditingAPIKey(false)}
+							>
+								<Text className="text-sm text-accent">Done</Text>
+							</TouchableOpacity>
+						</View>
+					) : (
+						<TouchableOpacity
+							className="px-3 py-2 rounded-lg border border-color flex-row items-center"
+							onPress={() => setEditingAPIKey(true)}
+						>
+							<Text className="flex-1 text-sm darker-text">
+								{current.apiKey ? "••••••••••••" : "No API key configured"}
+							</Text>
+							<Text className="text-sm text-accent">
+								{current.apiKey ? "Replace" : "Add"}
+							</Text>
+						</TouchableOpacity>
+					)}
 				</View>
 			</View>
 
