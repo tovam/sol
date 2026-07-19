@@ -441,7 +441,7 @@ class SolNative: RCTEventEmitter {
   }
 
   @objc func getNetworkInfo(
-    _ resolve: RCTPromiseResolveBlock,
+    _ resolve: @escaping RCTPromiseResolveBlock,
     rejecter _: RCTPromiseRejectBlock
   ) {
     DispatchQueue.global(qos: .userInitiated).async {
