@@ -1,4 +1,5 @@
 import axios from "axios";
+import { createAIHeaders, openAIEndpoint, openWebUIEndpoint } from "lib/aiHttp";
 import { solNative } from "lib/SolNative";
 
 export type AIProvider = "openai" | "openwebui";
@@ -35,24 +36,6 @@ export const DEFAULT_AI_SETTINGS: AISettings = {
 		apiKey: "",
 	},
 };
-
-function trimTrailingSlashes(value: string) {
-	return value.trim().replace(/\/+$/, "");
-}
-
-function openAIEndpoint(baseURL: string) {
-	const base = trimTrailingSlashes(baseURL);
-	if (base.endsWith("/responses")) return base;
-	if (base.endsWith("/v1")) return `${base}/responses`;
-	return `${base}/v1/responses`;
-}
-
-function openWebUIEndpoint(baseURL: string) {
-	const base = trimTrailingSlashes(baseURL);
-	if (base.endsWith("/api/chat/completions")) return base;
-	if (base.endsWith("/api")) return `${base}/chat/completions`;
-	return `${base}/api/chat/completions`;
-}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
 	return typeof value === "object" && value !== null
@@ -94,15 +77,22 @@ function extractOpenWebUIText(data: unknown) {
 		.join("\n");
 }
 
-function getRequestError(error: unknown) {
+function getRequestError(error: unknown, provider: AIProvider) {
 	if (!axios.isAxiosError(error)) {
 		return error instanceof Error ? error.message : "The request failed";
 	}
 	const data = asRecord(error.response?.data);
 	const apiError = asRecord(data?.error);
-	if (typeof apiError?.message === "string") return apiError.message;
-	if (typeof data?.detail === "string") return data.detail;
-	return error.message;
+	const detail =
+		typeof apiError?.message === "string"
+			? apiError.message
+			: typeof data?.detail === "string"
+				? data.detail
+				: error.message;
+	if (provider === "openwebui" && error.response?.status === 401) {
+		return `${detail}. Check that API keys are enabled and allowed for /api/chat/completions.`;
+	}
+	return detail;
 }
 
 export async function loadAISettings(): Promise<AISettings> {
@@ -129,12 +119,7 @@ export async function requestAI(
 	settings: AIProviderSettings,
 	messages: AIMessage[],
 ) {
-	const headers: Record<string, string> = {
-		"Content-Type": "application/json",
-	};
-	if (settings.apiKey.trim()) {
-		headers.Authorization = `Bearer ${settings.apiKey.trim()}`;
-	}
+	const headers = createAIHeaders(provider, settings.apiKey);
 
 	try {
 		if (provider === "openai") {
@@ -161,6 +146,6 @@ export async function requestAI(
 		if (!responseText) throw new Error("The API returned no text");
 		return responseText;
 	} catch (error) {
-		throw new Error(getRequestError(error));
+		throw new Error(getRequestError(error, provider));
 	}
 }
