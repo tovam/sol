@@ -3,6 +3,7 @@ import WebKit
 
 private let dailymotionBridgeName = "solDailymotion"
 private let dailymotionMinimumDVRWindow = 10.0
+private let dailymotionMaximumTimelineClockDrift = 10 * 60.0
 
 private final class FloatingVideoPanel: NSPanel {
   override var canBecomeKey: Bool { true }
@@ -126,6 +127,8 @@ private struct DailymotionBridgeState {
   var duration: Double?
   var seekableStart: Double?
   var seekableEnd: Double?
+  var mediaTimelineStartDate: Date?
+  var seekableObservedAt: Date?
   var playbackRate = 1.0
   var volume = 1.0
   var isAdPlaying = false
@@ -138,6 +141,11 @@ private protocol DailymotionControlsViewDelegate: AnyObject {
   func controlsDidTogglePlayback(_ controls: DailymotionControlsView)
   func controls(_ controls: DailymotionControlsView, seekBy seconds: Double)
   func controls(_ controls: DailymotionControlsView, seekTo seconds: Double)
+  func controls(
+    _ controls: DailymotionControlsView,
+    seekToClockTime clockTime: String,
+    completion: @escaping (String?) -> Void
+  )
   func controlsDidRequestLiveEdge(_ controls: DailymotionControlsView)
   func controls(_ controls: DailymotionControlsView, didSelectRate rate: Double)
   func controls(_ controls: DailymotionControlsView, didSetVolume volume: Double)
@@ -153,7 +161,9 @@ private final class DailymotionTrackingSlider: NSSlider {
   }
 }
 
-private final class DailymotionControlsView: NSVisualEffectView {
+private final class DailymotionControlsView: NSVisualEffectView,
+  NSTextFieldDelegate
+{
   weak var delegate: DailymotionControlsViewDelegate?
 
   private let playButton = NSButton()
@@ -167,6 +177,7 @@ private final class DailymotionControlsView: NSVisualEffectView {
     action: nil
   )
   private let timeLabel = NSTextField(labelWithString: "Loading…")
+  private let clockTimeField = NSTextField(string: "")
   private let liveButton = NSButton(title: "LIVE", target: nil, action: nil)
   private let ratePopUp = NSPopUpButton(frame: .zero, pullsDown: false)
   private let volumeImage = NSImageView()
@@ -240,12 +251,24 @@ private final class DailymotionControlsView: NSVisualEffectView {
     timeLabel.alignment = .center
     timeLabel.lineBreakMode = .byClipping
 
+    clockTimeField.placeholderString = "HH:mm"
+    clockTimeField.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+    clockTimeField.alignment = .center
+    clockTimeField.controlSize = .small
+    clockTimeField.focusRingType = .none
+    clockTimeField.target = self
+    clockTimeField.action = #selector(seekToClockTime)
+    clockTimeField.delegate = self
+    clockTimeField.toolTip = "Jump to local time (HH:mm or HH:mm:ss)"
+    clockTimeField.isHidden = true
+
     let stack = NSStackView(views: [
       playButton,
       backwardButton,
       forwardButton,
       seekSlider,
       timeLabel,
+      clockTimeField,
       liveButton,
       ratePopUp,
       volumeImage,
@@ -279,6 +302,7 @@ private final class DailymotionControlsView: NSVisualEffectView {
       forwardButton.widthAnchor.constraint(equalToConstant: 36),
       seekSlider.widthAnchor.constraint(greaterThanOrEqualToConstant: 60),
       timeLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 64),
+      clockTimeField.widthAnchor.constraint(equalToConstant: 62),
       liveButton.widthAnchor.constraint(equalToConstant: 46),
       ratePopUp.widthAnchor.constraint(equalToConstant: 56),
       volumeImage.widthAnchor.constraint(equalToConstant: 16),
@@ -307,6 +331,7 @@ private final class DailymotionControlsView: NSVisualEffectView {
     backwardButton.isHidden = false
     forwardButton.isHidden = false
     seekSlider.isHidden = false
+    clockTimeField.isHidden = true
     liveButton.isHidden = true
     timeLabel.textColor = .secondaryLabelColor
 
@@ -397,7 +422,12 @@ private final class DailymotionControlsView: NSVisualEffectView {
       return
     }
 
-    let delay = max(0, rangeEnd - position)
+    let edgeDelay = max(0, rangeEnd - position)
+    let clockDelay = wallClockDelay(
+      state,
+      position: position,
+      edgeDelay: edgeDelay
+    )
     setTimeline(
       start: rangeStart,
       end: rangeEnd,
@@ -407,10 +437,35 @@ private final class DailymotionControlsView: NSVisualEffectView {
     backwardButton.isEnabled = state.hasReliableAdState
     forwardButton.isEnabled = state.hasReliableAdState
     liveButton.isHidden = false
-    liveButton.isEnabled = state.hasReliableAdState && delay > 3
+    liveButton.isEnabled = state.hasReliableAdState && edgeDelay > 3
+    clockTimeField.isHidden = false
+    clockTimeField.isEnabled = state.hasReliableAdState
     ratePopUp.isEnabled = state.hasReliableAdState
-    timeLabel.textColor = delay <= 3 ? .systemRed : .secondaryLabelColor
-    timeLabel.stringValue = delay <= 3 ? "LIVE" : "−\(formatTime(delay))"
+    timeLabel.textColor = edgeDelay <= 3 ? .systemRed : .secondaryLabelColor
+    timeLabel.stringValue = edgeDelay <= 3
+      ? "LIVE"
+      : "−\(formatTime(clockDelay))"
+  }
+
+  private func wallClockDelay(
+    _ state: DailymotionBridgeState,
+    position: Double,
+    edgeDelay: Double
+  ) -> Double {
+    let positionDate: Date?
+    if let timelineStartDate = state.mediaTimelineStartDate {
+      positionDate = timelineStartDate.addingTimeInterval(position)
+    } else if
+      let observedAt = state.seekableObservedAt,
+      let rangeEnd = state.seekableEnd
+    {
+      positionDate = observedAt.addingTimeInterval(position - rangeEnd)
+    } else {
+      positionDate = nil
+    }
+
+    guard let positionDate else { return edgeDelay }
+    return max(0, Date().timeIntervalSince(positionDate))
   }
 
   private func configureButton(
@@ -528,6 +583,33 @@ private final class DailymotionControlsView: NSVisualEffectView {
     delegate?.controlsDidRequestLiveEdge(self)
   }
 
+  @objc private func seekToClockTime() {
+    guard let delegate else {
+      return
+    }
+    delegate.controls(
+      self,
+      seekToClockTime: clockTimeField.stringValue
+    ) { [weak self] error in
+      guard let self else { return }
+      if let error {
+        self.clockTimeField.textColor = .systemRed
+        self.clockTimeField.toolTip = error
+        NSSound.beep()
+      } else {
+        self.clockTimeField.textColor = .labelColor
+        self.clockTimeField.toolTip =
+          "Jump to local time (HH:mm or HH:mm:ss)"
+      }
+    }
+  }
+
+  func controlTextDidChange(_ notification: Notification) {
+    guard notification.object as? NSTextField === clockTimeField else { return }
+    clockTimeField.textColor = .labelColor
+    clockTimeField.toolTip = "Jump to local time (HH:mm or HH:mm:ss)"
+  }
+
   @objc private func changeRate() {
     let index = ratePopUp.indexOfSelectedItem
     guard rates.indices.contains(index) else { return }
@@ -605,7 +687,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     panel.hasShadow = true
     panel.isReleasedWhenClosed = false
     panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-    panel.contentMinSize = NSSize(width: 480, height: 314)
+    panel.contentMinSize = NSSize(width: 560, height: 314)
     panel.center()
 
     self.panel = panel
@@ -945,6 +1027,10 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
       || frameInfo.isMainFrame && area >= mediaFrameArea
 
     guard shouldUseFrame else { return }
+    if !isCurrentFrame {
+      state.mediaTimelineStartDate = nil
+      state.seekableObservedAt = nil
+    }
     mediaFrame = frameInfo
     mediaFrameToken = frameToken
     mediaFrameIsMain = frameInfo.isMainFrame
@@ -963,9 +1049,29 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
       {
         state.seekableStart = seekableStart
         state.seekableEnd = seekableEnd
+        state.seekableObservedAt = Date()
       } else {
         state.seekableStart = nil
         state.seekableEnd = nil
+        state.seekableObservedAt = nil
+      }
+      if
+        let timelineStartMilliseconds = finiteDouble(body["timelineStartMs"]),
+        timelineStartMilliseconds > 0,
+        let seekableEnd = state.seekableEnd,
+        let observedAt = state.seekableObservedAt
+      {
+        let timelineStartDate = Date(
+          timeIntervalSince1970: timelineStartMilliseconds / 1_000
+        )
+        let mappedEdgeDate = timelineStartDate.addingTimeInterval(seekableEnd)
+        state.mediaTimelineStartDate = abs(
+          mappedEdgeDate.timeIntervalSince(observedAt)
+        ) <= dailymotionMaximumTimelineClockDrift
+          ? timelineStartDate
+          : nil
+      } else {
+        state.mediaTimelineStartDate = nil
       }
     }
 
@@ -1006,6 +1112,8 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     state.mediaCurrentTime = nil
     state.seekableStart = nil
     state.seekableEnd = nil
+    state.mediaTimelineStartDate = nil
+    state.seekableObservedAt = nil
   }
 
   private func bool(_ value: Any?) -> Bool? {
@@ -1337,6 +1445,16 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
         }
       }
 
+      function timelineStartMs(video) {
+        try {
+          if (typeof video?.getStartDate !== "function") return null;
+          const value = Number(video.getStartDate());
+          return Number.isFinite(value) && value > 0 ? value : null;
+        } catch (_) {
+          return null;
+        }
+      }
+
       function report() {
         const video = locateMedia();
         if (!video) {
@@ -1354,6 +1472,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
           duration: finite(video.duration),
           seekableStart,
           seekableEnd,
+          timelineStartMs: timelineStartMs(video),
           rate: finite(video.playbackRate),
           volume: finite(video.volume),
           area: video.clientWidth * video.clientHeight,
@@ -1478,6 +1597,94 @@ extension DailymotionPlayerController: DailymotionControlsViewDelegate {
   ) {
     guard !state.isAdPlaying, controlsCanSeek else { return }
     sendCommand("seek", value: seconds)
+  }
+
+  fileprivate func controls(
+    _ controls: DailymotionControlsView,
+    seekToClockTime clockTime: String,
+    completion: @escaping (String?) -> Void
+  ) {
+    guard
+      !state.isAdPlaying,
+      state.contentMode == .live,
+      controlsCanSeek,
+      let rangeStart = state.seekableStart,
+      let rangeEnd = state.seekableEnd
+    else {
+      completion("Clock seeking is unavailable for this live stream")
+      return
+    }
+
+    let now = Date()
+    guard let targetDate = mostRecentDate(forClockTime: clockTime, now: now)
+    else {
+      completion("Enter a valid local time: HH:mm or HH:mm:ss")
+      return
+    }
+
+    let target: Double
+    if let timelineStartDate = state.mediaTimelineStartDate {
+      target = targetDate.timeIntervalSince(timelineStartDate)
+    } else {
+      let observedAt = state.seekableObservedAt ?? now
+      target = rangeEnd - observedAt.timeIntervalSince(targetDate)
+    }
+
+    let tolerance = 1.0
+    guard
+      target.isFinite,
+      target >= rangeStart - tolerance,
+      target <= rangeEnd + tolerance
+    else {
+      completion("That time is outside the available DVR window")
+      return
+    }
+
+    sendCommand(
+      "seek",
+      value: min(max(target, rangeStart), max(rangeStart, rangeEnd - 0.05))
+    ) { succeeded in
+      completion(succeeded ? nil : "Dailymotion could not seek to that time")
+    }
+  }
+
+  private func mostRecentDate(
+    forClockTime value: String,
+    now: Date
+  ) -> Date? {
+    let parts = value
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+      .split(separator: ":", omittingEmptySubsequences: false)
+    guard
+      parts.count == 2 || parts.count == 3,
+      parts.allSatisfy({
+        !$0.isEmpty && $0.allSatisfy(\.isNumber)
+      }),
+      let hour = Int(parts[0]),
+      let minute = Int(parts[1]),
+      let second = parts.count == 3 ? Int(parts[2]) : 0,
+      (0...23).contains(hour),
+      (0...59).contains(minute),
+      (0...59).contains(second)
+    else {
+      return nil
+    }
+
+    let calendar = Calendar.autoupdatingCurrent
+    let reference = now.addingTimeInterval(1)
+    let matching = DateComponents(hour: hour, minute: minute, second: second)
+    return [Calendar.RepeatedTimePolicy.first, .last]
+      .compactMap { repeatedTimePolicy in
+        calendar.nextDate(
+          after: reference,
+          matching: matching,
+          matchingPolicy: .strict,
+          repeatedTimePolicy: repeatedTimePolicy,
+          direction: .backward
+        )
+      }
+      .filter { $0 <= reference }
+      .max()
   }
 
   fileprivate func controlsDidRequestLiveEdge(
