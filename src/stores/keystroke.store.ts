@@ -689,24 +689,15 @@ export const createKeystrokeStore = (root: IRootStore) => {
 							}
 							break;
 
+						case Widget.SEARCH: {
+							const count = root.ui.searchItems.length;
+							root.ui.selectedIndex = count
+								? (root.ui.selectedIndex - 1 + count) % count
+								: 0;
+							break;
+						}
+
 						default:
-							if (
-								root.ui.focusedWidget === Widget.SEARCH &&
-								root.ui.selectedIndex === 0 &&
-								root.ui.history.length > 0
-							) {
-								root.ui.setQuery(
-									root.ui.history[
-										root.ui.history.length - 1 - root.ui.historyPointer
-									],
-								);
-
-								root.ui.setHistoryPointer(
-									Math.min(root.ui.history.length, root.ui.historyPointer + 1),
-								);
-								return;
-							}
-
 							root.ui.selectedIndex = Math.max(0, root.ui.selectedIndex - 1);
 							break;
 					}
@@ -754,10 +745,10 @@ export const createKeystrokeStore = (root: IRootStore) => {
 						}
 
 						case Widget.SEARCH: {
-							root.ui.selectedIndex = Math.min(
-								root.ui.items.length - 1,
-								root.ui.selectedIndex + 1,
-							);
+							const count = root.ui.searchItems.length;
+							root.ui.selectedIndex = count
+								? (root.ui.selectedIndex + 1) % count
+								: 0;
 							break;
 						}
 
