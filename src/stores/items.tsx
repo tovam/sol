@@ -564,6 +564,19 @@ export function createBaseItems(store: IRootStore) {
 			preventClose: true,
 		},
 		{
+			id: "ai_one_shot",
+			icon: "✦",
+			name: "Ask AI (one shot)",
+			alias:
+				"ai chatgpt openai openwebui question ask intelligence artificielle",
+			type: ItemType.CONFIGURATION,
+			callback: () => {
+				store.ui.setQuery("");
+				store.ui.focusWidget(Widget.AI_ONE_SHOT);
+			},
+			preventClose: true,
+		},
+		{
 			id: "downloads_folder",
 			IconComponent: (...props: any[]) => (
 				<FileIcon {...props} url="~/Downloads" className="w-6 h-6" />

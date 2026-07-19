@@ -76,6 +76,7 @@ export enum Widget {
 	PASSWORD_GENERATOR = "PASSWORD_GENERATOR",
 	QR_CODE = "QR_CODE",
 	YTDLP = "YTDLP",
+	AI_ONE_SHOT = "AI_ONE_SHOT",
 }
 
 export enum ItemType {

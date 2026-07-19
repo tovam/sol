@@ -5,6 +5,7 @@ import {observer} from 'mobx-react-lite'
 import {Text, TouchableOpacity, View} from 'react-native'
 import {useStore} from 'store'
 import {Widget} from 'stores/ui.store'
+import {AIOneShotWidget} from 'widgets/aiOneShot.widget'
 import {ClipboardWidget} from 'widgets/clipboard.widget'
 import {ColorPickerWidget} from 'widgets/colorPicker.widget'
 import {CreateItemWidget} from 'widgets/createItem.widget'
@@ -109,6 +110,14 @@ export const RootContainer = observer(() => {
     subWindow = (
       <View className="fullWindow">
         <YtDlpWidget />
+      </View>
+    )
+  }
+
+  if (widget === Widget.AI_ONE_SHOT) {
+    subWindow = (
+      <View className="fullWindow">
+        <AIOneShotWidget />
       </View>
     )
   }
