@@ -1,5 +1,16 @@
 import axios from "axios";
-import { createAIHeaders, openAIEndpoint, openWebUIEndpoint } from "lib/aiHttp";
+import {
+	createAIHeaders,
+	openAIEndpoint,
+	openAIModelsEndpoint,
+	openWebUIEndpoint,
+	openWebUIModelsEndpoint,
+} from "lib/aiHttp";
+import {
+	filterOpenAITextModels,
+	filterOpenWebUITextModels,
+	parseAIModelsResponse,
+} from "lib/aiModels";
 import { solNative } from "lib/SolNative";
 
 export type AIProvider = "openai" | "openwebui";
@@ -90,28 +101,111 @@ function getRequestError(error: unknown, provider: AIProvider) {
 				? data.detail
 				: error.message;
 	if (provider === "openwebui" && error.response?.status === 401) {
-		return `${detail}. Check that API keys are enabled and allowed for /api/chat/completions.`;
+		return `${detail}. Check that API keys are enabled and accepted by OpenWebUI.`;
 	}
 	return detail;
 }
 
+export async function fetchAIModels(
+	provider: AIProvider,
+	settings: AIProviderSettings,
+) {
+	const headers = createAIHeaders(provider, settings.apiKey);
+	const endpoint =
+		provider === "openai"
+			? openAIModelsEndpoint(settings.baseURL)
+			: openWebUIModelsEndpoint(settings.baseURL);
+
+	try {
+		const response = await axios.get(endpoint, { headers });
+		const parsedModels = parseAIModelsResponse(response.data);
+		if (provider === "openwebui") {
+			return filterOpenWebUITextModels(parsedModels);
+		}
+
+		return filterOpenAITextModels(parsedModels).sort((first, second) =>
+			second.id.localeCompare(first.id, undefined, { numeric: true }),
+		);
+	} catch (error) {
+		throw new Error(getRequestError(error, provider));
+	}
+}
+
 export async function loadAISettings(): Promise<AISettings> {
 	const savedValue = await solNative.securelyRetrieve(SETTINGS_KEY);
-	if (!savedValue) return DEFAULT_AI_SETTINGS;
-	try {
-		const saved = JSON.parse(savedValue) as Partial<AISettings>;
+	if (!savedValue) {
 		return {
-			provider: saved.provider === "openwebui" ? "openwebui" : "openai",
-			openai: { ...DEFAULT_AI_SETTINGS.openai, ...saved.openai },
-			openwebui: { ...DEFAULT_AI_SETTINGS.openwebui, ...saved.openwebui },
+			...DEFAULT_AI_SETTINGS,
+			openai: { ...DEFAULT_AI_SETTINGS.openai },
+			openwebui: { ...DEFAULT_AI_SETTINGS.openwebui },
+		};
+	}
+	try {
+		const saved = asRecord(JSON.parse(savedValue));
+		const apiKeys = asRecord(saved?.apiKeys);
+		if (saved?.version === 2 && apiKeys) {
+			return {
+				...DEFAULT_AI_SETTINGS,
+				openai: {
+					...DEFAULT_AI_SETTINGS.openai,
+					apiKey:
+						typeof apiKeys.openai === "string" ? apiKeys.openai : "",
+				},
+				openwebui: {
+					...DEFAULT_AI_SETTINGS.openwebui,
+					apiKey:
+						typeof apiKeys.openwebui === "string"
+							? apiKeys.openwebui
+							: "",
+				},
+			};
+		}
+
+		const savedProvider =
+			saved?.provider === "openwebui" ? "openwebui" : "openai";
+		const savedOpenAI = asRecord(saved?.openai);
+		const savedOpenWebUI = asRecord(saved?.openwebui);
+		const decodeLegacyProviderSettings = (
+			value: Record<string, unknown> | null,
+			defaults: AIProviderSettings,
+		): AIProviderSettings => ({
+			baseURL:
+				typeof value?.baseURL === "string" ? value.baseURL : defaults.baseURL,
+			model: typeof value?.model === "string" ? value.model : defaults.model,
+			apiKey:
+				typeof value?.apiKey === "string" ? value.apiKey : defaults.apiKey,
+		});
+		return {
+			provider: savedProvider,
+			openai: decodeLegacyProviderSettings(
+				savedOpenAI,
+				DEFAULT_AI_SETTINGS.openai,
+			),
+			openwebui: decodeLegacyProviderSettings(
+				savedOpenWebUI,
+				DEFAULT_AI_SETTINGS.openwebui,
+			),
 		};
 	} catch {
-		return DEFAULT_AI_SETTINGS;
+		return {
+			...DEFAULT_AI_SETTINGS,
+			openai: { ...DEFAULT_AI_SETTINGS.openai },
+			openwebui: { ...DEFAULT_AI_SETTINGS.openwebui },
+		};
 	}
 }
 
 export function saveAISettings(settings: AISettings) {
-	return solNative.securelyStore(SETTINGS_KEY, JSON.stringify(settings));
+	return solNative.securelyStore(
+		SETTINGS_KEY,
+		JSON.stringify({
+			version: 2,
+			apiKeys: {
+				openai: settings.openai.apiKey,
+				openwebui: settings.openwebui.apiKey,
+			},
+		}),
+	);
 }
 
 export async function requestAI(

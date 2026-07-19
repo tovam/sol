@@ -1,13 +1,9 @@
 import { BackButton } from "components/BackButton";
-import {
-	type AIMessage,
-	type AISettings,
-	DEFAULT_AI_SETTINGS,
-	loadAISettings,
-	requestAI,
-} from "lib/ai";
+import { AIProviderModelControls } from "components/AIProviderModelControls";
+import type { AIMessage } from "lib/ai";
 import { solNative } from "lib/SolNative";
-import { type FC, useEffect, useRef, useState } from "react";
+import { observer } from "mobx-react-lite";
+import { useEffect, useRef, useState } from "react";
 import {
 	ActivityIndicator,
 	ScrollView,
@@ -47,17 +43,15 @@ function createMessage(role: AIMessage["role"], content: string): ChatMessage {
 	};
 }
 
-export const AIChatWidget: FC = () => {
+export const AIChatWidget = observer(() => {
 	const store = useStore();
 	const scrollView = useRef<ScrollView>(null);
-	const [settings, setSettings] = useState<AISettings>(DEFAULT_AI_SETTINGS);
 	const [messages, setMessages] = useState<ChatMessage[]>([]);
 	const [input, setInput] = useState("");
 	const [error, setError] = useState("");
 	const [loading, setLoading] = useState(false);
 
 	useEffect(() => {
-		void loadAISettings().then(setSettings);
 		void solNative.securelyRetrieve(CONVERSATION_KEY).then((savedValue) => {
 			if (!savedValue) return;
 			try {
@@ -77,8 +71,6 @@ export const AIChatWidget: FC = () => {
 		});
 	}, []);
 
-	const current = settings[settings.provider];
-
 	const persistConversation = (nextMessages: ChatMessage[]) => {
 		return solNative.securelyStore(
 			CONVERSATION_KEY,
@@ -95,19 +87,6 @@ export const AIChatWidget: FC = () => {
 	const send = async () => {
 		const content = input.trim();
 		if (!content || loading) return;
-		if (!current.baseURL.trim()) {
-			setError("Enter the API server URL in Settings");
-			return;
-		}
-		if (!current.model.trim()) {
-			setError("Enter a model name in Settings");
-			return;
-		}
-		if (settings.provider === "openai" && !current.apiKey.trim()) {
-			setError("Enter your OpenAI API key in Settings");
-			return;
-		}
-
 		const messagesWithQuestion: ChatMessage[] = [
 			...messages,
 			createMessage("user", content),
@@ -119,9 +98,7 @@ export const AIChatWidget: FC = () => {
 
 		try {
 			await persistConversation(messagesWithQuestion);
-			const answer = await requestAI(
-				settings.provider,
-				current,
+			const answer = await store.ai.request(
 				messagesWithQuestion.map(({ role, content: messageContent }) => ({
 					role,
 					content: messageContent,
@@ -159,6 +136,7 @@ export const AIChatWidget: FC = () => {
 						Saved locally and ready to continue later
 					</Text>
 				</View>
+				<AIProviderModelControls compact />
 				<TouchableOpacity
 					className="px-3 py-2 rounded-lg subBg border border-color"
 					onPress={() => store.ui.showSettings("AI")}
@@ -241,4 +219,4 @@ export const AIChatWidget: FC = () => {
 			</View>
 		</View>
 	);
-};
+});

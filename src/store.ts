@@ -1,4 +1,5 @@
 import { createContext, useContext } from "react";
+import { type AIStore, createAIStore } from "stores/ai.store";
 import { type CalendarStore, createCalendarStore } from "stores/calendar.store";
 import {
 	type ClipboardStore,
@@ -18,6 +19,7 @@ import { createTimerStore, type TimerStore } from "stores/timer.store";
 import { createUIStore, type UIStore } from "./stores/ui.store";
 
 export interface IRootStore {
+	ai: AIStore;
 	ui: UIStore;
 	clipboard: ClipboardStore;
 	keystroke: KeystrokeStore;
@@ -32,6 +34,7 @@ export interface IRootStore {
 const createRootStore = (): IRootStore => {
 	const store: any = {};
 
+	store.ai = createAIStore();
 	store.ui = createUIStore(store);
 	store.clipboard = createClipboardStore(store);
 	store.keystroke = createKeystrokeStore(store);
@@ -41,6 +44,7 @@ const createRootStore = (): IRootStore => {
 	store.emoji = createEmojiStore(store);
 	store.timer = createTimerStore();
 	(store as IRootStore).cleanUp = () => {
+		store.ai.cleanUp();
 		store.ui.cleanUp();
 		store.calendar.cleanUp();
 		store.keystroke.cleanUp();

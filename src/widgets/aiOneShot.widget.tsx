@@ -1,12 +1,8 @@
 import { BackButton } from "components/BackButton";
-import {
-	DEFAULT_AI_SETTINGS,
-	loadAISettings,
-	requestAI,
-	type AISettings as Settings,
-} from "lib/ai";
+import { AIProviderModelControls } from "components/AIProviderModelControls";
 import { solNative } from "lib/SolNative";
-import { type FC, useEffect, useState } from "react";
+import { observer } from "mobx-react-lite";
+import { useState } from "react";
 import {
 	ActivityIndicator,
 	Clipboard,
@@ -19,19 +15,12 @@ import { TextInput } from "react-native-macos";
 import { useStore } from "store";
 import { Widget } from "stores/ui.store";
 
-export const AIOneShotWidget: FC = () => {
+export const AIOneShotWidget = observer(() => {
 	const store = useStore();
-	const [settings, setSettings] = useState<Settings>(DEFAULT_AI_SETTINGS);
 	const [question, setQuestion] = useState("");
 	const [answer, setAnswer] = useState("");
 	const [error, setError] = useState("");
 	const [loading, setLoading] = useState(false);
-
-	useEffect(() => {
-		void loadAISettings().then(setSettings);
-	}, []);
-
-	const current = settings[settings.provider];
 
 	const ask = async () => {
 		const prompt = question.trim();
@@ -39,24 +28,11 @@ export const AIOneShotWidget: FC = () => {
 			setError("Write a question first");
 			return;
 		}
-		if (!current.baseURL.trim()) {
-			setError("Enter the API server URL");
-			return;
-		}
-		if (!current.model.trim()) {
-			setError("Enter a model name");
-			return;
-		}
-		if (settings.provider === "openai" && !current.apiKey.trim()) {
-			setError("Enter your OpenAI API key");
-			return;
-		}
-
 		setLoading(true);
 		setError("");
 		setAnswer("");
 		try {
-			const responseText = await requestAI(settings.provider, current, [
+			const responseText = await store.ai.request([
 				{ role: "user", content: prompt },
 			]);
 			setAnswer(responseText);
@@ -86,6 +62,7 @@ export const AIOneShotWidget: FC = () => {
 						One question, one answer — no conversation history
 					</Text>
 				</View>
+				<AIProviderModelControls compact />
 				<TouchableOpacity
 					className="px-3 py-2 rounded-lg subBg border border-color"
 					onPress={() => store.ui.showSettings("AI")}
@@ -153,4 +130,4 @@ export const AIOneShotWidget: FC = () => {
 			</View>
 		</View>
 	);
-};
+});

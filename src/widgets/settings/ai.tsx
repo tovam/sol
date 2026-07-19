@@ -1,13 +1,7 @@
-import {
-	type AIProvider,
-	type AIProviderSettings,
-	type AISettings,
-	DEFAULT_AI_SETTINGS,
-	loadAISettings,
-	requestAI,
-	saveAISettings,
-} from "lib/ai";
-import { useEffect, useState } from "react";
+import { AIProviderModelControls } from "components/AIProviderModelControls";
+import type { AIProviderSettings } from "lib/ai";
+import { observer } from "mobx-react-lite";
+import { useState } from "react";
 import {
 	ActivityIndicator,
 	ScrollView,
@@ -16,53 +10,30 @@ import {
 	View,
 } from "react-native";
 import { TextInput } from "react-native-macos";
+import { useStore } from "store";
+import { validateAIProviderSettings } from "stores/ai.store";
 
 type TestState = "idle" | "testing" | "success" | "error";
 
-function validationError(
-	provider: AIProvider,
-	settings: AIProviderSettings,
-): string | null {
-	if (!settings.baseURL.trim()) return "Enter the API server URL";
-	if (!settings.model.trim()) return "Enter a model name";
-	if (provider === "openai" && !settings.apiKey.trim()) {
-		return "Enter your OpenAI API key";
-	}
-	return null;
-}
-
-export function AI() {
-	const [settings, setSettings] = useState<AISettings>(DEFAULT_AI_SETTINGS);
-	const [loading, setLoading] = useState(true);
+export const AI = observer(() => {
+	const { ai } = useStore();
 	const [saving, setSaving] = useState(false);
 	const [testState, setTestState] = useState<TestState>("idle");
 	const [message, setMessage] = useState("");
 	const [editingAPIKey, setEditingAPIKey] = useState(false);
+	const busy = saving || testState === "testing" || ai.secretsLoading;
 
-	useEffect(() => {
-		void loadAISettings().then((loadedSettings) => {
-			setSettings(loadedSettings);
-			setLoading(false);
-		});
-	}, []);
-
+	const settings = ai.settings;
 	const current = settings[settings.provider];
 
-	const selectProvider = (provider: AIProvider) => {
-		setSettings((previous) => ({ ...previous, provider }));
+	const resetTestState = () => {
 		setEditingAPIKey(false);
 		setTestState("idle");
 		setMessage("");
 	};
 
 	const updateCurrent = (key: keyof AIProviderSettings, value: string) => {
-		setSettings((previous) => ({
-			...previous,
-			[previous.provider]: {
-				...previous[previous.provider],
-				[key]: value,
-			},
-		}));
+		ai.updateProviderSettings(settings.provider, key, value);
 		setTestState("idle");
 		setMessage("");
 	};
@@ -71,8 +42,8 @@ export function AI() {
 		setSaving(true);
 		setMessage("");
 		try {
-			await saveAISettings(settings);
-			setMessage("Saved securely in the macOS Keychain");
+			await ai.saveSecureSettings();
+			setMessage("Saved locally; API keys are protected by macOS Keychain");
 		} catch (error) {
 			setMessage(
 				error instanceof Error ? error.message : "Could not save settings",
@@ -83,18 +54,20 @@ export function AI() {
 	};
 
 	const testConnection = async () => {
-		const invalid = validationError(settings.provider, current);
+		setTestState("testing");
+		setMessage("");
+		await ai.ensureSecretsLoaded();
+		const provider = ai.settings.provider;
+		const providerSettings = ai.settings[provider];
+		const invalid = validateAIProviderSettings(provider, providerSettings);
 		if (invalid) {
 			setTestState("error");
 			setMessage(invalid);
 			return;
 		}
 
-		setTestState("testing");
-		setMessage("");
 		try {
-			await saveAISettings(settings);
-			const response = await requestAI(settings.provider, current, [
+			const response = await ai.request([
 				{ role: "user", content: "Reply with exactly: OK" },
 			]);
 			setTestState("success");
@@ -105,7 +78,7 @@ export function AI() {
 		}
 	};
 
-	if (loading) {
+	if (!ai.initialized) {
 		return (
 			<View className="flex-1 items-center justify-center">
 				<ActivityIndicator />
@@ -128,29 +101,10 @@ export function AI() {
 				</Text>
 			</View>
 
-			<View className="flex-row gap-2">
-				{(["openai", "openwebui"] as const).map((provider) => (
-					<TouchableOpacity
-						key={provider}
-						className={`flex-1 py-3 rounded-lg border items-center ${
-							settings.provider === provider
-								? "bg-accent-strong border-transparent"
-								: "subBg border-color"
-						}`}
-						onPress={() => selectProvider(provider)}
-					>
-						<Text
-							className={
-								settings.provider === provider
-									? "text-white font-semibold"
-									: "text"
-							}
-						>
-							{provider === "openai" ? "OpenAI" : "OpenWebUI"}
-						</Text>
-					</TouchableOpacity>
-				))}
-			</View>
+			<AIProviderModelControls
+				disabled={busy}
+				onSelectionChange={resetTestState}
+			/>
 
 			<View className="rounded-xl border border-color subBg p-4 gap-4">
 				<View>
@@ -159,6 +113,7 @@ export function AI() {
 					</Text>
 					<TextInput
 						enableFocusRing={false}
+						editable={!busy}
 						className="text-sm text px-3 py-2 rounded-lg border border-color"
 						value={current.baseURL}
 						onChangeText={(value) => updateCurrent("baseURL", value)}
@@ -174,6 +129,7 @@ export function AI() {
 					<Text className="text-xs font-semibold darker-text mb-1">Model</Text>
 					<TextInput
 						enableFocusRing={false}
+						editable={!busy}
 						className="text-sm text px-3 py-2 rounded-lg border border-color"
 						value={current.model}
 						onChangeText={(value) => updateCurrent("model", value)}
@@ -181,6 +137,10 @@ export function AI() {
 							settings.provider === "openai" ? "gpt-5.6-sol" : "llama3.2"
 						}
 					/>
+					<Text className="text-xs darker-text mt-1">
+						Manual model ID, useful for proxies or models hidden by the text
+						filter.
+					</Text>
 				</View>
 
 				<View>
@@ -200,6 +160,7 @@ export function AI() {
 							<TextInput
 								autoFocus
 								enableFocusRing={false}
+								editable={!busy}
 								autoCapitalize="none"
 								autoCorrect={false}
 								spellCheck={false}
@@ -210,6 +171,7 @@ export function AI() {
 								placeholder="Paste the API key"
 							/>
 							<TouchableOpacity
+								disabled={busy}
 								className="px-3 py-2"
 								onPress={() => setEditingAPIKey(false)}
 							>
@@ -218,6 +180,7 @@ export function AI() {
 						</View>
 					) : (
 						<TouchableOpacity
+							disabled={busy}
 							className="px-3 py-2 rounded-lg border border-color flex-row items-center"
 							onPress={() => setEditingAPIKey(true)}
 						>
@@ -267,8 +230,9 @@ export function AI() {
 				</TouchableOpacity>
 			</View>
 			<Text className="text-xs darker-text">
-				The URL, model and API keys are stored locally in the macOS Keychain.
+				Provider, URL and model are stored in Sol state; only API keys use the
+				macOS Keychain.
 			</Text>
 		</ScrollView>
 	);
-}
+});
