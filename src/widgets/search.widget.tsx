@@ -116,7 +116,7 @@ const ItemRow = observer(({ item, index }: { item: Item; index: number }) => {
 
 		return (
 			<View
-				className={clsx("flex-row items-center rounded-lg py-6", {
+				className={clsx("flex-row items-center rounded-xl py-5", {
 					highlight: isActive,
 				})}
 			>
@@ -136,8 +136,8 @@ const ItemRow = observer(({ item, index }: { item: Item; index: number }) => {
 			}}
 		>
 			<View
-				className={clsx("flex-1 flex-row items-center px-3 h-12 rounded-xl", {
-					"bg-accent": isActive,
+				className={clsx("flex-1 flex-row items-center px-4 h-14 rounded-xl", {
+					"bg-accent-strong": isActive,
 				})}
 			>
 				{item.isRunning && (
@@ -259,8 +259,8 @@ const ItemRow = observer(({ item, index }: { item: Item; index: number }) => {
 const EmptyComponent = () => {
 	return (
 		<View className="flex-1 items-center justify-center">
-			<Text className="text-neutral-300 dark:text-neutral-500 text-5xl font-thin">
-				[ ]
+			<Text className="text-neutral-400 dark:text-neutral-500 text-base">
+				No Results
 			</Text>
 		</View>
 	);
@@ -288,8 +288,12 @@ export const SearchWidget: FC = observer(() => {
 				"flex-1": !!store.ui.query,
 			})}
 		>
-			<View className="flex-row items-center gap-2 px-3">
-				<MainInput className="flex-1" hideIcon />
+			<View
+				className={clsx("flex-row items-center", {
+					"border-b border-color": !!store.ui.query,
+				})}
+			>
+				<MainInput className="flex-1" />
 			</View>
 
 			{!!store.ui.query && (
@@ -308,7 +312,7 @@ export const SearchWidget: FC = observer(() => {
 						maintainVisibleContentPosition={false}
 					/>
 
-					<View className="py-2 px-4 flex-row items-center justify-end gap-1 subBg border-t border-color">
+					<View className="h-9 px-4 flex-row items-center justify-end gap-1 subBg border-t border-color">
 						{store.ui.currentItem?.type === ItemType.CUSTOM && (
 							<>
 								<Text className="text-xs darker-text mr-1">Edit</Text>
@@ -321,44 +325,21 @@ export const SearchWidget: FC = observer(() => {
 								<View className="mx-2" />
 							</>
 						)}
-						<Text className="text-xs darker-text mr-1">Translate</Text>
-						<Key symbol={"⇧"} />
-						<Key symbol={"⏎"} />
-						{!items.length && (
-							<>
-								<View className="mx-2" />
-								<Text
-									className={clsx("text-xs darker-text mr-1", {
-										"font-semibold": !items.length,
-									})}
-								>
-									Search
-								</Text>
-								<Key symbol={"⌘"} />
-								<Key symbol={"⏎"} />
-							</>
-						)}
 						<View className="mx-2" />
-						<Text
-							className={clsx("text-xs darker-text mr-1", {
-								"font-semibold": !items.length,
-							})}
-						>
-							Browser Search
+						<Text className="text-xs darker-text mr-1">
+							{store.ui.currentItem?.type === ItemType.TEMPORARY_RESULT
+								? "Copy"
+								: items.length
+									? "Open"
+									: "Search the web"}
 						</Text>
-						{!!items.length && <Key symbol={"⌘"} />}
-						<Key symbol={"⏎"} primary={!items.length} />
+						<Key symbol={"⏎"} primary />
 						{!!items.length && (
 							<>
 								<View className="mx-2" />
-								<Text
-									className={clsx("text-xs mr-1", {
-										"font-semibold": !!items.length,
-									})}
-								>
-									Select
-								</Text>
-								<Key symbol={"⏎"} primary />
+								<Text className="text-xs darker-text mr-1">Web</Text>
+								<Key symbol={"⌘"} />
+								<Key symbol={"⏎"} />
 							</>
 						)}
 					</View>

@@ -6,6 +6,7 @@ import {Text, TouchableOpacity, View} from 'react-native'
 import {useStore} from 'store'
 import {Widget} from 'stores/ui.store'
 import {ClipboardWidget} from 'widgets/clipboard.widget'
+import {ColorPickerWidget} from 'widgets/colorPicker.widget'
 import {CreateItemWidget} from 'widgets/createItem.widget'
 import {EmojisWidget} from 'widgets/emojis.widget'
 import {FileSearchWidget} from 'widgets/fileSearch.widget'
@@ -46,6 +47,14 @@ export const RootContainer = observer(() => {
     subWindow = (
       <View className="fullWindow">
         <ClipboardWidget />
+      </View>
+    )
+  }
+
+  if (widget === Widget.COLOR_PICKER) {
+    subWindow = (
+      <View className="fullWindow">
+        <ColorPickerWidget />
       </View>
     )
   }

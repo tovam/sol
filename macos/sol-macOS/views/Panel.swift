@@ -21,15 +21,25 @@ final class Panel: NSPanel, NSWindowDelegate {
     self.isReleasedWhenClosed = false
     self.isOpaque = false
     self.delegate = self
-    self.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.2)
+    self.backgroundColor = .clear
+
+    if #available(macOS 11.0, *) {
+      self.titlebarSeparatorStyle = .none
+    }
 
     let effectView = NSVisualEffectView(
       frame: .zero
     )
     effectView.autoresizingMask = [.width, .height]
-    effectView.material = .headerView
+    effectView.material = .popover
     effectView.blendingMode = .behindWindow
     effectView.state = .active
+    effectView.wantsLayer = true
+    effectView.layer?.cornerRadius = 16
+    effectView.layer?.cornerCurve = .continuous
+    effectView.layer?.masksToBounds = true
+    effectView.layer?.borderWidth = 0.5
+    effectView.layer?.borderColor = NSColor.white.withAlphaComponent(0.22).cgColor
 
     self.contentView = effectView
     self.contentView!.wantsLayer = true

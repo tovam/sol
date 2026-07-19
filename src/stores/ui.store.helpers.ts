@@ -1,6 +1,7 @@
-import * as chrono from "chrono-node";
 import axios from "axios";
+import * as chrono from "chrono-node";
 import convert from "convert-units";
+import { evaluateUnitExpression } from "lib/unitExpression";
 import { DateTime } from "luxon";
 
 export type TemporaryResult =
@@ -14,6 +15,7 @@ export type TemporaryResult =
 			left: { label: string; value: string };
 			right: { label: string; value: string };
 			footer?: string;
+			copyValue?: string;
 	  }
 	| {
 			kind: "flight";
@@ -294,6 +296,22 @@ export function parseTimezoneConversion(query: string): TemporaryResult | null {
 
 export function parseUnitConversion(query: string): TemporaryResult | null {
 	const normalized = query.trim().replace(/,/g, "").replace(/\s+/g, " ");
+	const expressionResult = evaluateUnitExpression(query);
+	if (expressionResult != null) {
+		return {
+			kind: "comparison",
+			left: {
+				label: "Expression",
+				value: expressionResult.expression,
+			},
+			right: {
+				label: expressionResult.targetUnit,
+				value: expressionResult.formattedValue,
+			},
+			copyValue: `${expressionResult.formattedValue} ${expressionResult.targetUnit}`,
+		};
+	}
+
 	const match = normalized.match(
 		/^(?<value>-?\d*\.?\d+)\s*(?<from>[a-zA-Z]+)\s*(?:to|in)\s*(?<to>[a-zA-Z]+)$/i,
 	);
@@ -462,6 +480,9 @@ export function formatTemporaryResultForClipboard(result: TemporaryResult) {
 	}
 
 	if (result.kind === "comparison") {
+		if (result.copyValue) {
+			return result.copyValue;
+		}
 		const footer = result.footer ? ` | ${result.footer}` : "";
 		return `${result.left.value} ${result.left.label} = ${result.right.value} ${result.right.label}${footer}`;
 	}

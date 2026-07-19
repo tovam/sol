@@ -471,6 +471,17 @@ export function createBaseItems(store: IRootStore) {
 			preventClose: true,
 		},
 		{
+			id: "color_picker",
+			icon: "🎨",
+			name: "Color Picker",
+			alias: "colour hex rgb hsl palette",
+			type: ItemType.CONFIGURATION,
+			callback: () => {
+				store.ui.focusWidget(Widget.COLOR_PICKER);
+			},
+			preventClose: true,
+		},
+		{
 			id: "downloads_folder",
 			IconComponent: (...props: any[]) => (
 				<FileIcon {...props} url="~/Downloads" className="w-6 h-6" />

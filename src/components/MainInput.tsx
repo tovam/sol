@@ -16,7 +16,7 @@ type Props = {
 };
 
 export const MainInput = observer<Props>(
-	({ placeholder = "Search your mac...", showBackButton, hideIcon }) => {
+	({ placeholder = "Search", showBackButton, hideIcon, className }) => {
 		const store = useStore();
 		const isDarkMode = store.ui.isDarkMode;
 		const reloadApp = async () => {
@@ -37,12 +37,16 @@ export const MainInput = observer<Props>(
 
 		if (!showBackButton) {
 			leftButton = (
-				<TouchableOpacity onPress={reloadApp}>
+				<View className="w-8 h-8 items-center justify-center">
 					<Image
-						source={isDarkMode ? Assets.logoMinimal : Assets.logoMinimalWhite}
-						style={{ width: 20, height: 20 }}
+						source={Assets.SearchIcon}
+						style={{
+							width: 24,
+							height: 24,
+							tintColor: isDarkMode ? "#FFFFFFB8" : "#00000082",
+						}}
 					/>
-				</TouchableOpacity>
+				</View>
 			);
 		}
 
@@ -51,18 +55,22 @@ export const MainInput = observer<Props>(
 		}
 
 		return (
-			<View className="min-h-[42px] flex-row items-center gap-2 my-1 flex-1 px-2">
+			<View
+				className={`h-16 flex-row items-center gap-3 flex-1 px-4 ${className ?? ""}`}
+			>
 				{leftButton}
 				<TextInput
 					autoFocus
 					enableFocusRing={false}
 					value={store.ui.query}
 					onChangeText={store.ui.setQuery}
-					className={clsx("text-lg flex-1", {
+					className={clsx("text-4xl font-light flex-1", {
 						"text-white": isDarkMode,
 						"text-black": !isDarkMode,
 					})}
 					placeholder={placeholder}
+					placeholderTextColor={isDarkMode ? "#FFFFFF66" : "#00000066"}
+					clearButtonMode="while-editing"
 				/>
 				{__DEV__ && (
 					<TouchableOpacity onPress={reloadApp}>

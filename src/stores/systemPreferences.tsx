@@ -164,6 +164,26 @@ export function buildSystemPreferenceItem({
 
 const manualPanes: Item[] = [
 	{
+		id: "privacy_security_settings",
+		name: "Privacy & Security",
+		alias: "privacy security permissions full disk access",
+		IconComponent: (props: any[]) => {
+			return (
+				<Image source={Assets.macosSettings} className="w-6 h-6" {...props} />
+			);
+		},
+		type: ItemType.PREFERENCE_PANE,
+		callback: () => {
+			if (solNative.OSVersion >= 13) {
+				solNative.executeBashScript(
+					"open x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension",
+				);
+				return;
+			}
+			Linking.openURL("/System/Library/PreferencePanes/Security.prefPane");
+		},
+	},
+	{
 		id: "wallpaper_settings",
 		name: "Wallpaper",
 		IconComponent: (props: any[]) => {
@@ -215,6 +235,7 @@ const manualPanes: Item[] = [
 	{
 		id: "accessibility_settings",
 		name: "Accessibility",
+		alias: "accessibility permissions system settings",
 		IconComponent: (props: any[]) => {
 			return (
 				<Image source={Assets.accessibility} className="w-6 h-6" {...props} />
@@ -222,6 +243,12 @@ const manualPanes: Item[] = [
 		},
 		type: ItemType.PREFERENCE_PANE,
 		callback: () => {
+			if (solNative.OSVersion >= 13) {
+				solNative.executeBashScript(
+					"open x-apple.systempreferences:com.apple.Accessibility-Settings.extension",
+				);
+				return;
+			}
 			Linking.openURL(
 				"/System/Library/PreferencePanes/UniversalAccessPref.prefPane",
 			);

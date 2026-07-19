@@ -69,6 +69,7 @@ export enum Widget {
 	CLIPBOARD = "CLIPBOARD",
 	PROCESSES = "PROCESSES",
 	FILE_SEARCH = "FILE_SEARCH",
+	COLOR_PICKER = "COLOR_PICKER",
 }
 
 export enum ItemType {
