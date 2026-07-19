@@ -429,6 +429,110 @@ function parseQuantity(input: string) {
 	return new QuantityParser(tokenize(input)).parse();
 }
 
+type AutomaticUnitGroup = {
+	dimensions: Dimensions;
+	units: string[];
+	fallback: string;
+};
+
+const AUTOMATIC_UNIT_GROUPS: AutomaticUnitGroup[] = [
+	{ dimensions: MASS, units: ["t", "kg", "g", "mg", "ug"], fallback: "kg" },
+	{
+		dimensions: LENGTH,
+		units: ["km", "m", "cm", "mm", "um", "nm"],
+		fallback: "m",
+	},
+	{ dimensions: TIME, units: ["d", "h", "min", "s", "ms"], fallback: "s" },
+	{ dimensions: CURRENT, units: ["A", "mA"], fallback: "A" },
+	{
+		dimensions: derivedDimensions(0, 3, 0),
+		units: ["m^3", "L", "mL"],
+		fallback: "L",
+	},
+	{
+		dimensions: derivedDimensions(0, 1, -1),
+		units: ["m/s"],
+		fallback: "m/s",
+	},
+	{
+		dimensions: derivedDimensions(0, 0, -1),
+		units: ["MHz", "kHz", "Hz"],
+		fallback: "Hz",
+	},
+	{
+		dimensions: derivedDimensions(1, 1, -2),
+		units: ["MN", "kN", "N", "mN"],
+		fallback: "N",
+	},
+	{
+		dimensions: derivedDimensions(1, -1, -2),
+		units: ["MPa", "kPa", "Pa"],
+		fallback: "Pa",
+	},
+	{
+		dimensions: derivedDimensions(1, 2, -2),
+		units: ["MJ", "kJ", "J"],
+		fallback: "J",
+	},
+	{
+		dimensions: derivedDimensions(1, 2, -3),
+		units: ["MW", "kW", "W"],
+		fallback: "W",
+	},
+];
+
+function formatExponent(value: number) {
+	return Number.isInteger(value) ? value.toString() : formatResult(value);
+}
+
+function formatBaseUnit(dimensions: Dimensions) {
+	const names = ["kg", "m", "s", "A"];
+	const numerator: string[] = [];
+	const denominator: string[] = [];
+	for (let index = 0; index < dimensions.length; index += 1) {
+		const exponent = dimensions[index];
+		if (exponent === 0) continue;
+		const formatted =
+			Math.abs(exponent) === 1
+				? names[index]
+				: `${names[index]}^${formatExponent(Math.abs(exponent))}`;
+		if (exponent > 0) numerator.push(formatted);
+		else denominator.push(formatted);
+	}
+	const top = numerator.length > 0 ? numerator.join("*") : "1";
+	return denominator.length > 0 ? `${top}/${denominator.join("*")}` : top;
+}
+
+function inferTargetUnit(source: Quantity) {
+	const group = AUTOMATIC_UNIT_GROUPS.find(({ dimensions }) =>
+		dimensionsMatch(source.dimensions, dimensions),
+	);
+	if (!group) {
+		return {
+			unit: formatBaseUnit(source.dimensions),
+			quantity: quantity(1, source.dimensions),
+		};
+	}
+
+	if (source.value === 0) {
+		return { unit: group.fallback, quantity: parseQuantity(group.fallback) };
+	}
+
+	for (const unit of group.units) {
+		const target = parseQuantity(unit);
+		const converted = Math.abs(source.value / target.value);
+		if (converted >= 1 && converted < 1_000) {
+			return { unit, quantity: target };
+		}
+	}
+
+	const edgeUnit =
+		Math.abs(source.value / parseQuantity(group.units[0]).value) >= 1_000
+			? group.units[0]
+			: group.units[group.units.length - 1];
+	return { unit: edgeUnit, quantity: parseQuantity(edgeUnit) };
+}
+
 function formatResult(value: number) {
 	if (!Number.isFinite(value)) {
 		return value.toString();
@@ -449,19 +553,21 @@ export function evaluateUnitExpression(
 	const inIndex = normalized.toLowerCase().lastIndexOf(" in ");
 	const toIndex = normalized.toLowerCase().lastIndexOf(" to ");
 	const separatorIndex = Math.max(inIndex, toIndex);
-	if (separatorIndex <= 0) {
-		return null;
-	}
-
-	const expression = normalized.slice(0, separatorIndex).trim();
-	const targetUnit = normalized.slice(separatorIndex + 4).trim();
-	if (!expression || !targetUnit) {
-		return null;
-	}
+	const hasExplicitTarget = separatorIndex > 0;
+	const expression = hasExplicitTarget
+		? normalized.slice(0, separatorIndex).trim()
+		: normalized;
+	const targetUnit = hasExplicitTarget
+		? normalized.slice(separatorIndex + 4).trim()
+		: "";
+	if (!expression || (hasExplicitTarget && !targetUnit)) return null;
 
 	try {
 		const source = parseQuantity(expression);
-		const target = parseQuantity(targetUnit);
+		if (!hasExplicitTarget && isDimensionless(source.dimensions)) return null;
+		const inferredTarget = hasExplicitTarget ? null : inferTargetUnit(source);
+		const resolvedTargetUnit = inferredTarget?.unit ?? targetUnit;
+		const target = inferredTarget?.quantity ?? parseQuantity(targetUnit);
 		if (
 			!dimensionsMatch(source.dimensions, target.dimensions) ||
 			target.value === 0
@@ -472,7 +578,7 @@ export function evaluateUnitExpression(
 		const value = source.value / target.value;
 		return {
 			expression,
-			targetUnit,
+			targetUnit: resolvedTargetUnit,
 			value,
 			formattedValue: formatResult(value),
 		};
