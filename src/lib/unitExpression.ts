@@ -8,7 +8,10 @@ type Quantity = {
 type Token =
 	| { type: "number"; value: number }
 	| { type: "unit"; value: string }
-	| { type: "operator"; value: "+" | "-" | "*" | "/" | "^" }
+	| {
+			type: "operator";
+			value: "+" | "-" | "*" | "/" | "^" | "implicitMultiply";
+	  }
 	| { type: "leftParen" }
 	| { type: "rightParen" };
 
@@ -302,7 +305,10 @@ function tokenize(input: string): Token[] {
 			token.type === "leftParen";
 
 		if (previousCanMultiply && currentCanMultiply) {
-			withImplicitMultiplication.push({ type: "operator", value: "*" });
+			withImplicitMultiplication.push({
+				type: "operator",
+				value: "implicitMultiply",
+			});
 		}
 		withImplicitMultiplication.push(token);
 	}
@@ -348,13 +354,13 @@ class QuantityParser {
 	}
 
 	private parseMultiplicative(): Quantity {
-		let result = this.parseUnary();
+		let result = this.parseImplicitMultiplicative();
 		while (this.matchesOperator("*") || this.matchesOperator("/")) {
 			const operator = (
 				this.tokens[this.index] as Extract<Token, { type: "operator" }>
 			).value;
 			this.index += 1;
-			const right = this.parseUnary();
+			const right = this.parseImplicitMultiplicative();
 			result =
 				operator === "*"
 					? quantity(
@@ -365,6 +371,19 @@ class QuantityParser {
 							result.value / right.value,
 							subtractDimensions(result.dimensions, right.dimensions),
 						);
+		}
+		return result;
+	}
+
+	private parseImplicitMultiplicative(): Quantity {
+		let result = this.parseUnary();
+		while (this.matchesOperator("implicitMultiply")) {
+			this.index += 1;
+			const right = this.parseUnary();
+			result = quantity(
+				result.value * right.value,
+				addDimensions(result.dimensions, right.dimensions),
+			);
 		}
 		return result;
 	}
