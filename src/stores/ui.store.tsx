@@ -8,7 +8,7 @@ import {
 	normalizeDailymotionStreams,
 } from "lib/dailymotion";
 import { fetchPublicIPAddress } from "lib/publicIp";
-import { solNative } from "lib/SolNative";
+import { type GlassAppearance, solNative } from "lib/SolNative";
 import {
 	defaultShortcuts,
 	normalizeShortcut,
@@ -181,6 +181,49 @@ type RankedItem = Item & {
 	score?: number;
 };
 
+export const DEFAULT_GLASS_APPEARANCE: GlassAppearance = {
+	style: "clear",
+	cornerRadius: 24,
+	tintColor: null,
+	tintOpacity: 0,
+};
+
+const normalizeGlassAppearance = (value: unknown): GlassAppearance => {
+	const source =
+		value != null && typeof value === "object"
+			? (value as Record<string, unknown>)
+			: {};
+	const parseConfigNumber = (rawValue: unknown, fallback: number) => {
+		if (
+			typeof rawValue !== "number" &&
+			!(typeof rawValue === "string" && rawValue.trim() !== "")
+		) {
+			return fallback;
+		}
+
+		const parsedValue = Number(rawValue);
+		return Number.isFinite(parsedValue) ? parsedValue : fallback;
+	};
+	const rawRadius = parseConfigNumber(
+		source.cornerRadius,
+		DEFAULT_GLASS_APPEARANCE.cornerRadius,
+	);
+	const rawOpacity = parseConfigNumber(
+		source.tintOpacity,
+		DEFAULT_GLASS_APPEARANCE.tintOpacity,
+	);
+	const rawTint =
+		typeof source.tintColor === "string" ? source.tintColor.trim() : "";
+	const tintColor = /^#[\dA-Fa-f]{6}$/.test(rawTint) ? rawTint : null;
+
+	return {
+		style: source.style === "regular" ? "regular" : "clear",
+		cornerRadius: Math.min(Math.max(rawRadius, 0), 32),
+		tintColor,
+		tintOpacity: tintColor ? Math.min(Math.max(rawOpacity, 0), 1) : 0,
+	};
+};
+
 export const createUIStore = (root: IRootStore) => {
 	// Guards against spurious writes during hydrate/reload
 	let isHydrating = false;
@@ -303,6 +346,7 @@ export const createUIStore = (root: IRootStore) => {
 					store.customItems = src.customItems ?? [];
 					store.globalShortcut = src.globalShortcut ?? "option";
 					store.showWindowOn = src.showWindowOn ?? "screenWithFrontmost";
+					store.glassAppearance = normalizeGlassAppearance(src.glassAppearance);
 					store.calendarEnabled = src.calendarEnabled ?? true;
 					store.showAllDayEvents = src.showAllDayEvents ?? true;
 					store.launchAtLogin = src.launchAtLogin ?? true;
@@ -341,6 +385,7 @@ export const createUIStore = (root: IRootStore) => {
 				solNative.setLaunchAtLogin(src.launchAtLogin ?? true);
 				solNative.setGlobalShortcut(src.globalShortcut);
 				solNative.setShowWindowOn(src.showWindowOn ?? "screenWithFrontmost");
+				solNative.setGlassAppearance(toJS(store.glassAppearance));
 				solNative.setMediaKeyForwardingEnabled(store.mediaKeyForwardingEnabled);
 				solNative.setHyperKeyEnabled(store.hyperKeyEnabled);
 				solNative.updateHotkeys(toJS(store.shortcuts));
@@ -384,6 +429,9 @@ export const createUIStore = (root: IRootStore) => {
 					store.globalShortcut = jsonConfig.globalShortcut;
 				if (jsonConfig.showWindowOn !== undefined)
 					store.showWindowOn = jsonConfig.showWindowOn;
+				store.glassAppearance = normalizeGlassAppearance(
+					jsonConfig.glassAppearance,
+				);
 				if (jsonConfig.calendarEnabled !== undefined)
 					store.calendarEnabled = jsonConfig.calendarEnabled;
 				if (jsonConfig.showAllDayEvents !== undefined)
@@ -423,6 +471,7 @@ export const createUIStore = (root: IRootStore) => {
 			solNative.setLaunchAtLogin(store.launchAtLogin);
 			solNative.setGlobalShortcut(store.globalShortcut);
 			solNative.setShowWindowOn(store.showWindowOn);
+			solNative.setGlassAppearance(toJS(store.glassAppearance));
 			solNative.setMediaKeyForwardingEnabled(store.mediaKeyForwardingEnabled);
 			solNative.setHyperKeyEnabled(store.hyperKeyEnabled);
 			solNative.updateHotkeys(toJS(store.shortcuts));
@@ -453,6 +502,7 @@ export const createUIStore = (root: IRootStore) => {
 		showWindowOn: "screenWithFrontmost" as
 			| "screenWithFrontmost"
 			| "screenWithCursor",
+		glassAppearance: { ...DEFAULT_GLASS_APPEARANCE } as GlassAppearance,
 		query: "",
 		selectedIndex: 0,
 		focusedWidget: Widget.SEARCH,
@@ -830,6 +880,18 @@ export const createUIStore = (root: IRootStore) => {
 		setShowWindowOn: (on: "screenWithFrontmost" | "screenWithCursor") => {
 			solNative.setShowWindowOn(on);
 			store.showWindowOn = on;
+		},
+		setGlassAppearance: (patch: Partial<GlassAppearance>) => {
+			const nextAppearance = normalizeGlassAppearance({
+				...toJS(store.glassAppearance),
+				...patch,
+			});
+			store.glassAppearance = nextAppearance;
+			solNative.setGlassAppearance(toJS(nextAppearance));
+		},
+		resetGlassAppearance: () => {
+			store.glassAppearance = { ...DEFAULT_GLASS_APPEARANCE };
+			solNative.setGlassAppearance(toJS(store.glassAppearance));
 		},
 		focusWidget: (widget: Widget) => {
 			if (store.searchTab === SearchTab.FILES && widget !== Widget.SEARCH) {

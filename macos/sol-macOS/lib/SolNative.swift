@@ -428,6 +428,22 @@ class SolNative: RCTEventEmitter {
     }
   }
 
+  @objc func setGlassAppearance(_ settings: NSDictionary) {
+    let style = settings["style"] as? String ?? "clear"
+    let cornerRadius = (settings["cornerRadius"] as? NSNumber)?.doubleValue ?? 24
+    let tintHex = settings["tintColor"] as? String
+    let tintOpacity = (settings["tintOpacity"] as? NSNumber)?.doubleValue ?? 0
+
+    DispatchQueue.main.async {
+      PanelManager.shared.setGlassAppearance(
+        style: style,
+        cornerRadius: cornerRadius,
+        tintHex: tintHex,
+        tintOpacity: tintOpacity
+      )
+    }
+  }
+
   @objc func toggleDND() {
     DoNotDisturb.toggle()
   }

@@ -1,7 +1,7 @@
 import AppKit
 
 private final class SpotlightFallbackBackgroundView: NSVisualEffectView {
-  static let cornerRadius: CGFloat = 24
+  private let tintOverlay = NSView(frame: .zero)
 
   override init(frame frameRect: NSRect) {
     super.init(frame: frameRect)
@@ -15,9 +15,26 @@ private final class SpotlightFallbackBackgroundView: NSVisualEffectView {
 
   private func configureLayer() {
     wantsLayer = true
-    layer?.cornerRadius = Self.cornerRadius
+    layer?.cornerRadius = 24
     layer?.cornerCurve = .circular
     layer?.masksToBounds = true
+
+    tintOverlay.wantsLayer = true
+    tintOverlay.frame = bounds
+    tintOverlay.autoresizingMask = [.width, .height]
+    addSubview(tintOverlay)
+  }
+
+  func applyGlassAppearance(
+    style: String,
+    cornerRadius: CGFloat,
+    tintColor: NSColor?
+  ) {
+    // NSVisualEffectView has no exact clear/regular equivalent. These are the
+    // closest stable legacy materials for Sol's floating panel.
+    material = style == "regular" ? .hudWindow : .popover
+    layer?.cornerRadius = cornerRadius
+    tintOverlay.layer?.backgroundColor = tintColor?.cgColor
   }
 }
 
@@ -66,6 +83,43 @@ final class Panel: NSPanel, NSWindowDelegate {
     } else {
       contentView?.addSubview(rootView)
     }
+  }
+
+  func applyGlassAppearance(
+    style: String,
+    cornerRadius: Double,
+    tintHex: String?,
+    tintOpacity: Double
+  ) {
+    let safeRadius = CGFloat(min(max(cornerRadius, 0), 32))
+    let safeOpacity = CGFloat(min(max(tintOpacity, 0), 1))
+    let tintColor: NSColor?
+
+    if let tintHex,
+      !tintHex.isEmpty,
+      safeOpacity > 0,
+      let parsedColor = NSColor(hex: tintHex as NSString)
+    {
+      tintColor = parsedColor.withAlphaComponent(safeOpacity)
+    } else {
+      tintColor = nil
+    }
+
+    if #available(macOS 26.0, *), let glassView = contentView as? NSGlassEffectView {
+      glassView.style = style == "regular" ? .regular : .clear
+      glassView.cornerRadius = safeRadius
+      glassView.tintColor = tintColor
+      glassView.needsDisplay = true
+    } else if let effectView = contentView as? SpotlightFallbackBackgroundView {
+      effectView.applyGlassAppearance(
+        style: style,
+        cornerRadius: safeRadius,
+        tintColor: tintColor
+      )
+      effectView.needsDisplay = true
+    }
+
+    invalidateShadow()
   }
 
   override var canBecomeKey: Bool {

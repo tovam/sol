@@ -16,6 +16,20 @@ enum PreferredScreen {
     self.rootView = rootView
   }
 
+  func setGlassAppearance(
+    style: String,
+    cornerRadius: Double,
+    tintHex: String?,
+    tintOpacity: Double
+  ) {
+    mainWindow.applyGlassAppearance(
+      style: style,
+      cornerRadius: cornerRadius,
+      tintHex: tintHex,
+      tintOpacity: tintOpacity
+    )
+  }
+
   @objc func showWindow(target: String? = nil) {
     HotKeyManager.shared.settingsHotKey.isPaused = false
 

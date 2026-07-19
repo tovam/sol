@@ -1,5 +1,12 @@
 import { NativeEventEmitter, NativeModules } from "react-native";
 
+export type GlassAppearance = {
+	style: "clear" | "regular";
+	cornerRadius: number;
+	tintColor: string | null;
+	tintOpacity: number;
+};
+
 class SolNative extends NativeEventEmitter {
 	openFile: (path: string) => void;
 	openWithFinder: (path: string) => void;
@@ -71,6 +78,7 @@ class SolNative extends NativeEventEmitter {
 	removeIndexedPath: typeof global.__SolProxy.removeIndexedPath;
 	clearIndex: typeof global.__SolProxy.clearIndex;
 	setShowWindowOn: (on: "screenWithFrontmost" | "screenWithCursor") => void;
+	setGlassAppearance: (settings: GlassAppearance) => void;
 	useBackgroundOverlay: (v: boolean) => void;
 	toggleDND: () => void;
 	toggleScreenRuler: () => void;
@@ -203,6 +211,7 @@ class SolNative extends NativeEventEmitter {
 		this.resetWindowSize = global.__SolProxy.resetWindowSize;
 		this.hideWindow = global.__SolProxy.hideWindow;
 		this.setShowWindowOn = module.setShowWindowOn;
+		this.setGlassAppearance = module.setGlassAppearance;
 		this.useBackgroundOverlay = module.useBackgroundOverlay;
 		this.toggleScreenRuler = module.toggleScreenRuler;
 		this.openDailymotionPlayer = module.openDailymotionPlayer;

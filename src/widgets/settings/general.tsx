@@ -5,6 +5,7 @@ import { Input } from "components/Input";
 import { MySwitch } from "components/MySwitch";
 import { solNative } from "lib/SolNative";
 import { observer } from "mobx-react-lite";
+import { useEffect, useState } from "react";
 import { Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useStore } from "store";
 
@@ -14,6 +15,182 @@ export const isValidCustomSearchEngineUrl = (url: string) => {
 		/^https?:\/\/(?:(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?|localhost|\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d+)?(\/[^\s?#]*)?\?[\w-]+=%s$/;
 	return searchPatternRegex.test(url);
 };
+
+const GlassAppearanceSettings = observer(() => {
+	const store = useStore();
+	const appearance = store.ui.glassAppearance;
+	const [style, setStyle] = useState<"clear" | "regular">(appearance.style);
+	const [cornerRadius, setCornerRadius] = useState(
+		String(appearance.cornerRadius),
+	);
+	const [tintColor, setTintColor] = useState(appearance.tintColor ?? "");
+	const [tintOpacity, setTintOpacity] = useState(
+		String(Math.round(appearance.tintOpacity * 100)),
+	);
+
+	useEffect(() => {
+		setStyle(appearance.style);
+		setCornerRadius(String(appearance.cornerRadius));
+		setTintColor(appearance.tintColor ?? "");
+		setTintOpacity(String(Math.round(appearance.tintOpacity * 100)));
+	}, [
+		appearance.style,
+		appearance.cornerRadius,
+		appearance.tintColor,
+		appearance.tintOpacity,
+	]);
+
+	const parsedRadius = Number(cornerRadius.replace(",", "."));
+	const parsedOpacity = Number(tintOpacity.replace(",", "."));
+	const normalizedTint = tintColor.trim();
+	const tintIsValid =
+		normalizedTint === "" || /^#[\dA-Fa-f]{6}$/.test(normalizedTint);
+	const valuesAreValid =
+		cornerRadius.trim() !== "" &&
+		tintOpacity.trim() !== "" &&
+		Number.isFinite(parsedRadius) &&
+		parsedRadius >= 0 &&
+		parsedRadius <= 32 &&
+		Number.isFinite(parsedOpacity) &&
+		parsedOpacity >= 0 &&
+		parsedOpacity <= 100 &&
+		tintIsValid;
+
+	const reset = () => {
+		setStyle("clear");
+		setCornerRadius("24");
+		setTintColor("");
+		setTintOpacity("0");
+		store.ui.resetGlassAppearance();
+	};
+
+	return (
+		<View className="z-30 p-3 subBg gap-3 rounded-lg border border-lightBorder dark:border-darkBorder">
+			<View>
+				<Text className="text-sm text">Window Glass</Text>
+				<Text className="text-xxs text-neutral-500 dark:text-neutral-400 mt-1">
+					These are the public Liquid Glass controls. Blur and refraction stay
+					adaptive and are managed by macOS.
+				</Text>
+			</View>
+
+			<View className="border-t border-lightBorder dark:border-darkBorder" />
+
+			<View className="flex-row items-center z-40">
+				<View className="flex-1">
+					<Text className="text-sm text">Style</Text>
+					<Text className="text-xxs text-neutral-500 dark:text-neutral-400">
+						Clear lets more of the background through
+					</Text>
+				</View>
+				<Dropdown
+					value={style}
+					onValueChange={(value) =>
+						setStyle(value === "regular" ? "regular" : "clear")
+					}
+					options={[
+						{ label: "Clear", value: "clear" },
+						{ label: "Regular", value: "regular" },
+					]}
+				/>
+			</View>
+
+			<View className="flex-row items-center gap-2">
+				<View className="flex-1">
+					<Text className="text-sm text">Corner radius</Text>
+					<Text className="text-xxs text-neutral-500 dark:text-neutral-400">
+						0–32 pt; 32 pt makes the collapsed bar a capsule
+					</Text>
+				</View>
+				<Input
+					bordered
+					className="w-20"
+					inputClassName="text-right"
+					value={cornerRadius}
+					onChangeText={setCornerRadius}
+				/>
+				<Text className="text-xs darker-text w-5">pt</Text>
+			</View>
+
+			<View className="flex-row items-center gap-2">
+				<View className="flex-1">
+					<Text className="text-sm text">Tint color</Text>
+					<Text className="text-xxs text-neutral-500 dark:text-neutral-400">
+						#RRGGBB, or leave empty for adaptive glass
+					</Text>
+				</View>
+				<Input
+					bordered
+					className="w-32"
+					inputClassName="text-right"
+					placeholder="#FFFFFF"
+					value={tintColor}
+					onChangeText={setTintColor}
+				/>
+			</View>
+
+			<View className="flex-row items-center gap-2">
+				<View className="flex-1">
+					<Text className="text-sm text">Tint intensity</Text>
+					<Text className="text-xxs text-neutral-500 dark:text-neutral-400">
+						Used with a tint color; start below 20% for a subtle result
+					</Text>
+				</View>
+				<Input
+					bordered
+					className="w-20"
+					inputClassName="text-right"
+					value={tintOpacity}
+					onChangeText={setTintOpacity}
+					readOnly={normalizedTint === ""}
+				/>
+				<Text className="text-xs darker-text w-5">%</Text>
+			</View>
+
+			{!valuesAreValid && (
+				<Text className="text-xs text-red-500">
+					Use a radius from 0 to 32, an intensity from 0 to 100, and a
+					#RRGGBB color.
+				</Text>
+			)}
+
+			<View className="flex-row justify-end gap-3">
+				<TouchableOpacity onPress={reset}>
+					<View className="px-4 py-2 rounded-lg border border-color">
+						<Text className="text-sm text">Reset</Text>
+					</View>
+				</TouchableOpacity>
+				<TouchableOpacity
+					disabled={!valuesAreValid}
+					onPress={() => {
+						if (!valuesAreValid) return;
+						store.ui.setGlassAppearance({
+							style,
+							cornerRadius: parsedRadius,
+							tintColor: normalizedTint || null,
+							tintOpacity: normalizedTint ? parsedOpacity / 100 : 0,
+						});
+					}}
+				>
+					<View
+						className={clsx("px-4 py-2 rounded-lg", {
+							"bg-accent-strong": valuesAreValid,
+							"bg-neutral-300 dark:bg-neutral-700": !valuesAreValid,
+						})}
+					>
+						<Text className="text-sm text-white">Apply</Text>
+					</View>
+				</TouchableOpacity>
+			</View>
+
+			<Text className="text-xxs text-neutral-500 dark:text-neutral-400">
+				Saved as glassAppearance in ~/.config/sol/config.json. Requires macOS
+				26 for native Liquid Glass; older versions use a visual-effect
+				fallback.
+			</Text>
+		</View>
+	);
+});
 
 export const General = observer(() => {
 	const store = useStore();
@@ -36,6 +213,7 @@ export const General = observer(() => {
 					onValueChange={store.ui.setLaunchAtLogin}
 				/>
 			</View>
+			<GlassAppearanceSettings />
 			<View className="z-20 p-3 subBg gap-3 rounded-lg border border-lightBorder dark:border-darkBorder">
 				<View className="flex-row items-center z-30">
 					<Text className="flex-1 text-sm">Global Shortcut</Text>
