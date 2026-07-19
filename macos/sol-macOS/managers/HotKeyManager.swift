@@ -48,7 +48,11 @@ final class HotKeyManager {
         return $0
       }
 
-      if $0.keyCode == 36 && !self.catchEnterPress {
+      let commandEnter =
+        $0.keyCode == 36 && $0.modifierFlags.contains(.command)
+        && !$0.modifierFlags.contains(.shift)
+
+      if $0.keyCode == 36 && !self.catchEnterPress && !commandEnter {
         return $0
       }
 

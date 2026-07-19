@@ -1,8 +1,9 @@
 import { BackButton } from "components/BackButton";
 import { AIProviderModelControls } from "components/AIProviderModelControls";
 import type { AIMessage } from "lib/ai";
+import { solNative } from "lib/SolNative";
 import { observer } from "mobx-react-lite";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
 	ActivityIndicator,
 	ScrollView,
@@ -24,6 +25,7 @@ export const AIChatWidget = observer(() => {
 	const [input, setInput] = useState("");
 	const [error, setError] = useState("");
 	const [loading, setLoading] = useState(false);
+	const sendRef = useRef<() => void>(() => undefined);
 
 	const messages = store.ai.conversation;
 
@@ -66,6 +68,21 @@ export const AIChatWidget = observer(() => {
 			setLoading(false);
 		}
 	};
+
+	sendRef.current = () => void send();
+
+	useEffect(() => {
+		solNative.turnOffEnterListener();
+		const subscription = solNative.addListener("keyDown", (event) => {
+			if (event.keyCode === 36 && event.meta && !event.shift) {
+				sendRef.current();
+			}
+		});
+		return () => {
+			subscription.remove();
+			solNative.turnOnEnterListener();
+		};
+	}, []);
 
 	return (
 		<View className="fullWindow">
@@ -168,7 +185,7 @@ export const AIChatWidget = observer(() => {
 					disabled={loading || !input.trim()}
 					onPress={() => void send()}
 				>
-					<Text className="text-white text-sm font-semibold">Send</Text>
+					<Text className="text-white text-sm font-semibold">Send  ⌘↩</Text>
 				</TouchableOpacity>
 			</View>
 		</View>

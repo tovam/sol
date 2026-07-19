@@ -2,7 +2,7 @@ import { BackButton } from "components/BackButton";
 import { AIProviderModelControls } from "components/AIProviderModelControls";
 import { solNative } from "lib/SolNative";
 import { observer } from "mobx-react-lite";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
 	ActivityIndicator,
 	Clipboard,
@@ -21,9 +21,11 @@ export const AIOneShotWidget = observer(() => {
 	const [answer, setAnswer] = useState("");
 	const [error, setError] = useState("");
 	const [loading, setLoading] = useState(false);
+	const askRef = useRef<() => void>(() => undefined);
 
 	const ask = async () => {
 		const prompt = question.trim();
+		if (loading) return;
 		if (!prompt) {
 			setError("Write a question first");
 			return;
@@ -46,6 +48,21 @@ export const AIOneShotWidget = observer(() => {
 			setLoading(false);
 		}
 	};
+
+	askRef.current = () => void ask();
+
+	useEffect(() => {
+		solNative.turnOffEnterListener();
+		const subscription = solNative.addListener("keyDown", (event) => {
+			if (event.keyCode === 36 && event.meta && !event.shift) {
+				askRef.current();
+			}
+		});
+		return () => {
+			subscription.remove();
+			solNative.turnOnEnterListener();
+		};
+	}, []);
 
 	return (
 		<View className="fullWindow">
@@ -141,7 +158,7 @@ export const AIOneShotWidget = observer(() => {
 						disabled={loading || !question.trim()}
 						onPress={() => void ask()}
 					>
-						<Text className="text-white text-sm font-semibold">Ask</Text>
+						<Text className="text-white text-sm font-semibold">Ask  ⌘↩</Text>
 					</TouchableOpacity>
 				</View>
 			</View>
