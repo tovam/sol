@@ -227,6 +227,12 @@ fi
 
 print "Installing in /Applications…"
 pkill -x sol >/dev/null 2>&1 || true
+for _ in {1..20}; do
+  if ! pgrep -x sol >/dev/null 2>&1; then
+    break
+  fi
+  sleep 0.25
+done
 trap '' INT TERM
 if [[ -d "$INSTALL_TARGET" ]]; then
   mv "$INSTALL_TARGET" "$BACKUP_APP"
@@ -240,7 +246,11 @@ ditto "$DOWNLOADED_APP" "$INSTALL_TARGET"
 xattr -dr com.apple.quarantine "$INSTALL_TARGET"
 codesign --verify --deep --strict "$INSTALL_TARGET"
 
-open "$INSTALL_TARGET"
+if ! open "$INSTALL_TARGET"; then
+  print -u2 "LaunchServices was not ready; retrying in a new instance…"
+  sleep 2
+  open -n "$INSTALL_TARGET"
+fi
 sleep 5
 if ! pgrep -x sol >/dev/null; then
   print -u2 "Sol did not start."
