@@ -1,6 +1,38 @@
-import Foundation
+import AppKit
 
-let appDelegate = NSApp.delegate as? AppDelegate
+private final class SpotlightBackgroundView: NSVisualEffectView {
+  static let cornerRadius: CGFloat = 24
+
+  override init(frame frameRect: NSRect) {
+    super.init(frame: frameRect)
+    configureLayer()
+  }
+
+  required init?(coder: NSCoder) {
+    super.init(coder: coder)
+    configureLayer()
+  }
+
+  override func viewDidChangeEffectiveAppearance() {
+    super.viewDidChangeEffectiveAppearance()
+    updateBorderColor()
+  }
+
+  private func configureLayer() {
+    wantsLayer = true
+    layer?.cornerRadius = Self.cornerRadius
+    layer?.cornerCurve = .continuous
+    layer?.masksToBounds = true
+    layer?.borderWidth = 0.5
+    updateBorderColor()
+  }
+
+  private func updateBorderColor() {
+    effectiveAppearance.performAsCurrentDrawingAppearance {
+      layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.55).cgColor
+    }
+  }
+}
 
 final class Panel: NSPanel, NSWindowDelegate {
   init(contentRect: NSRect) {
@@ -20,6 +52,7 @@ final class Panel: NSPanel, NSWindowDelegate {
     self.isMovableByWindowBackground = true
     self.isReleasedWhenClosed = false
     self.isOpaque = false
+    self.animationBehavior = .utilityWindow
     self.delegate = self
     self.backgroundColor = .clear
 
@@ -27,19 +60,13 @@ final class Panel: NSPanel, NSWindowDelegate {
       self.titlebarSeparatorStyle = .none
     }
 
-    let effectView = NSVisualEffectView(
+    let effectView = SpotlightBackgroundView(
       frame: .zero
     )
     effectView.autoresizingMask = [.width, .height]
     effectView.material = .popover
     effectView.blendingMode = .behindWindow
     effectView.state = .active
-    effectView.wantsLayer = true
-    effectView.layer?.cornerRadius = 16
-    effectView.layer?.cornerCurve = .continuous
-    effectView.layer?.masksToBounds = true
-    effectView.layer?.borderWidth = 0.5
-    effectView.layer?.borderColor = NSColor.white.withAlphaComponent(0.22).cgColor
 
     self.contentView = effectView
     self.contentView!.wantsLayer = true
