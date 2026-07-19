@@ -116,21 +116,383 @@ private struct DailymotionBridgeState {
   var error: String?
 }
 
+private protocol DailymotionControlsViewDelegate: AnyObject {
+  func controlsDidTogglePlayback(_ controls: DailymotionControlsView)
+  func controls(_ controls: DailymotionControlsView, seekBy seconds: Double)
+  func controls(_ controls: DailymotionControlsView, seekTo seconds: Double)
+  func controlsDidRequestLiveEdge(_ controls: DailymotionControlsView)
+  func controls(_ controls: DailymotionControlsView, didSelectRate rate: Double)
+  func controls(_ controls: DailymotionControlsView, didSetVolume volume: Double)
+}
+
+private final class DailymotionTrackingSlider: NSSlider {
+  private(set) var isUserTracking = false
+
+  override func mouseDown(with event: NSEvent) {
+    isUserTracking = true
+    super.mouseDown(with: event)
+    isUserTracking = false
+  }
+}
+
+private final class DailymotionControlsView: NSVisualEffectView {
+  weak var delegate: DailymotionControlsViewDelegate?
+
+  private let playButton = NSButton()
+  private let backwardButton = NSButton(title: "−10", target: nil, action: nil)
+  private let forwardButton = NSButton(title: "+10", target: nil, action: nil)
+  private let seekSlider = DailymotionTrackingSlider(
+    value: 0,
+    minValue: 0,
+    maxValue: 1,
+    target: nil,
+    action: nil
+  )
+  private let timeLabel = NSTextField(labelWithString: "Loading…")
+  private let liveButton = NSButton(title: "LIVE", target: nil, action: nil)
+  private let ratePopUp = NSPopUpButton(frame: .zero, pullsDown: false)
+  private let volumeImage = NSImageView()
+  private let volumeSlider = DailymotionTrackingSlider(
+    value: 1,
+    minValue: 0,
+    maxValue: 1,
+    target: nil,
+    action: nil
+  )
+  private let rates = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
+
+  override init(frame frameRect: NSRect) {
+    super.init(frame: frameRect)
+
+    material = .hudWindow
+    blendingMode = .withinWindow
+    state = .active
+    wantsLayer = true
+    layer?.cornerRadius = 11
+    layer?.cornerCurve = .continuous
+    layer?.masksToBounds = true
+    layer?.borderWidth = 0.5
+    layer?.borderColor = NSColor.white.withAlphaComponent(0.2).cgColor
+
+    configureButton(
+      playButton,
+      action: #selector(togglePlayback),
+      toolTip: "Play or pause"
+    )
+    configureButton(
+      backwardButton,
+      action: #selector(skipBackward),
+      toolTip: "Back 10 seconds"
+    )
+    configureButton(
+      forwardButton,
+      action: #selector(skipForward),
+      toolTip: "Forward 10 seconds"
+    )
+    configureButton(
+      liveButton,
+      action: #selector(goLive),
+      toolTip: "Return to live"
+    )
+    liveButton.contentTintColor = .systemRed
+    liveButton.isHidden = true
+
+    seekSlider.target = self
+    seekSlider.action = #selector(seek)
+    seekSlider.isContinuous = false
+    seekSlider.controlSize = .small
+    seekSlider.toolTip = "Playback position"
+
+    ratePopUp.addItems(withTitles: rates.map(rateTitle))
+    ratePopUp.selectItem(at: 3)
+    ratePopUp.target = self
+    ratePopUp.action = #selector(changeRate)
+    ratePopUp.controlSize = .small
+    ratePopUp.toolTip = "Playback speed"
+
+    volumeImage.image = NSImage(
+      systemSymbolName: "speaker.wave.2.fill",
+      accessibilityDescription: "Volume"
+    )
+    volumeImage.contentTintColor = .secondaryLabelColor
+    volumeImage.imageScaling = .scaleProportionallyDown
+
+    volumeSlider.target = self
+    volumeSlider.action = #selector(changeVolume)
+    volumeSlider.isContinuous = false
+    volumeSlider.controlSize = .small
+    volumeSlider.toolTip = "Volume"
+
+    timeLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .medium)
+    timeLabel.textColor = .secondaryLabelColor
+    timeLabel.alignment = .center
+    timeLabel.lineBreakMode = .byClipping
+
+    let stack = NSStackView(views: [
+      playButton,
+      backwardButton,
+      forwardButton,
+      seekSlider,
+      timeLabel,
+      liveButton,
+      ratePopUp,
+      volumeImage,
+      volumeSlider,
+    ])
+    stack.orientation = .horizontal
+    stack.alignment = .centerY
+    stack.distribution = .fill
+    stack.spacing = 6
+    stack.detachesHiddenViews = true
+    stack.translatesAutoresizingMaskIntoConstraints = false
+    addSubview(stack)
+
+    seekSlider.setContentHuggingPriority(.defaultLow, for: .horizontal)
+    seekSlider.setContentCompressionResistancePriority(
+      .defaultLow,
+      for: .horizontal
+    )
+    timeLabel.setContentCompressionResistancePriority(
+      .required,
+      for: .horizontal
+    )
+
+    NSLayoutConstraint.activate([
+      stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+      stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+      stack.topAnchor.constraint(equalTo: topAnchor, constant: 5),
+      stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -5),
+      playButton.widthAnchor.constraint(equalToConstant: 28),
+      backwardButton.widthAnchor.constraint(equalToConstant: 36),
+      forwardButton.widthAnchor.constraint(equalToConstant: 36),
+      seekSlider.widthAnchor.constraint(greaterThanOrEqualToConstant: 60),
+      timeLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 64),
+      liveButton.widthAnchor.constraint(equalToConstant: 46),
+      ratePopUp.widthAnchor.constraint(equalToConstant: 56),
+      volumeImage.widthAnchor.constraint(equalToConstant: 16),
+      volumeSlider.widthAnchor.constraint(equalToConstant: 45),
+    ])
+
+    render(DailymotionBridgeState())
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) has not been implemented")
+  }
+
+  func render(_ state: DailymotionBridgeState) {
+    let ready = state.ready && state.error == nil
+    setPlaySymbol(state.isPlaying ? "pause.fill" : "play.fill")
+    selectNearestRate(to: state.playbackRate)
+    if !volumeSlider.isUserTracking {
+      volumeSlider.doubleValue = state.isMuted
+        ? 0
+        : clamped(state.volume, lower: 0, upper: 1)
+    }
+    setVolumeSymbol(muted: state.isMuted, volume: state.volume)
+
+    playButton.isEnabled = ready
+    volumeSlider.isEnabled = ready
+    liveButton.isHidden = true
+
+    if state.isAdPlaying {
+      let duration = state.adDuration ?? 0
+      setTimeline(
+        start: 0,
+        end: max(duration, 1),
+        position: state.adTime,
+        enabled: false
+      )
+      backwardButton.isEnabled = false
+      forwardButton.isEnabled = false
+      ratePopUp.isEnabled = false
+      timeLabel.textColor = .systemOrange
+      timeLabel.stringValue = duration > 0
+        ? "AD · \(formatTime(state.adTime)) / \(formatTime(duration))"
+        : "AD"
+      return
+    }
+
+    guard ready else {
+      setTimeline(start: 0, end: 1, position: 0, enabled: false)
+      backwardButton.isEnabled = false
+      forwardButton.isEnabled = false
+      ratePopUp.isEnabled = false
+      timeLabel.textColor = state.error == nil ? .secondaryLabelColor : .systemRed
+      timeLabel.stringValue = state.error == nil ? "Loading…" : "Unavailable"
+      return
+    }
+
+    ratePopUp.isEnabled = true
+    timeLabel.textColor = .secondaryLabelColor
+    guard let duration = state.duration, duration > 0 else {
+      setTimeline(start: 0, end: 1, position: 0, enabled: false)
+      backwardButton.isEnabled = false
+      forwardButton.isEnabled = false
+      timeLabel.stringValue = state.isBuffering ? "Buffering…" : "Playing"
+      return
+    }
+
+    setTimeline(
+      start: 0,
+      end: duration,
+      position: state.currentTime,
+      enabled: true
+    )
+    backwardButton.isEnabled = true
+    forwardButton.isEnabled = true
+    timeLabel.stringValue = "\(formatTime(state.currentTime)) / \(formatTime(duration))"
+  }
+
+  private func configureButton(
+    _ button: NSButton,
+    action: Selector,
+    toolTip: String
+  ) {
+    button.target = self
+    button.action = action
+    button.bezelStyle = .texturedRounded
+    button.controlSize = .small
+    button.font = .systemFont(ofSize: 11, weight: .medium)
+    button.toolTip = toolTip
+  }
+
+  private func setTimeline(
+    start: Double,
+    end: Double,
+    position: Double,
+    enabled: Bool
+  ) {
+    let safeStart = start.isFinite ? start : 0
+    let safeEnd = end.isFinite ? max(end, safeStart + 0.001) : safeStart + 1
+    seekSlider.minValue = safeStart
+    seekSlider.maxValue = safeEnd
+    if !seekSlider.isUserTracking {
+      seekSlider.doubleValue = clamped(
+        position,
+        lower: safeStart,
+        upper: safeEnd
+      )
+    }
+    seekSlider.isEnabled = enabled
+  }
+
+  private func setVolumeSymbol(muted: Bool, volume: Double) {
+    let symbol: String
+    if muted || volume <= 0 {
+      symbol = "speaker.slash.fill"
+    } else if volume < 0.35 {
+      symbol = "speaker.wave.1.fill"
+    } else {
+      symbol = "speaker.wave.2.fill"
+    }
+    volumeImage.image = NSImage(
+      systemSymbolName: symbol,
+      accessibilityDescription: muted ? "Muted" : "Volume"
+    )
+  }
+
+  private func setPlaySymbol(_ name: String) {
+    if let image = NSImage(
+      systemSymbolName: name,
+      accessibilityDescription: name == "pause.fill" ? "Pause" : "Play"
+    ) {
+      playButton.image = image
+      playButton.title = ""
+    } else {
+      playButton.image = nil
+      playButton.title = name == "pause.fill" ? "Ⅱ" : "▶"
+    }
+  }
+
+  private func selectNearestRate(to rate: Double) {
+    guard
+      let index = rates.indices.min(by: {
+        abs(rates[$0] - rate) < abs(rates[$1] - rate)
+      })
+    else {
+      return
+    }
+    ratePopUp.selectItem(at: index)
+  }
+
+  private func rateTitle(_ rate: Double) -> String {
+    rate == rate.rounded() ? "\(Int(rate))×" : "\(rate)×"
+  }
+
+  private func formatTime(_ seconds: Double) -> String {
+    let total = Int(max(0, seconds.isFinite ? seconds : 0).rounded(.down))
+    let hours = total / 3600
+    let minutes = total % 3600 / 60
+    let remainingSeconds = total % 60
+    return hours > 0
+      ? String(format: "%d:%02d:%02d", hours, minutes, remainingSeconds)
+      : String(format: "%d:%02d", minutes, remainingSeconds)
+  }
+
+  private func clamped(
+    _ value: Double,
+    lower: Double,
+    upper: Double
+  ) -> Double {
+    min(max(value.isFinite ? value : lower, lower), upper)
+  }
+
+  @objc private func togglePlayback() {
+    delegate?.controlsDidTogglePlayback(self)
+  }
+
+  @objc private func skipBackward() {
+    delegate?.controls(self, seekBy: -10)
+  }
+
+  @objc private func skipForward() {
+    delegate?.controls(self, seekBy: 10)
+  }
+
+  @objc private func seek() {
+    guard seekSlider.isEnabled else { return }
+    delegate?.controls(self, seekTo: seekSlider.doubleValue)
+  }
+
+  @objc private func goLive() {
+    delegate?.controlsDidRequestLiveEdge(self)
+  }
+
+  @objc private func changeRate() {
+    let index = ratePopUp.indexOfSelectedItem
+    guard rates.indices.contains(index) else { return }
+    delegate?.controls(self, didSelectRate: rates[index])
+  }
+
+  @objc private func changeVolume() {
+    setVolumeSymbol(
+      muted: volumeSlider.doubleValue <= 0,
+      volume: volumeSlider.doubleValue
+    )
+    delegate?.controls(self, didSetVolume: volumeSlider.doubleValue)
+  }
+}
+
 final class DailymotionPlayerController: NSObject, NSWindowDelegate {
   static let shared = DailymotionPlayerController()
 
   private var panel: FloatingVideoPanel?
   private var webView: WKWebView?
+  private var controlsView: DailymotionControlsView?
   private var userContentController: WKUserContentController?
   private var source: DailymotionPlayerSource?
   private var sessionID = ""
   private var mediaFrame: WKFrameInfo?
+  private var mediaFrameToken: String?
   private var mediaFrameIsMain = false
   private var mediaFrameIsPlaying = false
   private var mediaFrameArea = 0.0
+  private var mediaFrameLastSeen = Date.distantPast
   private var sdkFallbackWorkItem: DispatchWorkItem?
+  private var sdkFallbackDidStart = false
   private var state = DailymotionBridgeState()
-  private var onStateChange: ((DailymotionBridgeState) -> Void)?
 
   func open(urlString: String, completion: @escaping (Bool) -> Void) {
     guard let source = DailymotionPlayerSource.parse(urlString) else {
@@ -172,7 +534,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     panel.hasShadow = true
     panel.isReleasedWhenClosed = false
     panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-    panel.minSize = NSSize(width: 360, height: 203)
+    panel.minSize = NSSize(width: 480, height: 270)
     panel.aspectRatio = NSSize(width: 16, height: 9)
     panel.center()
 
@@ -189,9 +551,12 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     self.source = source
     sessionID = UUID().uuidString
     mediaFrame = nil
+    mediaFrameToken = nil
     mediaFrameIsMain = false
     mediaFrameIsPlaying = false
     mediaFrameArea = 0
+    mediaFrameLastSeen = .distantPast
+    sdkFallbackDidStart = false
     state = DailymotionBridgeState()
 
     let contentController = WKUserContentController()
@@ -211,13 +576,41 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
 
     let webView = WKWebView(frame: panel.contentView?.bounds ?? .zero, configuration: configuration)
-    webView.autoresizingMask = [.width, .height]
+    webView.translatesAutoresizingMaskIntoConstraints = false
     webView.navigationDelegate = self
     webView.uiDelegate = self
-    panel.contentView = webView
+
+    let controlsView = DailymotionControlsView(frame: .zero)
+    controlsView.translatesAutoresizingMaskIntoConstraints = false
+    controlsView.delegate = self
+
+    let contentView = NSView(frame: panel.contentView?.bounds ?? .zero)
+    contentView.addSubview(webView)
+    contentView.addSubview(controlsView)
+    NSLayoutConstraint.activate([
+      webView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+      webView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+      webView.topAnchor.constraint(equalTo: contentView.topAnchor),
+      webView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+      controlsView.leadingAnchor.constraint(
+        equalTo: contentView.leadingAnchor,
+        constant: 10
+      ),
+      controlsView.trailingAnchor.constraint(
+        equalTo: contentView.trailingAnchor,
+        constant: -10
+      ),
+      controlsView.topAnchor.constraint(
+        equalTo: contentView.topAnchor,
+        constant: 10
+      ),
+      controlsView.heightAnchor.constraint(equalToConstant: 42),
+    ])
+    panel.contentView = contentView
 
     self.userContentController = contentController
     self.webView = webView
+    self.controlsView = controlsView
 
     switch source.backend {
     case let .sdk(playerID):
@@ -241,6 +634,8 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
         else {
           return
         }
+        self.sdkFallbackDidStart = true
+        self.clearMediaFrame()
         self.state = DailymotionBridgeState(backend: "media")
         self.notifyStateChange()
         webView.load(URLRequest(url: source.url))
@@ -267,20 +662,27 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
       forName: dailymotionBridgeName
     )
     webView?.removeFromSuperview()
+    controlsView?.delegate = nil
+    controlsView?.removeFromSuperview()
     webView = nil
+    controlsView = nil
     userContentController = nil
     mediaFrame = nil
+    mediaFrameToken = nil
     mediaFrameIsMain = false
     mediaFrameIsPlaying = false
     mediaFrameArea = 0
+    mediaFrameLastSeen = .distantPast
+    sdkFallbackDidStart = false
     sessionID = ""
   }
 
   private func notifyStateChange() {
-    onStateChange?(state)
+    controlsView?.render(state)
   }
 
   private func handleSDKState(_ body: [String: Any]) {
+    guard !sdkFallbackDidStart else { return }
     state.backend = "sdk"
     state.ready = bool(body["ready"]) ?? state.ready
     state.isPlaying = bool(body["isPlaying"]) ?? state.isPlaying
@@ -307,25 +709,35 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     _ body: [String: Any],
     frameInfo: WKFrameInfo
   ) {
-    guard bool(body["ready"]) == true else { return }
+    guard let frameToken = body["frame"] as? String else { return }
+    guard bool(body["ready"]) == true else {
+      if frameToken == mediaFrameToken {
+        clearMediaFrame()
+        if state.backend == "media" {
+          state.ready = false
+          notifyStateChange()
+        }
+      }
+      return
+    }
     let area = finiteDouble(body["area"]) ?? 0
     let isPlaying = bool(body["isPlaying"]) ?? false
-    let currentFrameURL = mediaFrame?.request.url
-    let incomingFrameURL = frameInfo.request.url
-    let isCurrentFrame = mediaFrameIsMain == frameInfo.isMainFrame
-      && currentFrameURL != nil
-      && currentFrameURL == incomingFrameURL
+    let isCurrentFrame = frameToken == mediaFrameToken
+    let currentFrameExpired = Date().timeIntervalSince(mediaFrameLastSeen) > 2
     let shouldUseFrame = isCurrentFrame
       || mediaFrame == nil
+      || currentFrameExpired
       || isPlaying && !mediaFrameIsPlaying
       || area > mediaFrameArea * 1.25
       || frameInfo.isMainFrame && area >= mediaFrameArea
 
     guard shouldUseFrame else { return }
     mediaFrame = frameInfo
+    mediaFrameToken = frameToken
     mediaFrameIsMain = frameInfo.isMainFrame
     mediaFrameIsPlaying = isPlaying
     mediaFrameArea = area
+    mediaFrameLastSeen = Date()
 
     if !(state.backend == "sdk" && state.isAdPlaying) {
       let seekableStart = finiteDouble(body["seekableStart"])
@@ -371,6 +783,15 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
   private func handleBridgeError(_ body: [String: Any]) {
     state.error = body["message"] as? String ?? "Dailymotion player error"
     notifyStateChange()
+  }
+
+  private func clearMediaFrame() {
+    mediaFrame = nil
+    mediaFrameToken = nil
+    mediaFrameIsMain = false
+    mediaFrameIsPlaying = false
+    mediaFrameArea = 0
+    mediaFrameLastSeen = .distantPast
   }
 
   private func bool(_ value: Any?) -> Bool? {
@@ -455,6 +876,10 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
         }
         completion?(true)
         return
+      }
+
+      if primaryFrame != nil {
+        self.clearMediaFrame()
       }
 
       guard let mediaFrame = self.mediaFrame, primaryFrame == nil else {
@@ -621,6 +1046,8 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     #"""
     (() => {
       const SESSION = "\#(sessionID)";
+      const FRAME = crypto.randomUUID?.()
+        ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
       const host = location.hostname.toLowerCase();
       const trustedHost = host === "dailymotion.com"
         || host.endsWith(".dailymotion.com")
@@ -633,6 +1060,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
         window.webkit?.messageHandlers?.solDailymotion?.postMessage({
           ...payload,
           session: SESSION,
+          frame: FRAME,
         });
       };
       const finite = (value) => Number.isFinite(value) ? value : null;
@@ -772,6 +1200,57 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
       setInterval(report, 500);
     })();
     """#
+  }
+}
+
+extension DailymotionPlayerController: DailymotionControlsViewDelegate {
+  fileprivate func controlsDidTogglePlayback(
+    _ controls: DailymotionControlsView
+  ) {
+    sendCommand(state.isPlaying ? "pause" : "play")
+  }
+
+  fileprivate func controls(
+    _ controls: DailymotionControlsView,
+    seekBy seconds: Double
+  ) {
+    guard !state.isAdPlaying else { return }
+    sendCommand("seekBy", value: seconds)
+  }
+
+  fileprivate func controls(
+    _ controls: DailymotionControlsView,
+    seekTo seconds: Double
+  ) {
+    guard !state.isAdPlaying else { return }
+    sendCommand("seek", value: seconds)
+  }
+
+  fileprivate func controlsDidRequestLiveEdge(
+    _ controls: DailymotionControlsView
+  ) {
+    guard
+      !state.isAdPlaying,
+      let liveEdge = state.seekableEnd
+    else {
+      return
+    }
+    sendCommand("goLive", value: max(0, liveEdge - 0.25))
+  }
+
+  fileprivate func controls(
+    _ controls: DailymotionControlsView,
+    didSelectRate rate: Double
+  ) {
+    guard !state.isAdPlaying else { return }
+    sendCommand("rate", value: rate)
+  }
+
+  fileprivate func controls(
+    _ controls: DailymotionControlsView,
+    didSetVolume volume: Double
+  ) {
+    sendCommand("volume", value: volume)
   }
 }
 
