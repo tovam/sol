@@ -6,14 +6,48 @@ enum PreferredScreen {
   case withMouse
 }
 
+private enum PresentationPhase {
+  case hidden
+  case opening
+  case visible
+  case closing
+}
+
+private enum FrameAnimationCurve {
+  case easeIn
+  case easeOut
+  case easeInOut
+
+  func value(at progress: CGFloat) -> CGFloat {
+    let t = min(max(progress, 0), 1)
+    switch self {
+    case .easeIn:
+      return t * t * t
+    case .easeOut:
+      let inverse = 1 - t
+      return 1 - inverse * inverse * inverse
+    case .easeInOut:
+      if t < 0.5 {
+        return 4 * t * t * t
+      }
+      let inverse = -2 * t + 2
+      return 1 - inverse * inverse * inverse / 2
+    }
+  }
+}
+
 @objc class PanelManager: NSObject {
   let baseSize = NSSize(width: 680, height: 450)
   public var preferredScreen: PreferredScreen = .frontmost
   private let mainWindow: Panel = Panel(contentRect: .zero)
   private var rootView: NSView?
   private var searchWindowPosition = NSPoint(x: 50, y: 20)
-  private var currentContentSize = NSSize(width: 680, height: 450)
-  private let openScaleAnimationKey = "sol.open.scale"
+  private var currentContentSize = NSSize(width: 680, height: 64)
+  private var presentationPhase: PresentationPhase = .hidden
+  private var restingFrame: NSRect?
+  private var pendingPresentationFrame: NSRect?
+  private var frameAnimationTimer: Timer?
+  private var frameAnimationGeneration = 0
   private var resizeAnimationGeneration = 0
   private var resizeTargetFrame: NSRect?
 
@@ -22,6 +56,7 @@ enum PreferredScreen {
   public func setRootView(_ rootView: NSView) {
     mainWindow.installRootView(rootView)
     self.rootView = rootView
+    resizeForCurrentContentSize()
   }
 
   func setGlassAppearance(
@@ -51,11 +86,22 @@ enum PreferredScreen {
       y: min(max(y, 0), 100)
     )
 
-    guard mainWindow.isVisible, let screen = getPreferredScreen() else {
+    guard let screen = getPreferredScreen() else {
       return
     }
 
-    mainWindow.setFrameOrigin(positionedOrigin(for: mainWindow.frame.size, on: screen))
+    let targetSize = restingFrame?.size ?? mainWindow.frame.size
+    let frame = NSRect(
+      origin: positionedOrigin(for: targetSize, on: screen),
+      size: targetSize
+    )
+    restingFrame = frame
+    if presentationPhase == .opening || presentationPhase == .closing {
+      pendingPresentationFrame = frame
+      return
+    }
+    stopFrameAnimation()
+    mainWindow.setFrame(frame, display: mainWindow.isVisible)
   }
 
   private func positionedOrigin(for windowSize: NSSize, on screen: NSScreen) -> NSPoint {
@@ -95,6 +141,12 @@ enum PreferredScreen {
     )
     resizeAnimationGeneration += 1
     resizeTargetFrame = nil
+    restingFrame = frame
+    if presentationPhase == .opening || presentationPhase == .closing {
+      pendingPresentationFrame = frame
+      return
+    }
+    stopFrameAnimation()
     mainWindow.setFrame(frame, display: mainWindow.isVisible)
     mainWindow.layoutInstalledRootView()
   }
@@ -109,57 +161,189 @@ enum PreferredScreen {
       return
     }
 
-    let shouldAnimate = shouldAnimateOpening()
-    mainWindow.contentView?.layer?.removeAnimation(forKey: openScaleAnimationKey)
-    mainWindow.alphaValue = shouldAnimate ? 0 : 1
-    mainWindow.setFrameOrigin(positionedOrigin(for: mainWindow.frame.size, on: screen))
-
-    mainWindow.setIsVisible(true)
-
-    mainWindow.makeKeyAndOrderFront(self)
-
-    if shouldAnimate {
-      animateOpening()
-    }
-
-    SolEmitter.sharedInstance.onShow(target: nil)
-  }
-
-  @objc func hideWindow() {
-    mainWindow.contentView?.layer?.removeAnimation(forKey: openScaleAnimationKey)
-    mainWindow.alphaValue = 1
-    mainWindow.setIsVisible(false)
-    SolEmitter.sharedInstance.onHide()
-    HotKeyManager.shared.settingsHotKey.isPaused = true
-  }
-
-  private func shouldAnimateOpening() -> Bool {
-    return !mainWindow.isVisible
-      && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-      && mainWindow.frame.width > 1
-      && mainWindow.frame.height > 1
-      && mainWindow.contentView?.layer != nil
-  }
-
-  private func animateOpening() {
-    guard let layer = mainWindow.contentView?.layer else {
-      mainWindow.alphaValue = 1
+    if presentationPhase == .visible || presentationPhase == .opening {
+      mainWindow.makeKeyAndOrderFront(self)
       return
     }
 
-    let timingFunction = CAMediaTimingFunction(controlPoints: 0.16, 1, 0.3, 1)
-    let scale = CABasicAnimation(keyPath: "transform.scale")
-    scale.fromValue = 1.022
-    scale.toValue = 1
-    scale.duration = 0.16
-    scale.timingFunction = timingFunction
-    layer.add(scale, forKey: openScaleAnimationKey)
+    let wasClosing = presentationPhase == .closing
+    stopFrameAnimation()
+    pendingPresentationFrame = nil
 
-    NSAnimationContext.runAnimationGroup { context in
-      context.duration = 0.09
-      context.timingFunction = timingFunction
-      mainWindow.animator().alphaValue = 1
+    var finalFrame = restingFrame ?? mainWindow.frame
+    finalFrame.origin = positionedOrigin(for: finalFrame.size, on: screen)
+    restingFrame = finalFrame
+
+    let shouldAnimate = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+      && finalFrame.width > 1
+      && finalFrame.height > 1
+
+    presentationPhase = .opening
+    if !wasClosing {
+      mainWindow.setFrame(openingFrame(around: finalFrame), display: false)
+      mainWindow.alphaValue = shouldAnimate ? 0.62 : 1
     }
+    mainWindow.setIsVisible(true)
+    mainWindow.makeKeyAndOrderFront(self)
+    mainWindow.displayIfNeeded()
+    SolEmitter.sharedInstance.onShow(target: nil)
+
+    guard shouldAnimate else {
+      mainWindow.setFrame(finalFrame, display: true)
+      mainWindow.alphaValue = 1
+      mainWindow.layoutInstalledRootView()
+      presentationPhase = .visible
+      applyPendingPresentationFrame()
+      return
+    }
+
+    // Let AppKit present the slightly larger initial frame once before the
+    // contraction starts; otherwise both states can be coalesced in one draw.
+    DispatchQueue.main.async { [weak self] in
+      guard let self, self.presentationPhase == .opening else { return }
+      self.animateFrame(
+        to: finalFrame,
+        alpha: 1,
+        duration: 0.2,
+        curve: .easeOut
+      ) { [weak self] in
+        guard let self, self.presentationPhase == .opening else { return }
+        self.presentationPhase = .visible
+        self.applyPendingPresentationFrame()
+      }
+    }
+  }
+
+  @objc func hideWindow() {
+    guard presentationPhase != .hidden, presentationPhase != .closing else {
+      return
+    }
+
+    stopFrameAnimation()
+    presentationPhase = .closing
+    pendingPresentationFrame = nil
+    HotKeyManager.shared.settingsHotKey.isPaused = true
+
+    let shouldAnimate = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+      && mainWindow.frame.width > 1
+      && mainWindow.frame.height > 1
+    guard shouldAnimate else {
+      finishHiding()
+      return
+    }
+
+    animateFrame(
+      to: closingFrame(around: restingFrame ?? mainWindow.frame),
+      alpha: 0,
+      duration: 0.085,
+      curve: .easeIn
+    ) { [weak self] in
+      guard let self, self.presentationPhase == .closing else { return }
+      self.finishHiding()
+    }
+  }
+
+  private func finishHiding() {
+    stopFrameAnimation()
+    mainWindow.setIsVisible(false)
+    mainWindow.alphaValue = 1
+    presentationPhase = .hidden
+    pendingPresentationFrame = nil
+    SolEmitter.sharedInstance.onHide()
+  }
+
+  private func openingFrame(around frame: NSRect) -> NSRect {
+    return scaledFrame(frame, widthScale: 1.026, heightScale: 1.018)
+  }
+
+  private func closingFrame(around frame: NSRect) -> NSRect {
+    return scaledFrame(frame, widthScale: 1.018, heightScale: 1.012)
+  }
+
+  private func scaledFrame(
+    _ frame: NSRect,
+    widthScale: CGFloat,
+    heightScale: CGFloat
+  ) -> NSRect {
+    let size = NSSize(
+      width: frame.width * widthScale,
+      height: frame.height * heightScale
+    )
+    return NSRect(
+      x: frame.midX - size.width / 2,
+      y: frame.midY - size.height / 2,
+      width: size.width,
+      height: size.height
+    )
+  }
+
+  private func animateFrame(
+    to targetFrame: NSRect,
+    alpha targetAlpha: CGFloat,
+    duration: TimeInterval,
+    curve: FrameAnimationCurve,
+    completion: @escaping () -> Void
+  ) {
+    stopFrameAnimation()
+    let startFrame = mainWindow.frame
+    let startAlpha = mainWindow.alphaValue
+    let startTime = CACurrentMediaTime()
+    frameAnimationGeneration += 1
+    let generation = frameAnimationGeneration
+
+    let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] timer in
+      guard let self, self.frameAnimationGeneration == generation else {
+        timer.invalidate()
+        return
+      }
+
+      let elapsed = CACurrentMediaTime() - startTime
+      let rawProgress = CGFloat(min(max(elapsed / duration, 0), 1))
+      let progress = curve.value(at: rawProgress)
+      let frame = self.interpolatedFrame(from: startFrame, to: targetFrame, progress: progress)
+      self.mainWindow.setFrame(frame, display: true)
+      self.mainWindow.alphaValue = startAlpha + (targetAlpha - startAlpha) * progress
+      self.mainWindow.layoutInstalledRootView()
+
+      guard rawProgress >= 1 else { return }
+      timer.invalidate()
+      if self.frameAnimationTimer === timer {
+        self.frameAnimationTimer = nil
+      }
+      self.mainWindow.setFrame(targetFrame, display: true)
+      self.mainWindow.alphaValue = targetAlpha
+      self.mainWindow.layoutInstalledRootView()
+      completion()
+    }
+
+    frameAnimationTimer = timer
+    RunLoop.main.add(timer, forMode: .common)
+  }
+
+  private func stopFrameAnimation() {
+    frameAnimationGeneration += 1
+    frameAnimationTimer?.invalidate()
+    frameAnimationTimer = nil
+  }
+
+  private func interpolatedFrame(
+    from start: NSRect,
+    to target: NSRect,
+    progress: CGFloat
+  ) -> NSRect {
+    return NSRect(
+      x: start.origin.x + (target.origin.x - start.origin.x) * progress,
+      y: start.origin.y + (target.origin.y - start.origin.y) * progress,
+      width: start.width + (target.width - start.width) * progress,
+      height: start.height + (target.height - start.height) * progress
+    )
+  }
+
+  private func applyPendingPresentationFrame() {
+    guard let frame = pendingPresentationFrame else { return }
+    pendingPresentationFrame = nil
+    guard let screen = getPreferredScreen() else { return }
+    setSearchFrame(frame, on: screen)
   }
 
   @objc func resetSize() {
@@ -167,6 +351,12 @@ enum PreferredScreen {
     let size = mainWindow.windowSize(forContentSize: baseSize)
     let origin = getPreferredScreen().map { positionedOrigin(for: size, on: $0) } ?? .zero
     let frame = NSRect(origin: origin, size: size)
+    restingFrame = frame
+    if presentationPhase == .opening || presentationPhase == .closing {
+      pendingPresentationFrame = frame
+      return
+    }
+    stopFrameAnimation()
     mainWindow.setFrame(frame, display: false)
     mainWindow.layoutInstalledRootView()
   }
@@ -191,6 +381,11 @@ enum PreferredScreen {
       origin: positionedOrigin(for: windowSize, on: screen),
       size: windowSize
     )
+    restingFrame = frame
+    if presentationPhase == .opening || presentationPhase == .closing {
+      pendingPresentationFrame = frame
+      return
+    }
     setSearchFrame(frame, on: screen)
   }
 
@@ -261,12 +456,18 @@ enum PreferredScreen {
     let origin = getPreferredScreen().map { positionedOrigin(for: size, on: $0) } ?? .zero
 
     let frame = NSRect(origin: origin, size: size)
+    restingFrame = frame
+    if presentationPhase == .opening || presentationPhase == .closing {
+      pendingPresentationFrame = frame
+      return
+    }
+    stopFrameAnimation()
     mainWindow.setFrame(frame, display: false)
     mainWindow.layoutInstalledRootView()
   }
 
   func toggle() {
-    if mainWindow.isVisible {
+    if presentationPhase == .visible || presentationPhase == .opening {
       hideWindow()
     } else {
       showWindow()
