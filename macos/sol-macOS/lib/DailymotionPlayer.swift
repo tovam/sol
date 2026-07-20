@@ -465,11 +465,17 @@ private final class DailymotionControlsView: NSVisualEffectView,
   private let playbackGroup = NSStackView()
   private let timelineGroup = NSStackView()
   private let liveGroup = NSStackView()
-  private let settingsGroup = NSStackView()
+  private let audioGroup = NSStackView()
+  private let playBackwardSeparator = NSBox()
+  private let backwardForwardSeparator = NSBox()
+  private let clockLiveSeparator = NSBox()
   private let playbackSeparator = NSBox()
   private let timelineSeparator = NSBox()
   private let liveSeparator = NSBox()
-  private let settingsSeparator = NSBox()
+  private let rateSeparator = NSBox()
+  private let qualitySeparator = NSBox()
+  private let audioSeparator = NSBox()
+  private let compactSpacer = NSView()
   private let primaryRow = NSStackView()
   private let secondaryRow = NSStackView()
   private let rowsStack = NSStackView()
@@ -478,8 +484,9 @@ private final class DailymotionControlsView: NSVisualEffectView,
   private var displayedQualityValues: [String] = []
   private let rates = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
 
-  private static let liveTwoRowBreakpoint: CGFloat = 600
-  private static let regularTwoRowBreakpoint: CGFloat = 480
+  private static let liveTwoRowBreakpoint: CGFloat = 640
+  private static let regularTwoRowBreakpoint: CGFloat = 528
+  private static let rowModeHysteresis: CGFloat = 32
   fileprivate static let singleRowHeight: CGFloat = 36
   fileprivate static let twoRowHeight: CGFloat = 68
 
@@ -531,7 +538,7 @@ private final class DailymotionControlsView: NSVisualEffectView,
     qualityPopUp.action = #selector(changeQuality)
     qualityPopUp.controlSize = .small
     showQualityStatus(
-      "Quality…",
+      "…",
       toolTip: "Waiting for Dailymotion video quality information"
     )
 
@@ -575,25 +582,38 @@ private final class DailymotionControlsView: NSVisualEffectView,
 
     configureHorizontalStack(
       playbackGroup,
-      views: [playButton, backwardButton, forwardButton]
+      views: [
+        playButton,
+        playBackwardSeparator,
+        backwardButton,
+        backwardForwardSeparator,
+        forwardButton,
+      ]
     )
     configureHorizontalStack(
       timelineGroup,
-      views: [seekSlider, timeLabel]
+      views: [seekSlider, timeLabel],
+      spacing: 6
     )
     configureHorizontalStack(
       liveGroup,
-      views: [clockTimeField, liveButton]
+      views: [clockTimeField, clockLiveSeparator, liveButton]
     )
     configureHorizontalStack(
-      settingsGroup,
-      views: [ratePopUp, qualityPopUp, volumeButton, volumeSlider]
+      audioGroup,
+      views: [volumeButton, volumeSlider],
+      spacing: 4
     )
     [
+      playBackwardSeparator,
+      backwardForwardSeparator,
+      clockLiveSeparator,
       playbackSeparator,
       timelineSeparator,
       liveSeparator,
-      settingsSeparator,
+      rateSeparator,
+      qualitySeparator,
+      audioSeparator,
     ].forEach { configureSeparator($0) }
     configureHorizontalStack(
       primaryRow,
@@ -604,8 +624,12 @@ private final class DailymotionControlsView: NSVisualEffectView,
         timelineSeparator,
         liveGroup,
         liveSeparator,
-        settingsGroup,
-        settingsSeparator,
+        ratePopUp,
+        rateSeparator,
+        qualityPopUp,
+        qualitySeparator,
+        audioGroup,
+        audioSeparator,
         fullscreenButton,
       ]
     )
@@ -637,8 +661,8 @@ private final class DailymotionControlsView: NSVisualEffectView,
       .defaultLow,
       for: .horizontal
     )
-    settingsGroup.setContentHuggingPriority(.defaultLow, for: .horizontal)
-    settingsGroup.setContentCompressionResistancePriority(
+    compactSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+    compactSpacer.setContentCompressionResistancePriority(
       .defaultLow,
       for: .horizontal
     )
@@ -657,27 +681,28 @@ private final class DailymotionControlsView: NSVisualEffectView,
       rowsStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
       rowsStack.topAnchor.constraint(equalTo: topAnchor, constant: 4),
       rowsStack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
-      playButton.widthAnchor.constraint(equalToConstant: 28),
-      backwardButton.widthAnchor.constraint(equalToConstant: 34),
-      forwardButton.widthAnchor.constraint(equalToConstant: 34),
+      playButton.widthAnchor.constraint(equalToConstant: 32),
+      backwardButton.widthAnchor.constraint(equalToConstant: 40),
+      forwardButton.widthAnchor.constraint(equalToConstant: 40),
       seekSlider.widthAnchor.constraint(greaterThanOrEqualToConstant: 48),
       timeLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 58),
-      clockTimeField.widthAnchor.constraint(equalToConstant: 62),
-      liveButton.widthAnchor.constraint(equalToConstant: 42),
-      ratePopUp.widthAnchor.constraint(equalToConstant: 52),
-      qualityPopUp.widthAnchor.constraint(equalToConstant: 64),
-      volumeButton.widthAnchor.constraint(equalToConstant: 26),
-      volumeSlider.widthAnchor.constraint(greaterThanOrEqualToConstant: 32),
-      fullscreenButton.widthAnchor.constraint(equalToConstant: 28),
-      playButton.heightAnchor.constraint(equalToConstant: 26),
-      backwardButton.heightAnchor.constraint(equalToConstant: 26),
-      forwardButton.heightAnchor.constraint(equalToConstant: 26),
-      clockTimeField.heightAnchor.constraint(equalToConstant: 26),
-      liveButton.heightAnchor.constraint(equalToConstant: 26),
-      ratePopUp.heightAnchor.constraint(equalToConstant: 26),
-      qualityPopUp.heightAnchor.constraint(equalToConstant: 26),
-      volumeButton.heightAnchor.constraint(equalToConstant: 26),
-      fullscreenButton.heightAnchor.constraint(equalToConstant: 26),
+      clockTimeField.widthAnchor.constraint(equalToConstant: 64),
+      liveButton.widthAnchor.constraint(equalToConstant: 46),
+      ratePopUp.widthAnchor.constraint(equalToConstant: 80),
+      qualityPopUp.widthAnchor.constraint(equalToConstant: 80),
+      volumeButton.widthAnchor.constraint(equalToConstant: 32),
+      volumeSlider.widthAnchor.constraint(greaterThanOrEqualToConstant: 40),
+      volumeSlider.widthAnchor.constraint(lessThanOrEqualToConstant: 96),
+      fullscreenButton.widthAnchor.constraint(equalToConstant: 32),
+      playButton.heightAnchor.constraint(equalToConstant: 28),
+      backwardButton.heightAnchor.constraint(equalToConstant: 28),
+      forwardButton.heightAnchor.constraint(equalToConstant: 28),
+      clockTimeField.heightAnchor.constraint(equalToConstant: 28),
+      liveButton.heightAnchor.constraint(equalToConstant: 28),
+      ratePopUp.heightAnchor.constraint(equalToConstant: 28),
+      qualityPopUp.heightAnchor.constraint(equalToConstant: 28),
+      volumeButton.heightAnchor.constraint(equalToConstant: 28),
+      fullscreenButton.heightAnchor.constraint(equalToConstant: 28),
     ])
 
     render(DailymotionBridgeState())
@@ -701,23 +726,29 @@ private final class DailymotionControlsView: NSVisualEffectView,
     let breakpoint = liveGroup.isHidden
       ? Self.regularTwoRowBreakpoint
       : Self.liveTwoRowBreakpoint
-    return width < breakpoint ? Self.twoRowHeight : Self.singleRowHeight
+    let singleRowThreshold = breakpoint
+      + (usesTwoRows ? Self.rowModeHysteresis : 0)
+    return width < singleRowThreshold
+      ? Self.twoRowHeight
+      : Self.singleRowHeight
   }
 
   private func configureHorizontalStack(
     _ stack: NSStackView,
-    views: [NSView]
+    views: [NSView],
+    spacing: CGFloat = 0
   ) {
     stack.orientation = .horizontal
     stack.alignment = .centerY
     stack.distribution = .fill
-    stack.spacing = 4
+    stack.spacing = spacing
     stack.detachesHiddenViews = true
     views.forEach(stack.addArrangedSubview)
   }
 
   private func configureSeparator(_ separator: NSBox) {
     separator.boxType = .separator
+    separator.alphaValue = 0.35
     separator.translatesAutoresizingMaskIntoConstraints = false
     NSLayoutConstraint.activate([
       separator.widthAnchor.constraint(equalToConstant: 1),
@@ -740,11 +771,16 @@ private final class DailymotionControlsView: NSVisualEffectView,
       playbackGroup,
       timelineGroup,
       liveGroup,
-      settingsGroup,
+      ratePopUp,
+      qualityPopUp,
+      audioGroup,
+      compactSpacer,
       playbackSeparator,
       timelineSeparator,
       liveSeparator,
-      settingsSeparator,
+      rateSeparator,
+      qualitySeparator,
+      audioSeparator,
       fullscreenButton,
     ]
     for view in movableViews {
@@ -762,10 +798,15 @@ private final class DailymotionControlsView: NSVisualEffectView,
       primaryRow.addArrangedSubview(playbackSeparator)
       primaryRow.addArrangedSubview(timelineGroup)
       primaryRow.addArrangedSubview(timelineSeparator)
-      primaryRow.addArrangedSubview(fullscreenButton)
+      primaryRow.addArrangedSubview(ratePopUp)
       secondaryRow.addArrangedSubview(liveGroup)
       secondaryRow.addArrangedSubview(liveSeparator)
-      secondaryRow.addArrangedSubview(settingsGroup)
+      secondaryRow.addArrangedSubview(qualityPopUp)
+      secondaryRow.addArrangedSubview(qualitySeparator)
+      secondaryRow.addArrangedSubview(compactSpacer)
+      secondaryRow.addArrangedSubview(audioGroup)
+      secondaryRow.addArrangedSubview(audioSeparator)
+      secondaryRow.addArrangedSubview(fullscreenButton)
       secondaryRow.isHidden = false
       toolbarHeightConstraint?.constant = Self.twoRowHeight
     } else {
@@ -775,8 +816,12 @@ private final class DailymotionControlsView: NSVisualEffectView,
       primaryRow.addArrangedSubview(timelineSeparator)
       primaryRow.addArrangedSubview(liveGroup)
       primaryRow.addArrangedSubview(liveSeparator)
-      primaryRow.addArrangedSubview(settingsGroup)
-      primaryRow.addArrangedSubview(settingsSeparator)
+      primaryRow.addArrangedSubview(ratePopUp)
+      primaryRow.addArrangedSubview(rateSeparator)
+      primaryRow.addArrangedSubview(qualityPopUp)
+      primaryRow.addArrangedSubview(qualitySeparator)
+      primaryRow.addArrangedSubview(audioGroup)
+      primaryRow.addArrangedSubview(audioSeparator)
       primaryRow.addArrangedSubview(fullscreenButton)
       secondaryRow.isHidden = true
       toolbarHeightConstraint?.constant = Self.singleRowHeight
@@ -802,7 +847,10 @@ private final class DailymotionControlsView: NSVisualEffectView,
   }
 
   func render(_ state: DailymotionBridgeState) {
-    defer { updateLiveGroupVisibility() }
+    defer {
+      updateTransportSeparatorVisibility()
+      updateLiveGroupVisibility()
+    }
     let ready = state.ready && state.error == nil
     setPlaySymbol(state.isPlaying ? "pause.fill" : "play.fill")
     selectNearestRate(to: state.playbackRate)
@@ -935,6 +983,8 @@ private final class DailymotionControlsView: NSVisualEffectView,
   }
 
   private func updateLiveGroupVisibility() {
+    clockLiveSeparator.isHidden = clockTimeField.isHidden
+      || liveButton.isHidden
     let shouldHide = clockTimeField.isHidden && liveButton.isHidden
     var visibilityChanged = false
     if liveGroup.isHidden != shouldHide {
@@ -948,6 +998,12 @@ private final class DailymotionControlsView: NSVisualEffectView,
     if visibilityChanged {
       needsLayout = true
     }
+  }
+
+  private func updateTransportSeparatorVisibility() {
+    playBackwardSeparator.isHidden = backwardButton.isHidden
+    backwardForwardSeparator.isHidden = backwardButton.isHidden
+      || forwardButton.isHidden
   }
 
   private func updateClockTimeFieldVisibility(
@@ -1002,7 +1058,7 @@ private final class DailymotionControlsView: NSVisualEffectView,
   ) {
     button.target = self
     button.action = action
-    button.bezelStyle = .texturedRounded
+    button.isBordered = false
     button.controlSize = .small
     button.font = .systemFont(ofSize: 11, weight: .medium)
     button.toolTip = toolTip
@@ -1083,7 +1139,7 @@ private final class DailymotionControlsView: NSVisualEffectView,
   ) {
     guard state.backend == "sdk" else {
       showQualityStatus(
-        "Quality —",
+        "—",
         toolTip: "Video quality is unavailable for this Dailymotion embed"
       )
       return
@@ -1091,7 +1147,7 @@ private final class DailymotionControlsView: NSVisualEffectView,
 
     guard ready else {
       showQualityStatus(
-        "Quality…",
+        "…",
         toolTip: "Waiting for Dailymotion video quality information"
       )
       return
@@ -1105,7 +1161,7 @@ private final class DailymotionControlsView: NSVisualEffectView,
     let values = ["default"] + qualities
     guard values.count > 1 else {
       showQualityStatus(
-        "Quality…",
+        "…",
         toolTip: "No selectable video quality is available yet"
       )
       return
