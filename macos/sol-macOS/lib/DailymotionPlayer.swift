@@ -205,13 +205,205 @@ private protocol DailymotionControlsViewDelegate: AnyObject {
   func controlsDidToggleFullscreen(_ controls: DailymotionControlsView)
 }
 
-private final class DailymotionTrackingSlider: NSSlider {
+private final class DailymotionTrackingSlider: NSControl {
+  private static let trackHeight: CGFloat = 8
+
   private(set) var isUserTracking = false
+  private(set) var minValue: Double
+  private(set) var maxValue: Double
+  var sendsContinuously = false
+  var keyboardStep: Double?
+
+  private var storedValue: Double
+
+  override var doubleValue: Double {
+    get { storedValue }
+    set { setValue(newValue) }
+  }
+
+  override var isEnabled: Bool {
+    didSet {
+      needsDisplay = true
+      setAccessibilityEnabled(isEnabled)
+    }
+  }
+
+  override var acceptsFirstResponder: Bool { isEnabled }
+
+  override var intrinsicContentSize: NSSize {
+    NSSize(width: NSView.noIntrinsicMetric, height: 18)
+  }
+
+  init(
+    value: Double,
+    minValue: Double,
+    maxValue: Double,
+    target: AnyObject?,
+    action: Selector?
+  ) {
+    let safeMinimum = minValue.isFinite ? minValue : 0
+    let safeMaximum = maxValue.isFinite
+      ? max(maxValue, safeMinimum)
+      : safeMinimum
+    self.minValue = safeMinimum
+    self.maxValue = safeMaximum
+    storedValue = min(
+      max(value.isFinite ? value : safeMinimum, safeMinimum),
+      safeMaximum
+    )
+    super.init(frame: .zero)
+    self.target = target
+    self.action = action
+    focusRingType = .none
+    setAccessibilityElement(true)
+    setAccessibilityRole(.slider)
+    updateAccessibilityValues()
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) has not been implemented")
+  }
+
+  func setRange(minimum: Double, maximum: Double) {
+    let safeMinimum = minimum.isFinite ? minimum : 0
+    let safeMaximum = maximum.isFinite
+      ? max(maximum, safeMinimum)
+      : safeMinimum
+    minValue = safeMinimum
+    maxValue = safeMaximum
+    setValue(storedValue)
+    needsDisplay = true
+    updateAccessibilityValues()
+  }
+
+  override func draw(_ dirtyRect: NSRect) {
+    super.draw(dirtyRect)
+    guard bounds.width > 0, bounds.height > 0 else { return }
+
+    let height = min(Self.trackHeight, bounds.height)
+    let trackRect = NSRect(
+      x: bounds.minX,
+      y: bounds.midY - height / 2,
+      width: bounds.width,
+      height: height
+    )
+    let trackPath = NSBezierPath(
+      roundedRect: trackRect,
+      xRadius: height / 2,
+      yRadius: height / 2
+    )
+    let backgroundColor = NSColor.tertiaryLabelColor.withAlphaComponent(
+      isEnabled ? 0.42 : 0.2
+    )
+    backgroundColor.setFill()
+    trackPath.fill()
+
+    let fraction = normalizedFraction
+    guard fraction > 0 else { return }
+
+    NSGraphicsContext.saveGraphicsState()
+    trackPath.addClip()
+    let fillRect = NSRect(
+      x: trackRect.minX,
+      y: trackRect.minY,
+      width: trackRect.width * CGFloat(fraction),
+      height: trackRect.height
+    )
+    NSColor.systemBlue.withAlphaComponent(isEnabled ? 1 : 0.35)
+      .setFill()
+    fillRect.fill()
+    NSGraphicsContext.restoreGraphicsState()
+  }
+
+  override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+    true
+  }
 
   override func mouseDown(with event: NSEvent) {
+    guard isEnabled else { return }
+    window?.makeFirstResponder(self)
     isUserTracking = true
-    super.mouseDown(with: event)
+    updateValue(with: event)
+    if sendsContinuously {
+      sendCurrentAction()
+    }
+  }
+
+  override func mouseDragged(with event: NSEvent) {
+    guard isEnabled, isUserTracking else { return }
+    updateValue(with: event)
+    if sendsContinuously {
+      sendCurrentAction()
+    }
+  }
+
+  override func mouseUp(with event: NSEvent) {
+    guard isUserTracking else { return }
+    updateValue(with: event)
+    sendCurrentAction()
     isUserTracking = false
+  }
+
+  override func keyDown(with event: NSEvent) {
+    let direction: Double
+    switch event.keyCode {
+    case 123, 125:
+      direction = -1
+    case 124, 126:
+      direction = 1
+    default:
+      super.keyDown(with: event)
+      return
+    }
+
+    let range = maxValue - minValue
+    let step = keyboardStep ?? max(range / 100, 0.001)
+    setValue(storedValue + direction * step, notifyAccessibility: true)
+    sendCurrentAction()
+  }
+
+  private var normalizedFraction: Double {
+    let range = maxValue - minValue
+    guard range.isFinite, range > 0 else { return 0 }
+    return min(max((storedValue - minValue) / range, 0), 1)
+  }
+
+  private func updateValue(with event: NSEvent) {
+    guard bounds.width > 0 else { return }
+    let location = convert(event.locationInWindow, from: nil)
+    let fraction = min(
+      max((location.x - bounds.minX) / bounds.width, 0),
+      1
+    )
+    let value = minValue + Double(fraction) * (maxValue - minValue)
+    setValue(value, notifyAccessibility: true)
+  }
+
+  private func setValue(
+    _ value: Double,
+    notifyAccessibility: Bool = false
+  ) {
+    let safeValue = value.isFinite ? value : minValue
+    let clampedValue = min(max(safeValue, minValue), maxValue)
+    guard storedValue != clampedValue else { return }
+    storedValue = clampedValue
+    needsDisplay = true
+    setAccessibilityValue(NSNumber(value: clampedValue))
+    if notifyAccessibility {
+      NSAccessibility.post(element: self, notification: .valueChanged)
+    }
+  }
+
+  private func updateAccessibilityValues() {
+    setAccessibilityMinValue(NSNumber(value: minValue))
+    setAccessibilityMaxValue(NSNumber(value: maxValue))
+    setAccessibilityValue(NSNumber(value: storedValue))
+  }
+
+  private func sendCurrentAction() {
+    guard let action else { return }
+    sendAction(action, to: target)
   }
 }
 
@@ -297,9 +489,10 @@ private final class DailymotionControlsView: NSVisualEffectView,
 
     seekSlider.target = self
     seekSlider.action = #selector(seek)
-    seekSlider.isContinuous = false
-    seekSlider.controlSize = .small
+    seekSlider.sendsContinuously = false
+    seekSlider.keyboardStep = 5
     seekSlider.toolTip = "Playback position"
+    seekSlider.setAccessibilityLabel("Playback position")
 
     ratePopUp.addItems(withTitles: rates.map(rateTitle))
     ratePopUp.selectItem(at: 3)
@@ -332,9 +525,10 @@ private final class DailymotionControlsView: NSVisualEffectView,
 
     volumeSlider.target = self
     volumeSlider.action = #selector(changeVolume)
-    volumeSlider.isContinuous = false
-    volumeSlider.controlSize = .small
+    volumeSlider.sendsContinuously = true
+    volumeSlider.keyboardStep = 0.05
     volumeSlider.toolTip = "Volume"
+    volumeSlider.setAccessibilityLabel("Volume")
 
     timeLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .medium)
     timeLabel.textColor = .secondaryLabelColor
@@ -787,8 +981,7 @@ private final class DailymotionControlsView: NSVisualEffectView,
   ) {
     let safeStart = start.isFinite ? start : 0
     let safeEnd = end.isFinite ? max(end, safeStart + 0.001) : safeStart + 1
-    seekSlider.minValue = safeStart
-    seekSlider.maxValue = safeEnd
+    seekSlider.setRange(minimum: safeStart, maximum: safeEnd)
     if !seekSlider.isUserTracking {
       seekSlider.doubleValue = clamped(
         position,
