@@ -4,6 +4,9 @@ import WebKit
 private let dailymotionBridgeName = "solDailymotion"
 private let dailymotionMinimumDVRWindow = 10.0
 private let dailymotionMaximumTimelineClockDrift = 10 * 60.0
+private let dailymotionSupportedQualityValues = [
+  "240", "380", "480", "720", "1080", "1440", "2160",
+]
 let dailymotionPlayerWindowIdentifier = NSUserInterfaceItemIdentifier(
   "com.ospfranco.sol.dailymotion-player"
 )
@@ -133,6 +136,8 @@ private struct DailymotionBridgeState {
   var mediaTimelineStartDate: Date?
   var seekableObservedAt: Date?
   var playbackRate = 1.0
+  var availableQualities: [String] = []
+  var selectedQuality: String?
   var volume = 1.0
   var isAdPlaying = false
   var adTime = 0.0
@@ -151,7 +156,12 @@ private protocol DailymotionControlsViewDelegate: AnyObject {
   )
   func controlsDidRequestLiveEdge(_ controls: DailymotionControlsView)
   func controls(_ controls: DailymotionControlsView, didSelectRate rate: Double)
+  func controls(
+    _ controls: DailymotionControlsView,
+    didSelectQuality quality: String
+  )
   func controls(_ controls: DailymotionControlsView, didSetVolume volume: Double)
+  func controlsDidToggleFullscreen(_ controls: DailymotionControlsView)
 }
 
 private final class DailymotionTrackingSlider: NSSlider {
@@ -183,6 +193,7 @@ private final class DailymotionControlsView: NSVisualEffectView,
   private let clockTimeField = NSTextField(string: "")
   private let liveButton = NSButton(title: "LIVE", target: nil, action: nil)
   private let ratePopUp = NSPopUpButton(frame: .zero, pullsDown: false)
+  private let qualityPopUp = NSPopUpButton(frame: .zero, pullsDown: false)
   private let volumeImage = NSImageView()
   private let volumeSlider = DailymotionTrackingSlider(
     value: 1,
@@ -191,6 +202,7 @@ private final class DailymotionControlsView: NSVisualEffectView,
     target: nil,
     action: nil
   )
+  private let fullscreenButton = NSButton()
   private let playbackGroup = NSStackView()
   private let timelineGroup = NSStackView()
   private let liveGroup = NSStackView()
@@ -201,9 +213,10 @@ private final class DailymotionControlsView: NSVisualEffectView,
   private let rowsStack = NSStackView()
   private var toolbarHeightConstraint: NSLayoutConstraint?
   private var usesTwoRows = false
+  private var displayedQualityValues: [String] = []
   private let rates = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
 
-  private static let twoRowBreakpoint: CGFloat = 540
+  private static let twoRowBreakpoint: CGFloat = 660
   private static let singleRowHeight: CGFloat = 44
   private static let twoRowHeight: CGFloat = 72
 
@@ -250,6 +263,21 @@ private final class DailymotionControlsView: NSVisualEffectView,
     ratePopUp.controlSize = .small
     ratePopUp.toolTip = "Playback speed"
 
+    qualityPopUp.target = self
+    qualityPopUp.action = #selector(changeQuality)
+    qualityPopUp.controlSize = .small
+    showQualityStatus(
+      "Quality…",
+      toolTip: "Waiting for Dailymotion video quality information"
+    )
+
+    configureButton(
+      fullscreenButton,
+      action: #selector(toggleFullscreen),
+      toolTip: "Enter full screen"
+    )
+    setFullscreen(false)
+
     volumeImage.image = NSImage(
       systemSymbolName: "speaker.wave.2.fill",
       accessibilityDescription: "Volume"
@@ -294,7 +322,7 @@ private final class DailymotionControlsView: NSVisualEffectView,
     )
     configureHorizontalStack(
       settingsGroup,
-      views: [ratePopUp, volumeImage, volumeSlider]
+      views: [ratePopUp, qualityPopUp, volumeImage, volumeSlider, fullscreenButton]
     )
     configureHorizontalStack(
       primaryRow,
@@ -351,8 +379,10 @@ private final class DailymotionControlsView: NSVisualEffectView,
       clockTimeField.widthAnchor.constraint(equalToConstant: 62),
       liveButton.widthAnchor.constraint(equalToConstant: 46),
       ratePopUp.widthAnchor.constraint(equalToConstant: 56),
+      qualityPopUp.widthAnchor.constraint(equalToConstant: 72),
       volumeImage.widthAnchor.constraint(equalToConstant: 16),
       volumeSlider.widthAnchor.constraint(equalToConstant: 45),
+      fullscreenButton.widthAnchor.constraint(equalToConstant: 28),
     ])
 
     render(DailymotionBridgeState())
@@ -431,6 +461,7 @@ private final class DailymotionControlsView: NSVisualEffectView,
       volumeSlider.doubleValue = clamped(state.volume, lower: 0, upper: 1)
     }
     setVolumeSymbol(muted: state.isMuted, volume: state.volume)
+    renderQualityControl(state, ready: ready)
 
     playButton.isEnabled = ready
     volumeSlider.isEnabled = ready
@@ -658,6 +689,96 @@ private final class DailymotionControlsView: NSVisualEffectView,
     }
   }
 
+  func setFullscreen(_ isFullscreen: Bool) {
+    let symbolName = isFullscreen
+      ? "arrow.down.right.and.arrow.up.left"
+      : "arrow.up.left.and.arrow.down.right"
+    fullscreenButton.image = NSImage(
+      systemSymbolName: symbolName,
+      accessibilityDescription: isFullscreen
+        ? "Exit full screen"
+        : "Enter full screen"
+    )
+    fullscreenButton.title = fullscreenButton.image == nil
+      ? (isFullscreen ? "Exit" : "Full")
+      : ""
+    fullscreenButton.toolTip = isFullscreen
+      ? "Exit full screen"
+      : "Enter full screen"
+  }
+
+  private func renderQualityControl(
+    _ state: DailymotionBridgeState,
+    ready: Bool
+  ) {
+    guard state.backend == "sdk" else {
+      showQualityStatus(
+        "Quality —",
+        toolTip: "Video quality is unavailable for this Dailymotion embed"
+      )
+      return
+    }
+
+    guard ready else {
+      showQualityStatus(
+        "Quality…",
+        toolTip: "Waiting for Dailymotion video quality information"
+      )
+      return
+    }
+
+    let qualities = Array(
+      dailymotionSupportedQualityValues
+        .filter(state.availableQualities.contains)
+        .reversed()
+    )
+    let values = ["default"] + qualities
+    guard values.count > 1 else {
+      showQualityStatus(
+        "Quality…",
+        toolTip: "No selectable video quality is available yet"
+      )
+      return
+    }
+
+    if values != displayedQualityValues {
+      qualityPopUp.removeAllItems()
+      for value in values {
+        qualityPopUp.addItem(
+          withTitle: value == "default" ? "Auto" : "\(value)p"
+        )
+        qualityPopUp.lastItem?.representedObject = value
+      }
+      displayedQualityValues = values
+    }
+
+    let selectedQuality = normalizedQuality(state.selectedQuality)
+    let selectedIndex = qualityPopUp.itemArray.firstIndex {
+      ($0.representedObject as? String) == selectedQuality
+    } ?? 0
+    qualityPopUp.selectItem(at: selectedIndex)
+    qualityPopUp.isEnabled = !state.isAdPlaying
+    qualityPopUp.toolTip = state.isAdPlaying
+      ? "Video quality cannot be changed during an ad"
+      : "Video quality"
+  }
+
+  private func showQualityStatus(_ title: String, toolTip: String) {
+    if displayedQualityValues != [title] {
+      qualityPopUp.removeAllItems()
+      qualityPopUp.addItem(withTitle: title)
+      displayedQualityValues = [title]
+    }
+    qualityPopUp.isEnabled = false
+    qualityPopUp.toolTip = toolTip
+  }
+
+  private func normalizedQuality(_ quality: String?) -> String {
+    let value = quality?.trimmingCharacters(in: .whitespacesAndNewlines)
+      .lowercased()
+    return value == "auto" || value == "default" ? "default" : value ?? "default"
+  }
+
   private func selectNearestRate(to rate: Double) {
     guard
       let index = rates.indices.min(by: {
@@ -745,12 +866,26 @@ private final class DailymotionControlsView: NSVisualEffectView,
     delegate?.controls(self, didSelectRate: rates[index])
   }
 
+  @objc private func changeQuality() {
+    guard
+      qualityPopUp.isEnabled,
+      let quality = qualityPopUp.selectedItem?.representedObject as? String
+    else {
+      return
+    }
+    delegate?.controls(self, didSelectQuality: quality)
+  }
+
   @objc private func changeVolume() {
     setVolumeSymbol(
       muted: volumeSlider.doubleValue <= 0,
       volume: volumeSlider.doubleValue
     )
     delegate?.controls(self, didSetVolume: volumeSlider.doubleValue)
+  }
+
+  @objc private func toggleFullscreen() {
+    delegate?.controlsDidToggleFullscreen(self)
   }
 }
 
@@ -805,6 +940,40 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     state = DailymotionBridgeState()
   }
 
+  func windowWillEnterFullScreen(_ notification: Notification) {
+    guard
+      let window = notification.object as? NSWindow,
+      let panel,
+      window === panel
+    else {
+      return
+    }
+    panel.level = .normal
+  }
+
+  func windowDidEnterFullScreen(_ notification: Notification) {
+    guard
+      let window = notification.object as? NSWindow,
+      let panel,
+      window === panel
+    else {
+      return
+    }
+    controlsView?.setFullscreen(true)
+  }
+
+  func windowDidExitFullScreen(_ notification: Notification) {
+    guard
+      let window = notification.object as? NSWindow,
+      let panel,
+      window === panel
+    else {
+      return
+    }
+    panel.level = .floating
+    controlsView?.setFullscreen(false)
+  }
+
   private func playerWindow() -> FloatingVideoPanel {
     if let panel {
       return panel
@@ -822,7 +991,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     panel.hidesOnDeactivate = false
     panel.hasShadow = true
     panel.isReleasedWhenClosed = false
-    panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+    panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenPrimary]
     panel.contentMinSize = NSSize(width: 320, height: 250)
     panel.center()
 
@@ -873,6 +1042,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     let controlsView = DailymotionControlsView(frame: .zero)
     controlsView.translatesAutoresizingMaskIntoConstraints = false
     controlsView.delegate = self
+    controlsView.setFullscreen(panel.styleMask.contains(.fullScreen))
 
     let contentView = NSView(frame: panel.contentView?.bounds ?? .zero)
     contentView.addSubview(controlsView)
@@ -1123,6 +1293,8 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     state.currentTime = finiteDouble(body["time"]) ?? state.currentTime
     state.duration = positiveFiniteDouble(body["duration"])
     state.playbackRate = finiteDouble(body["rate"]) ?? state.playbackRate
+    state.availableQualities = stringArray(body["qualities"])
+    state.selectedQuality = body["quality"] as? String
     state.volume = finiteDouble(body["volume"]).map {
       min(max($0, 0), 1)
     } ?? state.volume
@@ -1376,6 +1548,10 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     return value
   }
 
+  private func stringArray(_ value: Any?) -> [String] {
+    (value as? [Any])?.compactMap { $0 as? String } ?? []
+  }
+
   private func sendCommand(
     _ command: String,
     value: Double? = nil,
@@ -1494,6 +1670,56 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     }
   }
 
+  private func sendQualityCommand(
+    _ quality: String,
+    completion: ((Bool) -> Void)? = nil
+  ) {
+    guard
+      state.backend == "sdk",
+      quality == "default"
+        || dailymotionSupportedQualityValues.contains(quality),
+      let webView
+    else {
+      completion?(false)
+      return
+    }
+
+    executeTextCommand(
+      "quality",
+      value: quality,
+      in: nil,
+      webView: webView,
+      completion: completion
+    )
+  }
+
+  private func executeTextCommand(
+    _ command: String,
+    value: String,
+    in frame: WKFrameInfo?,
+    webView: WKWebView,
+    completion: ((Bool) -> Void)?
+  ) {
+    webView.callAsyncJavaScript(
+      """
+      return await window.__solDailymotionBridge?.command(command, value) ?? false;
+      """,
+      arguments: [
+        "command": command,
+        "value": value,
+      ],
+      in: frame,
+      in: .page
+    ) { result in
+      switch result {
+      case let .success(value):
+        completion?(self.bool(value) ?? false)
+      case .failure:
+        completion?(false)
+      }
+    }
+  }
+
   private func sdkPlayerHTML(
     playerID: String,
     videoID: String,
@@ -1555,6 +1781,14 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
                   time: number(state.videoTime),
                   duration: number(state.videoDuration),
                   rate: number(state.playerPlaybackSpeed),
+                  qualities: Array.isArray(state.videoQualitiesList)
+                    ? state.videoQualitiesList.filter(
+                      (quality) => typeof quality === "string"
+                    )
+                    : [],
+                  quality: typeof state.videoQuality === "string"
+                    ? state.videoQuality
+                    : null,
                   volume: number(state.playerVolume),
                   adPlaying: Boolean(state.adIsPlaying),
                   adTime: number(state.adTime),
@@ -1569,20 +1803,23 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
             window.__solDailymotionBridge = {
               async command(command, rawValue) {
                 if (!player) return false;
-                const value = Number(rawValue);
+                const numericValue = Number(rawValue);
                 try {
                   switch (command) {
                     case "play": await player.play(); break;
                     case "pause": await player.pause(); break;
-                    case "seek": await player.seek(value); break;
+                    case "seek": await player.seek(numericValue); break;
                     case "seekBy": {
                       const state = await player.getState();
-                      await player.seek((number(state.videoTime) ?? 0) + value);
+                      await player.seek(
+                        (number(state.videoTime) ?? 0) + numericValue
+                      );
                       break;
                     }
-                    case "goLive": await player.seek(value); break;
-                    case "rate": await player.setPlaybackSpeed(value); break;
-                    case "volume": await player.setVolume(value); break;
+                    case "goLive": await player.seek(numericValue); break;
+                    case "rate": await player.setPlaybackSpeed(numericValue); break;
+                    case "quality": await player.setQuality(String(rawValue)); break;
+                    case "volume": await player.setVolume(numericValue); break;
                     default: return false;
                   }
                   setTimeout(report, 0);
@@ -1605,6 +1842,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
                 "VIDEO_PLAYING", "VIDEO_PAUSE", "VIDEO_END",
                 "VIDEO_SEEKSTART", "VIDEO_SEEKEND", "VIDEO_BUFFERING",
                 "PLAYER_PLAYBACKSPEEDCHANGE", "PLAYER_VOLUMECHANGE",
+                "VIDEO_QUALITIESREADY", "VIDEO_QUALITYCHANGE",
                 "AD_START", "AD_END", "AD_TIMECHANGE", "PLAYER_ERROR",
               ];
               for (const name of eventNames) {
@@ -1983,9 +2221,31 @@ extension DailymotionPlayerController: DailymotionControlsViewDelegate {
 
   fileprivate func controls(
     _ controls: DailymotionControlsView,
+    didSelectQuality quality: String
+  ) {
+    guard
+      state.backend == "sdk",
+      state.ready,
+      state.error == nil,
+      !state.isAdPlaying,
+      quality == "default" || state.availableQualities.contains(quality)
+    else {
+      return
+    }
+    sendQualityCommand(quality)
+  }
+
+  fileprivate func controls(
+    _ controls: DailymotionControlsView,
     didSetVolume volume: Double
   ) {
     sendCommand("volume", value: volume)
+  }
+
+  fileprivate func controlsDidToggleFullscreen(
+    _ controls: DailymotionControlsView
+  ) {
+    panel?.toggleFullScreen(nil)
   }
 }
 
