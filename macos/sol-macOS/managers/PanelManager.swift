@@ -13,6 +13,8 @@ enum PreferredScreen {
   private var rootView: NSView?
   private var searchWindowPosition = NSPoint(x: 50, y: 20)
   private let openScaleAnimationKey = "sol.open.scale"
+  private var resizeAnimationGeneration = 0
+  private var resizeTargetFrame: NSRect?
 
   @objc static public let shared = PanelManager()
 
@@ -153,8 +155,60 @@ enum PreferredScreen {
       origin: positionedOrigin(for: windowSize, on: screen),
       size: windowSize
     )
-    self.mainWindow.setFrame(frame, display: true)
-    self.mainWindow.layoutInstalledRootView()
+    setSearchFrame(frame, on: screen)
+  }
+
+  private func setSearchFrame(_ frame: NSRect, on screen: NSScreen) {
+    if let resizeTargetFrame, framesAreNearlyEqual(resizeTargetFrame, frame) {
+      return
+    }
+
+    resizeAnimationGeneration += 1
+    let generation = resizeAnimationGeneration
+    let currentFrame = mainWindow.frame
+    let staysOnSameScreen = mainWindow.screen === screen
+    let keepsWidth = abs(currentFrame.width - frame.width) < 1
+    let keepsTopEdge = abs(currentFrame.maxY - frame.maxY) < 1
+    let changesHeight = abs(currentFrame.height - frame.height) >= 1
+    let shouldAnimate = mainWindow.isVisible
+      && staysOnSameScreen
+      && keepsWidth
+      && keepsTopEdge
+      && changesHeight
+      && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+
+    guard shouldAnimate else {
+      resizeTargetFrame = nil
+      mainWindow.setFrame(frame, display: true)
+      mainWindow.layoutInstalledRootView()
+      return
+    }
+
+    resizeTargetFrame = frame
+    let timingFunction = CAMediaTimingFunction(controlPoints: 0.16, 1, 0.3, 1)
+    NSAnimationContext.runAnimationGroup(
+      { context in
+        context.duration = 0.18
+        context.timingFunction = timingFunction
+        mainWindow.animator().setFrame(frame, display: true)
+      },
+      completionHandler: { [weak self] in
+        guard let self, self.resizeAnimationGeneration == generation else {
+          return
+        }
+
+        self.resizeTargetFrame = nil
+        self.mainWindow.setFrame(frame, display: true)
+        self.mainWindow.layoutInstalledRootView()
+      }
+    )
+  }
+
+  private func framesAreNearlyEqual(_ lhs: NSRect, _ rhs: NSRect) -> Bool {
+    return abs(lhs.minX - rhs.minX) < 0.5
+      && abs(lhs.minY - rhs.minY) < 0.5
+      && abs(lhs.width - rhs.width) < 0.5
+      && abs(lhs.height - rhs.height) < 0.5
   }
 
   @objc func setRelativeSize(_ proportion: Double) {
