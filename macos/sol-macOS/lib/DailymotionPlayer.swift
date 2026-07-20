@@ -213,18 +213,22 @@ private final class DailymotionControlsView: NSVisualEffectView,
   private let timelineGroup = NSStackView()
   private let liveGroup = NSStackView()
   private let settingsGroup = NSStackView()
+  private let playbackSeparator = NSBox()
+  private let timelineSeparator = NSBox()
+  private let liveSeparator = NSBox()
+  private let settingsSeparator = NSBox()
   private let primaryRow = NSStackView()
   private let secondaryRow = NSStackView()
-  private let compactSpacer = NSView()
   private let rowsStack = NSStackView()
   private var toolbarHeightConstraint: NSLayoutConstraint?
   private var usesTwoRows = false
   private var displayedQualityValues: [String] = []
   private let rates = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
 
-  private static let twoRowBreakpoint: CGFloat = 660
-  private static let singleRowHeight: CGFloat = 44
-  private static let twoRowHeight: CGFloat = 72
+  private static let liveTwoRowBreakpoint: CGFloat = 600
+  private static let regularTwoRowBreakpoint: CGFloat = 460
+  private static let singleRowHeight: CGFloat = 36
+  private static let twoRowHeight: CGFloat = 68
 
   override init(frame frameRect: NSRect) {
     super.init(frame: frameRect)
@@ -328,18 +332,34 @@ private final class DailymotionControlsView: NSVisualEffectView,
     )
     configureHorizontalStack(
       settingsGroup,
-      views: [ratePopUp, qualityPopUp, volumeImage, volumeSlider, fullscreenButton]
+      views: [ratePopUp, qualityPopUp, volumeImage, volumeSlider]
     )
+    [
+      playbackSeparator,
+      timelineSeparator,
+      liveSeparator,
+      settingsSeparator,
+    ].forEach { configureSeparator($0) }
     configureHorizontalStack(
       primaryRow,
-      views: [playbackGroup, timelineGroup, liveGroup, settingsGroup]
+      views: [
+        playbackGroup,
+        playbackSeparator,
+        timelineGroup,
+        timelineSeparator,
+        liveGroup,
+        liveSeparator,
+        settingsGroup,
+        settingsSeparator,
+        fullscreenButton,
+      ]
     )
     configureHorizontalStack(secondaryRow, views: [])
     secondaryRow.isHidden = true
 
     rowsStack.orientation = .vertical
     rowsStack.alignment = .width
-    rowsStack.distribution = .fill
+    rowsStack.distribution = .fillEqually
     rowsStack.spacing = 4
     rowsStack.detachesHiddenViews = true
     rowsStack.addArrangedSubview(primaryRow)
@@ -357,13 +377,18 @@ private final class DailymotionControlsView: NSVisualEffectView,
       .defaultLow,
       for: .horizontal
     )
-    compactSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-    compactSpacer.setContentCompressionResistancePriority(
+    volumeSlider.setContentHuggingPriority(.defaultLow, for: .horizontal)
+    volumeSlider.setContentCompressionResistancePriority(
+      .defaultLow,
+      for: .horizontal
+    )
+    settingsGroup.setContentHuggingPriority(.defaultLow, for: .horizontal)
+    settingsGroup.setContentCompressionResistancePriority(
       .defaultLow,
       for: .horizontal
     )
     timeLabel.setContentCompressionResistancePriority(
-      .required,
+      .defaultLow,
       for: .horizontal
     )
 
@@ -373,22 +398,30 @@ private final class DailymotionControlsView: NSVisualEffectView,
     self.toolbarHeightConstraint = toolbarHeightConstraint
     NSLayoutConstraint.activate([
       toolbarHeightConstraint,
-      rowsStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
-      rowsStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
-      rowsStack.topAnchor.constraint(equalTo: topAnchor, constant: 5),
-      rowsStack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -5),
+      rowsStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 4),
+      rowsStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -4),
+      rowsStack.topAnchor.constraint(equalTo: topAnchor, constant: 4),
+      rowsStack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -4),
       playButton.widthAnchor.constraint(equalToConstant: 28),
-      backwardButton.widthAnchor.constraint(equalToConstant: 36),
-      forwardButton.widthAnchor.constraint(equalToConstant: 36),
-      seekSlider.widthAnchor.constraint(greaterThanOrEqualToConstant: 60),
-      timeLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 64),
+      backwardButton.widthAnchor.constraint(equalToConstant: 34),
+      forwardButton.widthAnchor.constraint(equalToConstant: 34),
+      seekSlider.widthAnchor.constraint(greaterThanOrEqualToConstant: 48),
+      timeLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 58),
       clockTimeField.widthAnchor.constraint(equalToConstant: 62),
-      liveButton.widthAnchor.constraint(equalToConstant: 46),
-      ratePopUp.widthAnchor.constraint(equalToConstant: 56),
-      qualityPopUp.widthAnchor.constraint(equalToConstant: 72),
-      volumeImage.widthAnchor.constraint(equalToConstant: 16),
-      volumeSlider.widthAnchor.constraint(equalToConstant: 45),
+      liveButton.widthAnchor.constraint(equalToConstant: 42),
+      ratePopUp.widthAnchor.constraint(equalToConstant: 52),
+      qualityPopUp.widthAnchor.constraint(equalToConstant: 64),
+      volumeImage.widthAnchor.constraint(equalToConstant: 14),
+      volumeSlider.widthAnchor.constraint(greaterThanOrEqualToConstant: 32),
       fullscreenButton.widthAnchor.constraint(equalToConstant: 28),
+      playButton.heightAnchor.constraint(equalToConstant: 26),
+      backwardButton.heightAnchor.constraint(equalToConstant: 26),
+      forwardButton.heightAnchor.constraint(equalToConstant: 26),
+      clockTimeField.heightAnchor.constraint(equalToConstant: 26),
+      liveButton.heightAnchor.constraint(equalToConstant: 26),
+      ratePopUp.heightAnchor.constraint(equalToConstant: 26),
+      qualityPopUp.heightAnchor.constraint(equalToConstant: 26),
+      fullscreenButton.heightAnchor.constraint(equalToConstant: 26),
     ])
 
     render(DailymotionBridgeState())
@@ -400,7 +433,10 @@ private final class DailymotionControlsView: NSVisualEffectView,
   }
 
   override func layout() {
-    let shouldUseTwoRows = bounds.width < Self.twoRowBreakpoint
+    let breakpoint = liveGroup.isHidden
+      ? Self.regularTwoRowBreakpoint
+      : Self.liveTwoRowBreakpoint
+    let shouldUseTwoRows = bounds.width < breakpoint
     if shouldUseTwoRows != usesTwoRows {
       setUsesTwoRows(shouldUseTwoRows)
     }
@@ -414,20 +450,41 @@ private final class DailymotionControlsView: NSVisualEffectView,
     stack.orientation = .horizontal
     stack.alignment = .centerY
     stack.distribution = .fill
-    stack.spacing = 6
+    stack.spacing = 4
     stack.detachesHiddenViews = true
     views.forEach(stack.addArrangedSubview)
   }
 
+  private func configureSeparator(_ separator: NSBox) {
+    separator.boxType = .separator
+    separator.translatesAutoresizingMaskIntoConstraints = false
+    NSLayoutConstraint.activate([
+      separator.widthAnchor.constraint(equalToConstant: 1),
+      separator.heightAnchor.constraint(equalToConstant: 18),
+    ])
+  }
+
   private func setUsesTwoRows(_ usesTwoRows: Bool) {
     self.usesTwoRows = usesTwoRows
+    let hostWindow = window
+    let fieldEditor = hostWindow?.fieldEditor(
+      false,
+      for: clockTimeField
+    ) as? NSTextView
+    let wasEditingClockTime = fieldEditor != nil
+      && hostWindow?.firstResponder === fieldEditor
+    let selectedRange = fieldEditor?.selectedRange()
 
     let movableViews = [
       playbackGroup,
       timelineGroup,
       liveGroup,
       settingsGroup,
-      compactSpacer,
+      playbackSeparator,
+      timelineSeparator,
+      liveSeparator,
+      settingsSeparator,
+      fullscreenButton,
     ]
     for view in movableViews {
       if primaryRow.arrangedSubviews.contains(view) {
@@ -441,25 +498,49 @@ private final class DailymotionControlsView: NSVisualEffectView,
 
     if usesTwoRows {
       primaryRow.addArrangedSubview(playbackGroup)
+      primaryRow.addArrangedSubview(playbackSeparator)
       primaryRow.addArrangedSubview(timelineGroup)
+      primaryRow.addArrangedSubview(timelineSeparator)
+      primaryRow.addArrangedSubview(fullscreenButton)
       secondaryRow.addArrangedSubview(liveGroup)
-      secondaryRow.addArrangedSubview(compactSpacer)
+      secondaryRow.addArrangedSubview(liveSeparator)
       secondaryRow.addArrangedSubview(settingsGroup)
       secondaryRow.isHidden = false
       toolbarHeightConstraint?.constant = Self.twoRowHeight
     } else {
       primaryRow.addArrangedSubview(playbackGroup)
+      primaryRow.addArrangedSubview(playbackSeparator)
       primaryRow.addArrangedSubview(timelineGroup)
+      primaryRow.addArrangedSubview(timelineSeparator)
       primaryRow.addArrangedSubview(liveGroup)
+      primaryRow.addArrangedSubview(liveSeparator)
       primaryRow.addArrangedSubview(settingsGroup)
+      primaryRow.addArrangedSubview(settingsSeparator)
+      primaryRow.addArrangedSubview(fullscreenButton)
       secondaryRow.isHidden = true
       toolbarHeightConstraint?.constant = Self.singleRowHeight
     }
 
+    updateLiveGroupVisibility()
+    if wasEditingClockTime, hostWindow?.makeFirstResponder(clockTimeField) == true {
+      let maximumLength = (clockTimeField.stringValue as NSString).length
+      if
+        let selectedRange,
+        let restoredEditor = hostWindow?.fieldEditor(
+          false,
+          for: clockTimeField
+        ) as? NSTextView
+      {
+        let location = min(selectedRange.location, maximumLength)
+        let length = min(selectedRange.length, maximumLength - location)
+        restoredEditor.setSelectedRange(NSRange(location: location, length: length))
+      }
+    }
     needsLayout = true
   }
 
   func render(_ state: DailymotionBridgeState) {
+    defer { updateLiveGroupVisibility() }
     let ready = state.ready && state.error == nil
     setPlaySymbol(state.isPlaying ? "pause.fill" : "play.fill")
     selectNearestRate(to: state.playbackRate)
@@ -587,6 +668,22 @@ private final class DailymotionControlsView: NSVisualEffectView,
     timeLabel.stringValue = edgeDelay <= 3
       ? "LIVE"
       : "−\(formatTime(clockDelay))"
+  }
+
+  private func updateLiveGroupVisibility() {
+    let shouldHide = clockTimeField.isHidden && liveButton.isHidden
+    var visibilityChanged = false
+    if liveGroup.isHidden != shouldHide {
+      liveGroup.isHidden = shouldHide
+      visibilityChanged = true
+    }
+    if liveSeparator.isHidden != shouldHide {
+      liveSeparator.isHidden = shouldHide
+      visibilityChanged = true
+    }
+    if visibilityChanged {
+      needsLayout = true
+    }
   }
 
   private func updateClockTimeFieldVisibility(
