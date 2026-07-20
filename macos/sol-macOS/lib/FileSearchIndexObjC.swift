@@ -7,14 +7,16 @@ import SQLite3
   private let index = FileSearchIndex.shared
   private let indexer = FileSearchIndexer.shared
 
-  @objc(searchFilesWithQuery:)
-  func searchFiles(query: String) -> [[String: Any]] {
-    let results = index.searchFiles(query: query)
+  @objc(searchFilesWithQuery:sort:)
+  func searchFiles(query: String, sort: String) -> [[String: Any]] {
+    let results = index.searchFiles(query: query, sort: sort)
     return results.map { file in
       [
         "path": file.path,
         "name": file.name,
-        "is_folder": file.is_folder
+        "is_folder": file.is_folder,
+        "modified_at": file.modifiedAt,
+        "size": file.size
       ]
     }
   }

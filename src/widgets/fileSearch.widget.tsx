@@ -1,6 +1,7 @@
 import { LegendList, type LegendListRef } from "@legendapp/list/react-native";
 import clsx from "clsx";
 import { FileIcon } from "components/FileIcon";
+import { FileSortControl } from "components/FileSortControl";
 import { Key } from "components/Key";
 import { LoadingBar } from "components/LoadingBar";
 import { MainInput } from "components/MainInput";
@@ -64,7 +65,7 @@ export const FileSearchWidget: FC<Props> = observer(() => {
 			void runFileSearch(query);
 		}, 150);
 		return () => clearTimeout(timer);
-	}, [query, runFileSearch]);
+	}, [query, store.ui.fileSort, runFileSearch]);
 
 	useEffect(() => {
 		if (data.length && selectedIndex < data.length) {
@@ -97,15 +98,19 @@ export const FileSearchWidget: FC<Props> = observer(() => {
 				renderItem={RenderItem}
 			/>
 
-			{data.length > 0 && (
-				<View className="py-2 px-4 flex-row items-center justify-end gap-1 subBg">
-					<Text className="text-sm mr-2">Open Folder</Text>
-					<Key symbol={"⇧"} />
-					<Key symbol={"⏎"} />
-					<Text className="text-sm mx-2">Open</Text>
-					<Key symbol={"⏎"} primary />
-				</View>
-			)}
+			<View className="py-2 px-4 flex-row items-center gap-1 border-t border-color">
+				<FileSortControl upward />
+				<View className="flex-1" />
+				{data.length > 0 && (
+					<>
+						<Text className="text-sm mr-2">Open Folder</Text>
+						<Key symbol={"⇧"} />
+						<Key symbol={"⏎"} />
+						<Text className="text-sm mx-2">Open</Text>
+						<Key symbol={"⏎"} primary />
+					</>
+				)}
+			</View>
 		</View>
 	);
 });

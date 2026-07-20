@@ -212,6 +212,9 @@ void install(jsi::Runtime &rt,
 
   auto searchFilesIndexed = HOSTFN("searchFilesIndexed", []) {
     auto query = arguments[0].asString(rt).utf8(rt);
+    auto sort = count > 1 && arguments[1].isString()
+                    ? arguments[1].asString(rt).utf8(rt)
+                    : std::string("name_asc");
 
     if (query.empty()) {
       auto promiseCtr = rt.global().getPropertyAsFunction(rt, "Promise");
@@ -226,15 +229,18 @@ void install(jsi::Runtime &rt,
     }
 
     NSString *queryStr = [NSString stringWithUTF8String:query.c_str()];
+    NSString *sortStr = [NSString stringWithUTF8String:sort.c_str()];
 
     auto promiseCtr = rt.global().getPropertyAsFunction(rt, "Promise");
     auto promise = promiseCtr.callAsConstructor(
       rt,
-      HOSTFN("executor", [queryStr]) {
+      HOSTFN("executor", [queryStr, sortStr]) {
         auto resolve = std::make_shared<jsi::Value>(rt, arguments[0]);
 
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-          NSArray *results = [FileSearchIndexObjC.shared searchFilesWithQuery:queryStr];
+          NSArray *results = [FileSearchIndexObjC.shared
+              searchFilesWithQuery:queryStr
+              sort:sortStr];
 
           invoker->invokeAsync([resolve, results, &rt]() mutable {
             auto arr_res = jsi::Array(rt, results.count);
@@ -244,6 +250,8 @@ void install(jsi::Runtime &rt,
               obj.setProperty(rt, "name", jsi::String::createFromUtf8(rt, [result[@"name"] UTF8String]));
               obj.setProperty(rt, "path", jsi::String::createFromUtf8(rt, [result[@"path"] UTF8String]));
               obj.setProperty(rt, "isFolder", (bool)[result[@"is_folder"] boolValue]);
+              obj.setProperty(rt, "modifiedAt", [result[@"modified_at"] doubleValue]);
+              obj.setProperty(rt, "size", [result[@"size"] doubleValue]);
               arr_res.setValueAtIndex(rt, i, std::move(obj));
             }
             resolve->asObject(rt).asFunction(rt).call(rt, std::move(arr_res));

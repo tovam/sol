@@ -3,6 +3,7 @@ import { Icons } from "assets";
 import clsx from "clsx";
 import Favicon from "components/Favicon";
 import { FileIcon } from "components/FileIcon";
+import { FileSortControl } from "components/FileSortControl";
 import { Key } from "components/Key";
 import { LoadingBar } from "components/LoadingBar";
 import { MainInput } from "components/MainInput";
@@ -391,7 +392,12 @@ export const SearchWidget: FC = observer(() => {
 			void store.ui.runFileSearch(store.ui.query);
 		}, 150);
 		return () => clearTimeout(timer);
-	}, [activeTab, store.ui.query, store.ui.runFileSearch]);
+	}, [
+		activeTab,
+		store.ui.query,
+		store.ui.fileSort,
+		store.ui.runFileSearch,
+	]);
 
 	return (
 		<View
@@ -489,6 +495,12 @@ export const SearchWidget: FC = observer(() => {
 					</View>
 
 					<View className="h-9 px-4 flex-row items-center justify-end gap-1 border-t border-color">
+						{activeTab === SearchTab.FILES && (
+							<>
+								<FileSortControl upward />
+								<View className="flex-1" />
+							</>
+						)}
 						{store.ui.currentItem?.type === ItemType.CUSTOM && (
 							<>
 								<Text className="text-xs darker-text mr-1">Edit</Text>

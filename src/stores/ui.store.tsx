@@ -113,6 +113,25 @@ export enum SearchTab {
 	ACTIONS = "ACTIONS",
 }
 
+export const FileSort = {
+	NAME_ASC: "name_asc",
+	NAME_DESC: "name_desc",
+	MODIFIED_ASC: "modified_asc",
+	MODIFIED_DESC: "modified_desc",
+	SIZE_ASC: "size_asc",
+	SIZE_DESC: "size_desc",
+} as const;
+
+export type FileSort = (typeof FileSort)[keyof typeof FileSort];
+
+const FILE_SORT_VALUES = new Set<string>(Object.values(FileSort));
+
+const normalizeFileSort = (value: unknown): FileSort => {
+	return typeof value === "string" && FILE_SORT_VALUES.has(value)
+		? (value as FileSort)
+		: FileSort.NAME_ASC;
+};
+
 export const SEARCH_TAB_ORDER = [
 	SearchTab.ALL,
 	SearchTab.APPLICATIONS,
@@ -397,6 +416,7 @@ export const createUIStore = (root: IRootStore) => {
 					store.showUpcomingEvent = src.showUpcomingEvent ?? true;
 					store.scratchPadColor = src.scratchPadColor ?? ScratchPadColor.SYSTEM;
 					store.searchFolders = src.searchFolders ?? defaultSearchFolders;
+					store.fileSort = normalizeFileSort(src.fileSort);
 					store.searchEngine = src.searchEngine ?? "google";
 					store.customSearchUrl =
 						src.customSearchUrl ?? "https://google.com/search?q=%s";
@@ -495,6 +515,7 @@ export const createUIStore = (root: IRootStore) => {
 					store.scratchPadColor = jsonConfig.scratchPadColor;
 				if (jsonConfig.searchFolders !== undefined)
 					store.searchFolders = jsonConfig.searchFolders;
+				store.fileSort = normalizeFileSort(jsonConfig.fileSort);
 				if (jsonConfig.searchEngine !== undefined)
 					store.searchEngine = jsonConfig.searchEngine;
 				if (jsonConfig.customSearchUrl !== undefined)
@@ -589,6 +610,7 @@ export const createUIStore = (root: IRootStore) => {
 		showUpcomingEvent: true,
 		scratchPadColor: ScratchPadColor.SYSTEM,
 		searchFolders: [] as string[],
+		fileSort: FileSort.NAME_ASC as FileSort,
 		shortcuts: defaultShortcuts as Record<string, string>,
 		showInAppBrowserBookMarks: true,
 		hoveredEventId: null as string | null,
@@ -615,6 +637,7 @@ export const createUIStore = (root: IRootStore) => {
 		},
 		runFileSearch: async (query: string) => {
 			const requestId = ++fileSearchRequestId;
+			const sort = store.fileSort;
 			const isDedicatedFileSearch = store.focusedWidget === Widget.FILE_SEARCH;
 			const isFileTab =
 				store.focusedWidget === Widget.SEARCH && store.searchTab === SearchTab.FILES;
@@ -631,10 +654,11 @@ export const createUIStore = (root: IRootStore) => {
 				store.indexedFileResults = [];
 			});
 			try {
-				const results = await solNative.searchFilesIndexed(query);
+				const results = await solNative.searchFilesIndexed(query, sort);
 				const requestIsCurrent =
 					requestId === fileSearchRequestId &&
 					store.query === query &&
+					store.fileSort === sort &&
 					(store.focusedWidget === Widget.FILE_SEARCH ||
 						(store.focusedWidget === Widget.SEARCH &&
 							store.searchTab === SearchTab.FILES));
@@ -646,6 +670,8 @@ export const createUIStore = (root: IRootStore) => {
 						type: ItemType.FILE,
 						name: f.name,
 						url: f.path,
+						fileModifiedAt: f.modifiedAt,
+						fileSize: f.size,
 					}));
 					store.isLoading = false;
 				});
@@ -836,6 +862,14 @@ export const createUIStore = (root: IRootStore) => {
 			if (tab !== SearchTab.FILES && store.query) {
 				store.setQuery(store.query);
 			}
+		},
+		setFileSort: (sort: FileSort) => {
+			if (store.fileSort === sort) return;
+			fileSearchRequestId += 1;
+			store.fileSort = normalizeFileSort(sort);
+			store.selectedIndex = 0;
+			store.indexedFileResults = [];
+			store.isLoading = false;
 		},
 		cycleSearchTab: (direction: 1 | -1) => {
 			const currentIndex = SEARCH_TAB_ORDER.indexOf(store.searchTab);

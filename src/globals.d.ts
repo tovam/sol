@@ -51,7 +51,22 @@ declare const global: {
 		hideWindow: () => void;
 		searchFilesIndexed: (
 			query: string,
-		) => Promise<{ name: string; path: string; isFolder: boolean }[]>;
+			sort:
+				| "name_asc"
+				| "name_desc"
+				| "modified_asc"
+				| "modified_desc"
+				| "size_asc"
+				| "size_desc",
+		) => Promise<
+			{
+				name: string;
+				path: string;
+				isFolder: boolean;
+				modifiedAt: number;
+				size: number;
+			}[]
+		>;
 		hasIndexedContent: () => boolean;
 		indexPaths: (paths: string[]) => Promise<void>;
 		startWatchingPaths: (paths: string[]) => void;
@@ -145,6 +160,8 @@ type Item = {
 	text?: string;
 	isFavorite?: boolean; // injected in UI array
 	isRunning?: boolean; // only apps have this
+	fileModifiedAt?: number; // only indexed files have this
+	fileSize?: number; // only indexed files have this
 	bookmarkFolder?: null | string; // only bookmarks have this
 };
 
