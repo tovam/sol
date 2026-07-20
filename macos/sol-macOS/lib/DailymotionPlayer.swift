@@ -331,7 +331,7 @@ private final class DailymotionControlsView: NSVisualEffectView,
     backwardButton.isHidden = false
     forwardButton.isHidden = false
     seekSlider.isHidden = false
-    clockTimeField.isHidden = true
+    updateClockTimeFieldVisibility(for: state, ready: ready)
     liveButton.isHidden = true
     timeLabel.textColor = .secondaryLabelColor
 
@@ -438,13 +438,36 @@ private final class DailymotionControlsView: NSVisualEffectView,
     forwardButton.isEnabled = state.hasReliableAdState
     liveButton.isHidden = false
     liveButton.isEnabled = state.hasReliableAdState && edgeDelay > 3
-    clockTimeField.isHidden = false
     clockTimeField.isEnabled = state.hasReliableAdState
     ratePopUp.isEnabled = state.hasReliableAdState
     timeLabel.textColor = edgeDelay <= 3 ? .systemRed : .secondaryLabelColor
     timeLabel.stringValue = edgeDelay <= 3
       ? "LIVE"
       : "−\(formatTime(clockDelay))"
+  }
+
+  private func updateClockTimeFieldVisibility(
+    for state: DailymotionBridgeState,
+    ready: Bool
+  ) {
+    let hasDVRRange: Bool
+    if let rangeStart = state.seekableStart, let rangeEnd = state.seekableEnd {
+      hasDVRRange = rangeStart.isFinite
+        && rangeEnd.isFinite
+        && rangeEnd - rangeStart >= dailymotionMinimumDVRWindow
+    } else {
+      hasDVRRange = false
+    }
+    let shouldShow = ready
+      && state.contentMode == .live
+      && state.isOnAir != false
+      && !state.isAdPlaying
+      && hasDVRRange
+    let shouldHide = !shouldShow
+
+    if clockTimeField.isHidden != shouldHide {
+      clockTimeField.isHidden = shouldHide
+    }
   }
 
   private func wallClockDelay(
