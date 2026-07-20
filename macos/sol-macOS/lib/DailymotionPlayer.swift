@@ -775,6 +775,12 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
   private var metadataRequestGeneration = 0
   private var liveMetadataTimer: Timer?
   private var state = DailymotionBridgeState()
+  private var liveDVRRateCap = 2.0
+  private var candidateLiveDVRRateCap: Double?
+  private var candidateLiveDVRRateCapSamples = 0
+  private var lastLiveDVREdgeDelay: Double?
+  private var pendingAutomaticRate: Double?
+  private var pendingAutomaticRateRequestedAt = Date.distantPast
 
   func open(urlString: String, completion: @escaping (Bool) -> Void) {
     guard let source = DailymotionPlayerSource.parse(urlString) else {
@@ -839,6 +845,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     mediaFrameArea = 0
     mediaFrameLastSeen = .distantPast
     sdkFallbackDidStart = false
+    resetLiveDVRRateTracking()
     state = DailymotionBridgeState()
     state.isMuted = source.startsMuted
 
@@ -955,6 +962,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     mediaFrameLastSeen = .distantPast
     sdkFallbackDidStart = false
     sessionID = ""
+    resetLiveDVRRateTracking()
   }
 
   private func notifyStateChange() {
@@ -1207,6 +1215,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     // The SDK is canonical for playback and advertising. The media bridge is
     // still useful there because the public SDK does not expose DVR ranges.
     if state.backend == "sdk" {
+      updateLiveDVRRateCapFromFreshMediaState()
       notifyStateChange()
       return
     }
@@ -1223,7 +1232,113 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
       min(max($0, 0), 1)
     } ?? state.volume
     state.error = body["error"] as? String
+    updateLiveDVRRateCapFromFreshMediaState()
     notifyStateChange()
+  }
+
+  private func updateLiveDVRRateCapFromFreshMediaState() {
+    guard
+      state.contentMode == .live,
+      state.isOnAir != false,
+      !state.isAdPlaying,
+      state.hasReliableAdState,
+      let position = state.mediaCurrentTime,
+      let rangeStart = state.seekableStart,
+      let rangeEnd = state.seekableEnd,
+      position.isFinite,
+      rangeStart.isFinite,
+      rangeEnd.isFinite,
+      rangeEnd - rangeStart >= dailymotionMinimumDVRWindow
+    else {
+      return
+    }
+
+    let edgeDelay = max(0, rangeEnd - position)
+    if
+      let previousDelay = lastLiveDVREdgeDelay,
+      edgeDelay - previousDelay > 8
+    {
+      // A large backwards jump is a seek or timeline discontinuity, not the
+      // normal ±3 s Dailymotion jitter. Allow the cap to be recalculated.
+      resetLiveDVRRateTracking()
+    }
+    lastLiveDVREdgeDelay = edgeDelay
+
+    let observedCap = liveDVRRateCap(for: edgeDelay)
+    guard observedCap < liveDVRRateCap else {
+      candidateLiveDVRRateCap = nil
+      candidateLiveDVRRateCapSamples = 0
+      enforceLiveDVRRateCap()
+      return
+    }
+
+    if candidateLiveDVRRateCap == observedCap {
+      candidateLiveDVRRateCapSamples += 1
+    } else {
+      candidateLiveDVRRateCap = observedCap
+      candidateLiveDVRRateCapSamples = 1
+    }
+
+    // Three fresh 500 ms media reports prevent a one-off ±3 s jump from
+    // lowering the speed too early. Caps only move down automatically.
+    guard candidateLiveDVRRateCapSamples >= 3 else { return }
+    liveDVRRateCap = observedCap
+    candidateLiveDVRRateCap = nil
+    candidateLiveDVRRateCapSamples = 0
+    enforceLiveDVRRateCap()
+  }
+
+  private func liveDVRRateCap(for edgeDelay: Double) -> Double {
+    if edgeDelay <= 10 { return 1 }
+    if edgeDelay <= 60 { return 1.25 }
+    if edgeDelay <= 120 { return 1.5 }
+    return 2
+  }
+
+  private func enforceLiveDVRRateCap() {
+    clearSatisfiedAutomaticRateRequest()
+    guard state.playbackRate > liveDVRRateCap + 0.01 else { return }
+
+    let now = Date()
+    if
+      pendingAutomaticRate == liveDVRRateCap,
+      now.timeIntervalSince(pendingAutomaticRateRequestedAt) < 2
+    {
+      return
+    }
+
+    let requestedRate = liveDVRRateCap
+    let expectedSessionID = sessionID
+    pendingAutomaticRate = requestedRate
+    pendingAutomaticRateRequestedAt = now
+    sendCommand("rate", value: requestedRate) { [weak self] succeeded in
+      guard
+        let self,
+        self.sessionID == expectedSessionID,
+        self.pendingAutomaticRate == requestedRate
+      else {
+        return
+      }
+      if !succeeded {
+        self.pendingAutomaticRate = nil
+      }
+    }
+  }
+
+  private func clearSatisfiedAutomaticRateRequest() {
+    guard let pendingAutomaticRate else { return }
+    if state.playbackRate <= pendingAutomaticRate + 0.01 {
+      self.pendingAutomaticRate = nil
+    }
+  }
+
+  private func resetLiveDVRRateTracking() {
+    liveDVRRateCap = 2
+    candidateLiveDVRRateCap = nil
+    candidateLiveDVRRateCapSamples = 0
+    lastLiveDVREdgeDelay = nil
+    pendingAutomaticRate = nil
+    pendingAutomaticRateRequestedAt = .distantPast
   }
 
   private func handleBridgeError(_ body: [String: Any]) {
@@ -1717,6 +1832,7 @@ extension DailymotionPlayerController: DailymotionControlsViewDelegate {
     seekBy seconds: Double
   ) {
     guard !state.isAdPlaying, controlsCanSeek else { return }
+    resetLiveDVRRateTracking()
     sendCommand("seekBy", value: seconds)
   }
 
@@ -1725,6 +1841,7 @@ extension DailymotionPlayerController: DailymotionControlsViewDelegate {
     seekTo seconds: Double
   ) {
     guard !state.isAdPlaying, controlsCanSeek else { return }
+    resetLiveDVRRateTracking()
     sendCommand("seek", value: seconds)
   }
 
@@ -1767,6 +1884,7 @@ extension DailymotionPlayerController: DailymotionControlsViewDelegate {
       return
     }
 
+    resetLiveDVRRateTracking()
     sendCommand(
       "seek",
       value: min(
@@ -1827,6 +1945,7 @@ extension DailymotionPlayerController: DailymotionControlsViewDelegate {
     else {
       return
     }
+    resetLiveDVRRateTracking()
     let expectedSessionID = sessionID
     sendCommand("rate", value: 1) { [weak self] _ in
       guard
@@ -1856,7 +1975,10 @@ extension DailymotionPlayerController: DailymotionControlsViewDelegate {
     else {
       return
     }
-    sendCommand("rate", value: rate)
+    let effectiveRate = state.contentMode == .live
+      ? min(rate, liveDVRRateCap)
+      : rate
+    sendCommand("rate", value: effectiveRate)
   }
 
   fileprivate func controls(
