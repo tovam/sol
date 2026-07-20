@@ -1480,7 +1480,13 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
         liveResizeStartContentSize = currentContentSize
       }
       resizeDriver = liveResizeDriver ?? proposedDriver
-      if liveResizeDriver == nil {
+      if
+        liveResizeDriver == nil,
+        hasSignificantResizeDelta(
+          proposed: proposedContentSize,
+          relativeTo: resizeReference
+        )
+      {
         liveResizeDriver = proposedDriver
       }
     } else {
@@ -1610,6 +1616,16 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     let heightDelta = abs(proposed.height - reference.height)
       / max(reference.height, 1)
     return widthDelta >= heightDelta ? .width : .height
+  }
+
+  private func hasSignificantResizeDelta(
+    proposed: NSSize,
+    relativeTo reference: NSSize
+  ) -> Bool {
+    max(
+      abs(proposed.width - reference.width),
+      abs(proposed.height - reference.height)
+    ) > 0.5
   }
 
   private func updatePanelMinimumSize() {
