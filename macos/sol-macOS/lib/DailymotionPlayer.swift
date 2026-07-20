@@ -86,11 +86,10 @@ private struct DailymotionPlayerSource {
       url: url,
       resolvingAgainstBaseURL: false
     )?.queryItems
-    let startsMuted = queryItems?
-      .first(where: { $0.name.lowercased() == "mute" })?
-      .value
-      .map { ["1", "true", "yes"].contains($0.lowercased()) }
-      ?? false
+    // Sol provides its own mute control while the video surface deliberately
+    // ignores clicks. Honouring an embed's `mute=true` would therefore leave
+    // Dailymotion's click-to-unmute prompt visible but impossible to dismiss.
+    let playbackURL = forcingAudiblePlayback(in: url)
 
     if host == "www.dailymotion.com" {
       guard
@@ -103,10 +102,10 @@ private struct DailymotionPlayerSource {
       let videoID = String(components[2])
       guard isVideoID(videoID) else { return nil }
       return DailymotionPlayerSource(
-        url: url,
+        url: playbackURL,
         videoID: videoID,
         backend: .embeddedPage,
-        startsMuted: startsMuted
+        startsMuted: false
       )
     }
 
@@ -130,10 +129,10 @@ private struct DailymotionPlayerSource {
         return nil
       }
       return DailymotionPlayerSource(
-        url: url,
+        url: playbackURL,
         videoID: videoID,
         backend: .sdk(playerID: playerID),
-        startsMuted: startsMuted
+        startsMuted: false
       )
     }
 
@@ -148,6 +147,20 @@ private struct DailymotionPlayerSource {
     !value.isEmpty && value.allSatisfy {
       $0.isLetter || $0.isNumber || $0 == "_" || $0 == "-"
     }
+  }
+
+  private static func forcingAudiblePlayback(in url: URL) -> URL {
+    guard var components = URLComponents(
+      url: url,
+      resolvingAgainstBaseURL: false
+    ) else {
+      return url
+    }
+    var queryItems = components.queryItems ?? []
+    queryItems.removeAll { $0.name.lowercased() == "mute" }
+    queryItems.append(URLQueryItem(name: "mute", value: "false"))
+    components.queryItems = queryItems
+    return components.url ?? url
   }
 }
 
