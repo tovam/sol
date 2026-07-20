@@ -15,6 +15,10 @@ private final class SpotlightGlassHostView: NSView {
     super.init(frame: frameRect)
     wantsLayer = true
     layer?.backgroundColor = NSColor.clear.cgColor
+    // The glass elevation can draw into its 2 pt breathing room. Clip that
+    // room to a concentric outer curve so it never reveals a square backing.
+    layer?.cornerCurve = .circular
+    layer?.masksToBounds = true
     contentClipView.wantsLayer = true
     contentClipView.layer?.backgroundColor = NSColor.clear.cgColor
     contentClipView.layer?.cornerCurve = .circular
@@ -63,6 +67,17 @@ private final class SpotlightGlassHostView: NSView {
       min(glassView.bounds.width, glassView.bounds.height) / 2 - 0.5
     )
     let resolvedRadius = min(requestedCornerRadius, maximumRadius)
+    let outerMaximumRadius = max(
+      0,
+      min(bounds.width, bounds.height) / 2
+    )
+    let outerRadius = min(
+      resolvedRadius + Self.glassInset,
+      outerMaximumRadius
+    )
+    if abs((layer?.cornerRadius ?? 0) - outerRadius) > 0.01 {
+      layer?.cornerRadius = outerRadius
+    }
     if abs(glassView.cornerRadius - resolvedRadius) > 0.01 {
       glassView.cornerRadius = resolvedRadius
     }
