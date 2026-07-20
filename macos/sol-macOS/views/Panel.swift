@@ -278,6 +278,22 @@ final class Panel: NSPanel, NSWindowDelegate {
     }
   }
 
+  func snapshotImage() -> NSImage? {
+    guard let contentView else { return nil }
+    let bounds = contentView.bounds
+    guard bounds.width > 0, bounds.height > 0 else { return nil }
+
+    contentView.displayIfNeeded()
+    guard let representation = contentView.bitmapImageRepForCachingDisplay(in: bounds) else {
+      return nil
+    }
+    contentView.cacheDisplay(in: bounds, to: representation)
+
+    let image = NSImage(size: bounds.size)
+    image.addRepresentation(representation)
+    return image
+  }
+
   func applyGlassAppearance(
     style: String,
     cornerRadius: Double,

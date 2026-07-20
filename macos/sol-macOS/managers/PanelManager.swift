@@ -36,6 +36,41 @@ private enum FrameAnimationCurve {
   }
 }
 
+private final class ClosingAnimationPanel: NSPanel {
+  init(frame: NSRect, image: NSImage, sourceWindow: NSWindow) {
+    super.init(
+      contentRect: frame,
+      styleMask: [.borderless, .nonactivatingPanel],
+      backing: .buffered,
+      defer: false
+    )
+
+    isOpaque = false
+    backgroundColor = .clear
+    hasShadow = false
+    ignoresMouseEvents = true
+    isMovable = false
+    isReleasedWhenClosed = false
+    animationBehavior = .none
+    level = sourceWindow.level
+    collectionBehavior = sourceWindow.collectionBehavior
+
+    let imageView = NSImageView(frame: NSRect(origin: .zero, size: frame.size))
+    imageView.image = image
+    imageView.imageScaling = .scaleAxesIndependently
+    imageView.autoresizingMask = [.width, .height]
+    contentView = imageView
+  }
+
+  override var canBecomeKey: Bool {
+    return false
+  }
+
+  override var canBecomeMain: Bool {
+    return false
+  }
+}
+
 @objc class PanelManager: NSObject {
   let baseSize = NSSize(width: 680, height: 450)
   public var preferredScreen: PreferredScreen = .frontmost
@@ -49,6 +84,7 @@ private enum FrameAnimationCurve {
   private var frameAnimationTimer: Timer?
   private var frameAnimationGeneration = 0
   private var frameAnimationTarget: NSRect?
+  private var closingAnimationWindow: ClosingAnimationPanel?
 
   @objc static public let shared = PanelManager()
 
@@ -164,7 +200,10 @@ private enum FrameAnimationCurve {
     }
 
     let wasClosing = presentationPhase == .closing
+    let reopeningFrame = closingAnimationWindow?.frame
+    let reopeningAlpha = closingAnimationWindow?.alphaValue
     stopFrameAnimation()
+    dismissClosingAnimationWindow()
     pendingPresentationFrame = nil
 
     var finalFrame = restingFrame ?? mainWindow.frame
@@ -176,7 +215,10 @@ private enum FrameAnimationCurve {
       && finalFrame.height > 1
 
     presentationPhase = .opening
-    if !wasClosing {
+    if wasClosing, let reopeningFrame, let reopeningAlpha {
+      mainWindow.setFrame(reopeningFrame, display: false)
+      mainWindow.alphaValue = reopeningAlpha
+    } else {
       mainWindow.setFrame(openingFrame(around: finalFrame), display: false)
       mainWindow.alphaValue = shouldAnimate ? 0.62 : 1
     }
@@ -231,11 +273,30 @@ private enum FrameAnimationCurve {
     }
 
     let closingBaseFrame = wasOpening ? (restingFrame ?? mainWindow.frame) : mainWindow.frame
+    guard let snapshot = mainWindow.snapshotImage() else {
+      finishHiding()
+      return
+    }
+
+    let animationWindow = ClosingAnimationPanel(
+      frame: mainWindow.frame,
+      image: snapshot,
+      sourceWindow: mainWindow
+    )
+    animationWindow.alphaValue = mainWindow.alphaValue
+    closingAnimationWindow = animationWindow
+    animationWindow.orderFrontRegardless()
+
+    // Relinquish key status immediately. The remaining animation is a
+    // non-key, mouse-transparent bitmap and cannot capture keyboard input.
+    mainWindow.setIsVisible(false)
+    mainWindow.alphaValue = 1
     animateFrame(
       to: closingFrame(around: closingBaseFrame),
       alpha: 0,
       duration: 0.085,
-      curve: .easeIn
+      curve: .easeIn,
+      window: animationWindow
     ) { [weak self] in
       guard let self, self.presentationPhase == .closing else { return }
       self.finishHiding()
@@ -244,11 +305,17 @@ private enum FrameAnimationCurve {
 
   private func finishHiding() {
     stopFrameAnimation()
+    dismissClosingAnimationWindow()
     mainWindow.setIsVisible(false)
     mainWindow.alphaValue = 1
     presentationPhase = .hidden
     pendingPresentationFrame = nil
     SolEmitter.sharedInstance.onHide()
+  }
+
+  private func dismissClosingAnimationWindow() {
+    closingAnimationWindow?.orderOut(self)
+    closingAnimationWindow = nil
   }
 
   private func openingFrame(around frame: NSRect) -> NSRect {
@@ -281,11 +348,13 @@ private enum FrameAnimationCurve {
     alpha targetAlpha: CGFloat,
     duration: TimeInterval,
     curve: FrameAnimationCurve,
+    window: NSWindow? = nil,
     completion: @escaping () -> Void
   ) {
     stopFrameAnimation()
-    let startFrame = mainWindow.frame
-    let startAlpha = mainWindow.alphaValue
+    let animatedWindow = window ?? mainWindow
+    let startFrame = animatedWindow.frame
+    let startAlpha = animatedWindow.alphaValue
     let startTime = CACurrentMediaTime()
     frameAnimationTarget = targetFrame
     frameAnimationGeneration += 1
@@ -301,9 +370,11 @@ private enum FrameAnimationCurve {
       let rawProgress = CGFloat(min(max(elapsed / duration, 0), 1))
       let progress = curve.value(at: rawProgress)
       let frame = self.interpolatedFrame(from: startFrame, to: targetFrame, progress: progress)
-      self.mainWindow.setFrame(frame, display: true)
-      self.mainWindow.alphaValue = startAlpha + (targetAlpha - startAlpha) * progress
-      self.mainWindow.layoutInstalledRootView()
+      animatedWindow.setFrame(frame, display: true)
+      animatedWindow.alphaValue = startAlpha + (targetAlpha - startAlpha) * progress
+      if animatedWindow === self.mainWindow {
+        self.mainWindow.layoutInstalledRootView()
+      }
 
       guard rawProgress >= 1 else { return }
       timer.invalidate()
@@ -311,9 +382,11 @@ private enum FrameAnimationCurve {
         self.frameAnimationTimer = nil
       }
       self.frameAnimationTarget = nil
-      self.mainWindow.setFrame(targetFrame, display: true)
-      self.mainWindow.alphaValue = targetAlpha
-      self.mainWindow.layoutInstalledRootView()
+      animatedWindow.setFrame(targetFrame, display: true)
+      animatedWindow.alphaValue = targetAlpha
+      if animatedWindow === self.mainWindow {
+        self.mainWindow.layoutInstalledRootView()
+      }
       completion()
     }
 
