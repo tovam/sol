@@ -192,6 +192,118 @@ const GlassAppearanceSettings = observer(() => {
 	);
 });
 
+const SearchWindowPositionSettings = observer(() => {
+	const store = useStore();
+	const position = store.ui.searchWindowPosition;
+	const [x, setX] = useState(String(position.x));
+	const [y, setY] = useState(String(position.y));
+
+	useEffect(() => {
+		setX(String(position.x));
+		setY(String(position.y));
+	}, [position.x, position.y]);
+
+	const parsedX = Number(x.replace(",", "."));
+	const parsedY = Number(y.replace(",", "."));
+	const valuesAreValid =
+		x.trim() !== "" &&
+		y.trim() !== "" &&
+		Number.isFinite(parsedX) &&
+		Number.isFinite(parsedY) &&
+		parsedX >= 0 &&
+		parsedX <= 100 &&
+		parsedY >= 0 &&
+		parsedY <= 100;
+
+	const reset = () => {
+		setX("50");
+		setY("20");
+		store.ui.resetSearchWindowPosition();
+	};
+
+	return (
+		<View className="p-3 subBg gap-3 rounded-lg border border-lightBorder dark:border-darkBorder">
+			<View>
+				<Text className="text-sm text">Search Window Position</Text>
+				<Text className="text-xxs text-neutral-500 dark:text-neutral-400 mt-1">
+					Position the center of the Sol prompt horizontally and its top edge
+					vertically.
+				</Text>
+			</View>
+
+			<View className="border-t border-lightBorder dark:border-darkBorder" />
+
+			<View className="flex-row items-center gap-2">
+				<View className="flex-1">
+					<Text className="text-sm text">Horizontal (X)</Text>
+					<Text className="text-xxs text-neutral-500 dark:text-neutral-400">
+						0% left · 50% center · 100% right
+					</Text>
+				</View>
+				<Input
+					bordered
+					className="w-20"
+					inputClassName="text-right"
+					value={x}
+					onChangeText={setX}
+				/>
+				<Text className="text-xs darker-text w-5">%</Text>
+			</View>
+
+			<View className="flex-row items-center gap-2">
+				<View className="flex-1">
+					<Text className="text-sm text">From top (Y)</Text>
+					<Text className="text-xxs text-neutral-500 dark:text-neutral-400">
+						0% top · 100% bottom
+					</Text>
+				</View>
+				<Input
+					bordered
+					className="w-20"
+					inputClassName="text-right"
+					value={y}
+					onChangeText={setY}
+				/>
+				<Text className="text-xs darker-text w-5">%</Text>
+			</View>
+
+			{!valuesAreValid && (
+				<Text className="text-xs text-red-500">
+					Use values between 0 and 100.
+				</Text>
+			)}
+
+			<View className="flex-row justify-end gap-3">
+				<TouchableOpacity onPress={reset}>
+					<View className="px-4 py-2 rounded-lg border border-color">
+						<Text className="text-sm text">Reset</Text>
+					</View>
+				</TouchableOpacity>
+				<TouchableOpacity
+					disabled={!valuesAreValid}
+					onPress={() => {
+						if (!valuesAreValid) return;
+						store.ui.setSearchWindowPosition({ x: parsedX, y: parsedY });
+					}}
+				>
+					<View
+						className={clsx("px-4 py-2 rounded-lg", {
+							"bg-accent-strong": valuesAreValid,
+							"bg-neutral-300 dark:bg-neutral-700": !valuesAreValid,
+						})}
+					>
+						<Text className="text-sm text-white">Apply</Text>
+					</View>
+				</TouchableOpacity>
+			</View>
+
+			<Text className="text-xxs text-neutral-500 dark:text-neutral-400">
+				The window always stays fully inside the active screen.
+			</Text>
+		</View>
+	);
+});
+
 export const General = observer(() => {
 	const store = useStore();
 	return (
@@ -214,6 +326,7 @@ export const General = observer(() => {
 				/>
 			</View>
 			<GlassAppearanceSettings />
+			<SearchWindowPositionSettings />
 			<View className="z-20 p-3 subBg gap-3 rounded-lg border border-lightBorder dark:border-darkBorder">
 				<View className="flex-row items-center z-30">
 					<Text className="flex-1 text-sm">Global Shortcut</Text>

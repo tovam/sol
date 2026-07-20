@@ -452,6 +452,15 @@ class SolNative: RCTEventEmitter {
     }
   }
 
+  @objc func setSearchWindowPosition(_ position: NSDictionary) {
+    let x = (position["x"] as? NSNumber)?.doubleValue ?? 50
+    let y = (position["y"] as? NSNumber)?.doubleValue ?? 20
+
+    DispatchQueue.main.async {
+      PanelManager.shared.setSearchWindowPosition(x: x, y: y)
+    }
+  }
+
   @objc func toggleDND() {
     DoNotDisturb.toggle()
   }

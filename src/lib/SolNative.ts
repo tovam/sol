@@ -7,6 +7,11 @@ export type GlassAppearance = {
 	tintOpacity: number;
 };
 
+export type SearchWindowPosition = {
+	x: number;
+	y: number;
+};
+
 class SolNative extends NativeEventEmitter {
 	openFile: (path: string) => void;
 	openWithFinder: (path: string) => void;
@@ -81,6 +86,7 @@ class SolNative extends NativeEventEmitter {
 	clearIndex: typeof global.__SolProxy.clearIndex;
 	setShowWindowOn: (on: "screenWithFrontmost" | "screenWithCursor") => void;
 	setGlassAppearance: (settings: GlassAppearance) => void;
+	setSearchWindowPosition: (position: SearchWindowPosition) => void;
 	useBackgroundOverlay: (v: boolean) => void;
 	toggleDND: () => void;
 	toggleScreenRuler: () => void;
@@ -217,6 +223,7 @@ class SolNative extends NativeEventEmitter {
 		this.hideWindow = global.__SolProxy.hideWindow;
 		this.setShowWindowOn = module.setShowWindowOn;
 		this.setGlassAppearance = module.setGlassAppearance;
+		this.setSearchWindowPosition = module.setSearchWindowPosition;
 		this.useBackgroundOverlay = module.useBackgroundOverlay;
 		this.toggleScreenRuler = module.toggleScreenRuler;
 		this.openDailymotionPlayer = module.openDailymotionPlayer;

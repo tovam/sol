@@ -8,6 +8,7 @@ enum PreferredScreen {
   public var preferredScreen: PreferredScreen = .frontmost
   private let mainWindow: Panel = Panel(contentRect: .zero)
   private var rootView: NSView?
+  private var searchWindowPosition = NSPoint(x: 50, y: 20)
 
   @objc static public let shared = PanelManager()
 
@@ -30,6 +31,34 @@ enum PreferredScreen {
     )
   }
 
+  func setSearchWindowPosition(x: Double, y: Double) {
+    searchWindowPosition = NSPoint(
+      x: min(max(x, 0), 100),
+      y: min(max(y, 0), 100)
+    )
+
+    guard mainWindow.isVisible, let screen = getPreferredScreen() else {
+      return
+    }
+
+    mainWindow.setFrameOrigin(positionedOrigin(for: mainWindow.frame.size, on: screen))
+  }
+
+  private func positionedOrigin(for windowSize: NSSize, on screen: NSScreen) -> NSPoint {
+    let visibleFrame = screen.visibleFrame
+    let requestedCenterX =
+      visibleFrame.minX + visibleFrame.width * searchWindowPosition.x / 100
+    let requestedTopY =
+      visibleFrame.maxY - visibleFrame.height * searchWindowPosition.y / 100
+    let maximumX = max(visibleFrame.minX, visibleFrame.maxX - windowSize.width)
+    let maximumY = max(visibleFrame.minY, visibleFrame.maxY - windowSize.height)
+
+    return NSPoint(
+      x: floor(min(max(requestedCenterX - windowSize.width / 2, visibleFrame.minX), maximumX)),
+      y: floor(min(max(requestedTopY - windowSize.height, visibleFrame.minY), maximumY))
+    )
+  }
+
   @objc func showWindow(target: String? = nil) {
     HotKeyManager.shared.settingsHotKey.isPaused = false
 
@@ -40,10 +69,7 @@ enum PreferredScreen {
       return
     }
 
-    let yOffset = screen.visibleFrame.height * 0.3
-    let x = screen.visibleFrame.midX - mainWindow.frame.width / 2
-    let y = screen.visibleFrame.midY - mainWindow.frame.height + yOffset
-    mainWindow.setFrameOrigin(NSPoint(x: floor(x), y: floor(y)))
+    mainWindow.setFrameOrigin(positionedOrigin(for: mainWindow.frame.size, on: screen))
 
     mainWindow.setIsVisible(true)
 
@@ -59,12 +85,11 @@ enum PreferredScreen {
   }
 
   @objc func resetSize() {
-    let origin = CGPoint(x: 0, y: 0)
     let size = mainWindow.windowSize(forContentSize: baseSize)
+    let origin = getPreferredScreen().map { positionedOrigin(for: size, on: $0) } ?? .zero
     let frame = NSRect(origin: origin, size: size)
     mainWindow.setFrame(frame, display: false)
     mainWindow.layoutInstalledRootView()
-    mainWindow.center()
   }
 
   @objc func setHeight(_ height: Int) {
@@ -82,14 +107,9 @@ enum PreferredScreen {
       return
     }
 
-    let yOffset = screen.visibleFrame.height * 0.3
-    let y = floor(screen.visibleFrame.midY - windowSize.height + yOffset)
-
     let frame = NSRect(
-      x: mainWindow.frame.minX,
-      y: y,
-      width: windowSize.width,
-      height: windowSize.height
+      origin: positionedOrigin(for: windowSize, on: screen),
+      size: windowSize
     )
     self.mainWindow.setFrame(frame, display: true)
     self.mainWindow.layoutInstalledRootView()
@@ -100,17 +120,16 @@ enum PreferredScreen {
       return
     }
 
-    let origin = CGPoint(x: 0, y: 0)
     let contentSize = CGSize(
       width: screenSize.width * CGFloat(proportion),
       height: screenSize.height * CGFloat(proportion)
     )
     let size = mainWindow.windowSize(forContentSize: contentSize)
+    let origin = getPreferredScreen().map { positionedOrigin(for: size, on: $0) } ?? .zero
 
     let frame = NSRect(origin: origin, size: size)
     mainWindow.setFrame(frame, display: false)
     mainWindow.layoutInstalledRootView()
-    mainWindow.center()
   }
 
   func toggle() {

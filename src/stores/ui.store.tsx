@@ -8,7 +8,11 @@ import {
 	normalizeDailymotionStreams,
 } from "lib/dailymotion";
 import { fetchPublicIPAddress } from "lib/publicIp";
-import { type GlassAppearance, solNative } from "lib/SolNative";
+import {
+	type GlassAppearance,
+	type SearchWindowPosition,
+	solNative,
+} from "lib/SolNative";
 import {
 	defaultShortcuts,
 	normalizeShortcut,
@@ -191,6 +195,38 @@ export const DEFAULT_GLASS_APPEARANCE: GlassAppearance = {
 	tintOpacity: 0,
 };
 
+export const DEFAULT_SEARCH_WINDOW_POSITION: SearchWindowPosition = {
+	x: 50,
+	y: 20,
+};
+
+const normalizeSearchWindowPosition = (
+	value: unknown,
+): SearchWindowPosition => {
+	const source =
+		value != null && typeof value === "object"
+			? (value as Record<string, unknown>)
+			: {};
+	const normalizeAxis = (rawValue: unknown, fallback: number) => {
+		if (
+			typeof rawValue !== "number" &&
+			!(typeof rawValue === "string" && rawValue.trim() !== "")
+		) {
+			return fallback;
+		}
+
+		const parsedValue = Number(rawValue);
+		return Number.isFinite(parsedValue)
+			? Math.min(Math.max(parsedValue, 0), 100)
+			: fallback;
+	};
+
+	return {
+		x: normalizeAxis(source.x, DEFAULT_SEARCH_WINDOW_POSITION.x),
+		y: normalizeAxis(source.y, DEFAULT_SEARCH_WINDOW_POSITION.y),
+	};
+};
+
 const normalizeGlassAppearance = (value: unknown): GlassAppearance => {
 	const source =
 		value != null && typeof value === "object"
@@ -349,6 +385,9 @@ export const createUIStore = (root: IRootStore) => {
 					store.customItems = src.customItems ?? [];
 					store.globalShortcut = src.globalShortcut ?? "option";
 					store.showWindowOn = src.showWindowOn ?? "screenWithFrontmost";
+					store.searchWindowPosition = normalizeSearchWindowPosition(
+						src.searchWindowPosition,
+					);
 					store.glassAppearance = normalizeGlassAppearance(src.glassAppearance);
 					store.calendarEnabled = src.calendarEnabled ?? true;
 					store.showAllDayEvents = src.showAllDayEvents ?? true;
@@ -388,6 +427,9 @@ export const createUIStore = (root: IRootStore) => {
 				solNative.setLaunchAtLogin(src.launchAtLogin ?? true);
 				solNative.setGlobalShortcut(src.globalShortcut);
 				solNative.setShowWindowOn(src.showWindowOn ?? "screenWithFrontmost");
+				solNative.setSearchWindowPosition(
+					toJS(store.searchWindowPosition),
+				);
 				solNative.setGlassAppearance(toJS(store.glassAppearance));
 				solNative.setMediaKeyForwardingEnabled(store.mediaKeyForwardingEnabled);
 				solNative.setHyperKeyEnabled(store.hyperKeyEnabled);
@@ -432,6 +474,9 @@ export const createUIStore = (root: IRootStore) => {
 					store.globalShortcut = jsonConfig.globalShortcut;
 				if (jsonConfig.showWindowOn !== undefined)
 					store.showWindowOn = jsonConfig.showWindowOn;
+				store.searchWindowPosition = normalizeSearchWindowPosition(
+					jsonConfig.searchWindowPosition,
+				);
 				store.glassAppearance = normalizeGlassAppearance(
 					jsonConfig.glassAppearance,
 				);
@@ -474,6 +519,7 @@ export const createUIStore = (root: IRootStore) => {
 			solNative.setLaunchAtLogin(store.launchAtLogin);
 			solNative.setGlobalShortcut(store.globalShortcut);
 			solNative.setShowWindowOn(store.showWindowOn);
+			solNative.setSearchWindowPosition(toJS(store.searchWindowPosition));
 			solNative.setGlassAppearance(toJS(store.glassAppearance));
 			solNative.setMediaKeyForwardingEnabled(store.mediaKeyForwardingEnabled);
 			solNative.setHyperKeyEnabled(store.hyperKeyEnabled);
@@ -505,6 +551,9 @@ export const createUIStore = (root: IRootStore) => {
 		showWindowOn: "screenWithFrontmost" as
 			| "screenWithFrontmost"
 			| "screenWithCursor",
+		searchWindowPosition: {
+			...DEFAULT_SEARCH_WINDOW_POSITION,
+		} as SearchWindowPosition,
 		glassAppearance: { ...DEFAULT_GLASS_APPEARANCE } as GlassAppearance,
 		query: "",
 		selectedIndex: 0,
@@ -884,6 +933,15 @@ export const createUIStore = (root: IRootStore) => {
 		setShowWindowOn: (on: "screenWithFrontmost" | "screenWithCursor") => {
 			solNative.setShowWindowOn(on);
 			store.showWindowOn = on;
+		},
+		setSearchWindowPosition: (position: SearchWindowPosition) => {
+			const normalizedPosition = normalizeSearchWindowPosition(position);
+			store.searchWindowPosition = normalizedPosition;
+			solNative.setSearchWindowPosition(toJS(normalizedPosition));
+		},
+		resetSearchWindowPosition: () => {
+			store.searchWindowPosition = { ...DEFAULT_SEARCH_WINDOW_POSITION };
+			solNative.setSearchWindowPosition(toJS(store.searchWindowPosition));
 		},
 		setGlassAppearance: (patch: Partial<GlassAppearance>) => {
 			const nextAppearance = normalizeGlassAppearance({
