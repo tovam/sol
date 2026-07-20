@@ -1,0 +1,105 @@
+name: Republish existing macOS build
+
+on:
+  push:
+    tags:
+      - "sol-republish-*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-republish-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish-development-release:
+    name: Republish public development release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+
+    steps:
+      - name: Resolve source workflow run
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          source_run_id="${GITHUB_REF_NAME#sol-republish-}"
+          if [[ -z "$source_run_id" || "$source_run_id" == *[!0-9]* ]]; then
+            echo "Tag must end with a numeric workflow run ID." >&2
+            exit 1
+          fi
+
+          source_sha="$(
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$source_run_id" \
+              --jq '.head_sha'
+          )"
+          build_conclusion="$(
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$source_run_id/jobs" \
+              --paginate \
+              --jq '.jobs[] | select(.name == "Build unsigned macOS app") | .conclusion'
+          )"
+
+          if [[ "$build_conclusion" != "success" ]]; then
+            echo "Source build job is not successful: ${build_conclusion:-missing}" >&2
+            exit 1
+          fi
+
+          echo "run-id=$source_run_id" >> "$GITHUB_OUTPUT"
+          echo "sha=$source_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Download built application
+        uses: actions/download-artifact@v4
+        with:
+          name: Sol-macOS-unsigned
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.source.outputs.run-id }}
+          github-token: ${{ github.token }}
+
+      - name: Publish development release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: sol-development
+          SOURCE_SHA: ${{ steps.source.outputs.sha }}
+        run: |
+          test -f Sol-macOS-unsigned.zip
+          sha256sum Sol-macOS-unsigned.zip > Sol-macOS-unsigned.zip.sha256
+
+          printf '%s\n' \
+            'Explicitly triggered unsigned macOS development build.' \
+            '' \
+            "Commit: \`${SOURCE_SHA}\`" \
+            '' \
+            'This development build is not notarized by Apple.' \
+            > "$RUNNER_TEMP/release-notes.md"
+
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title 'Sol development build (unsigned)' \
+              --notes-file "$RUNNER_TEMP/release-notes.md" \
+              --prerelease
+            gh release upload "$RELEASE_TAG" \
+              Sol-macOS-unsigned.zip \
+              Sol-macOS-unsigned.zip.sha256 \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
+          else
+            gh release create "$RELEASE_TAG" \
+              Sol-macOS-unsigned.zip \
+              Sol-macOS-unsigned.zip.sha256 \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$SOURCE_SHA" \
+              --title 'Sol development build (unsigned)' \
+              --notes-file "$RUNNER_TEMP/release-notes.md" \
+              --prerelease \
+              --latest=false
+          fi
+
+          printf 'Public download: https://github.com/%s/releases/download/%s/Sol-macOS-unsigned.zip\n' \
+            "$GITHUB_REPOSITORY" \
+            "$RELEASE_TAG" \
+            >> "$GITHUB_STEP_SUMMARY"

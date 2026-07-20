@@ -204,7 +204,6 @@ jobs:
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
             gh release edit "$RELEASE_TAG" \
               --repo "$GITHUB_REPOSITORY" \
-              --target "$GITHUB_SHA" \
               --title 'Sol development build (unsigned)' \
               --notes-file "$RUNNER_TEMP/release-notes.md" \
               --prerelease
