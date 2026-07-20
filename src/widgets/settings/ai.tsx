@@ -1,5 +1,6 @@
 import { AIProviderModelControls } from "components/AIProviderModelControls";
 import { OpenAICostSummary } from "components/OpenAICostSummary";
+import { TextInput } from "components/TextInput";
 import type { AIProviderSettings } from "lib/ai";
 import { observer } from "mobx-react-lite";
 import { useState } from "react";
@@ -10,7 +11,6 @@ import {
 	TouchableOpacity,
 	View,
 } from "react-native";
-import { TextInput } from "react-native-macos";
 import { useStore } from "store";
 import { validateAIProviderSettings } from "stores/ai.store";
 

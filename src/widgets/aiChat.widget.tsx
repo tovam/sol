@@ -1,5 +1,6 @@
 import { BackButton } from "components/BackButton";
 import { AIProviderModelControls } from "components/AIProviderModelControls";
+import { TextInput } from "components/TextInput";
 import type { AIMessage } from "lib/ai";
 import { solNative } from "lib/SolNative";
 import { observer } from "mobx-react-lite";
@@ -11,7 +12,6 @@ import {
 	TouchableOpacity,
 	View,
 } from "react-native";
-import { TextInput } from "react-native-macos";
 import { useStore } from "store";
 import type { QueuedAIConversation } from "stores/ai.store";
 import { Widget } from "stores/ui.store";

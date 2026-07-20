@@ -4,13 +4,13 @@ import { BackButton } from "components/BackButton";
 import { Input } from "components/Input";
 import { MySwitch } from "components/MySwitch";
 import { SolButton } from "components/SolButton";
+import type { TextInputHandle } from "components/TextInput";
 import { solNative } from "lib/SolNative";
 import { observer } from "mobx-react-lite";
 import React, { type FC, useEffect, useRef, useState } from "react";
 import {
 	Image,
 	Text,
-	type TextInput,
 	TouchableOpacity,
 	View,
 	type ViewStyle,
@@ -56,8 +56,8 @@ export const CreateItemWidget: FC<Props> = observer(({ style }) => {
 	const [iconSelectorOpen, setIconSelectorOpen] = useState(false);
 	const [focusedField, setFocusedField] = useState(0);
 
-	const nameInputRef = useRef<TextInput>(null);
-	const textInputRef = useRef<TextInput>(null);
+	const nameInputRef = useRef<TextInputHandle>(null);
+	const textInputRef = useRef<TextInputHandle>(null);
 
 	useEffect(() => {
 		const subscription = solNative.addListener("keyDown", (e) => {

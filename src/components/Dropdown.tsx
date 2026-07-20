@@ -9,9 +9,9 @@ import {
 	useColorScheme,
 	View,
 	type ViewStyle,
-	TextInput,
 } from "react-native";
 import { SelectableButton } from "./SelectableButton";
+import { TextInput } from "./TextInput";
 import { useEffect, useMemo, useState } from "react";
 import MiniSearch from "minisearch";
 

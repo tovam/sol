@@ -2,10 +2,10 @@ import { Assets } from "assets";
 import clsx from "clsx";
 import { observer } from "mobx-react-lite";
 import { DevSettings, Image, Text, TouchableOpacity, View } from "react-native";
-import { TextInput } from "react-native-macos";
 import { useStore } from "store";
 import { Widget } from "stores/ui.store";
 import { BackButton } from "./BackButton";
+import { TextInput } from "./TextInput";
 
 type Props = {
 	placeholder?: string;
@@ -16,7 +16,7 @@ type Props = {
 };
 
 export const MainInput = observer<Props>(
-	({ placeholder = "Search", showBackButton, hideIcon, className }) => {
+	({ placeholder = "Search", showBackButton, hideIcon, className, style }) => {
 		const store = useStore();
 		const isDarkMode = store.ui.isDarkMode;
 		const reloadApp = async () => {
@@ -57,10 +57,12 @@ export const MainInput = observer<Props>(
 		return (
 			<View
 				className={`h-16 flex-row items-center gap-3 flex-1 px-4 ${className ?? ""}`}
+				style={style}
 			>
 				{leftButton}
 				<TextInput
 					autoFocus
+					multiline={false}
 					enableFocusRing={false}
 					value={store.ui.query}
 					onChangeText={store.ui.setQuery}

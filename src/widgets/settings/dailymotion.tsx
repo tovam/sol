@@ -1,3 +1,4 @@
+import { TextInput } from "components/TextInput";
 import {
 	dailymotionPlayerURL,
 	extractDailymotionVideoID,
@@ -6,7 +7,6 @@ import { solNative } from "lib/SolNative";
 import { observer } from "mobx-react-lite";
 import { useState } from "react";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
-import { TextInput } from "react-native-macos";
 import { useStore } from "store";
 
 export const DailymotionSettings = observer(() => {

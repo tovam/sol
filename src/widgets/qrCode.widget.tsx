@@ -1,4 +1,5 @@
 import { BackButton } from "components/BackButton";
+import { TextInput } from "components/TextInput";
 import { solNative } from "lib/SolNative";
 import { type FC, useCallback, useEffect, useState } from "react";
 import {
@@ -9,7 +10,6 @@ import {
 	TouchableOpacity,
 	View,
 } from "react-native";
-import { TextInput } from "react-native-macos";
 import { useStore } from "store";
 import { Widget } from "stores/ui.store";
 

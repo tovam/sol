@@ -1,8 +1,8 @@
 import { BackButton } from "components/BackButton";
+import { TextInput } from "components/TextInput";
 import { observer } from "mobx-react-lite";
 import { type FC, useEffect, useState } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
-import { TextInput } from "react-native-macos";
 import { useStore } from "store";
 import { formatTimerDuration, parseTimerDuration } from "stores/timer.store";
 import { Widget } from "stores/ui.store";
