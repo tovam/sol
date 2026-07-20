@@ -16,6 +16,12 @@ private final class FloatingVideoPanel: NSPanel {
   override var canBecomeMain: Bool { true }
 }
 
+private final class NonInteractiveDailymotionWebView: WKWebView {
+  override func hitTest(_ point: NSPoint) -> NSView? {
+    nil
+  }
+}
+
 private struct DailymotionPlayerSource {
   enum Backend {
     case sdk(playerID: String)
@@ -1034,7 +1040,10 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     configuration.allowsAirPlayForMediaPlayback = true
     configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
 
-    let webView = WKWebView(frame: panel.contentView?.bounds ?? .zero, configuration: configuration)
+    let webView = NonInteractiveDailymotionWebView(
+      frame: panel.contentView?.bounds ?? .zero,
+      configuration: configuration
+    )
     webView.translatesAutoresizingMaskIntoConstraints = false
     webView.navigationDelegate = self
     webView.uiDelegate = self
