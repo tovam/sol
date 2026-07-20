@@ -29,6 +29,5 @@ const STYLES = StyleSheet.create({
 	input: {
 		flexShrink: 1,
 		minWidth: 0,
-		width: "100%",
 	},
 });

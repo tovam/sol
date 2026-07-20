@@ -1,7 +1,14 @@
 import { Assets } from "assets";
 import clsx from "clsx";
 import { observer } from "mobx-react-lite";
-import { DevSettings, Image, Text, TouchableOpacity, View } from "react-native";
+import {
+	DevSettings,
+	Image,
+	StyleSheet,
+	Text,
+	TouchableOpacity,
+	View,
+} from "react-native";
 import { useStore } from "store";
 import { Widget } from "stores/ui.store";
 import { BackButton } from "./BackButton";
@@ -66,10 +73,12 @@ export const MainInput = observer<Props>(
 					enableFocusRing={false}
 					value={store.ui.query}
 					onChangeText={store.ui.setQuery}
-					className={clsx("text-4xl font-light flex-1", {
+					className={clsx("text-4xl font-light", {
 						"text-white": isDarkMode,
 						"text-black": !isDarkMode,
 					})}
+					style={STYLES.searchInput}
+					textAlign="left"
 					placeholder={placeholder}
 					placeholderTextColor={isDarkMode ? "#FFFFFF66" : "#00000066"}
 					clearButtonMode="while-editing"
@@ -83,3 +92,12 @@ export const MainInput = observer<Props>(
 		);
 	},
 );
+
+const STYLES = StyleSheet.create({
+	searchInput: {
+		flexBasis: 0,
+		flexGrow: 1,
+		flexShrink: 1,
+		minWidth: 0,
+	},
+});
