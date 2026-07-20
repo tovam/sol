@@ -27,24 +27,44 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          source_run_id="${GITHUB_REF_NAME#sol-republish-}"
+          source_reference="${GITHUB_REF_NAME#sol-republish-}"
+          source_run_id="${source_reference%%-*}"
           if [[ -z "$source_run_id" || "$source_run_id" == *[!0-9]* ]]; then
-            echo "Tag must end with a numeric workflow run ID." >&2
+            echo "::error::Tag must start with a numeric workflow run ID."
             exit 1
           fi
 
+          retry_command() {
+            local attempt
+            for attempt in 1 2 3 4 5; do
+              if "$@"; then
+                return 0
+              fi
+              if [[ "$attempt" -lt 5 ]]; then
+                echo "::warning::GitHub API attempt $attempt failed; retrying." >&2
+                sleep "$((attempt * 3))"
+              fi
+            done
+            return 1
+          }
+
           source_sha="$(
-            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$source_run_id" \
+            retry_command gh api "repos/$GITHUB_REPOSITORY/actions/runs/$source_run_id" \
               --jq '.head_sha'
           )"
           build_conclusion="$(
-            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$source_run_id/jobs" \
+            retry_command gh api "repos/$GITHUB_REPOSITORY/actions/runs/$source_run_id/jobs" \
               --paginate \
               --jq '.jobs[] | select(.name == "Build unsigned macOS app") | .conclusion'
           )"
 
+          if [[ ! "$source_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Source workflow run returned an invalid commit SHA."
+            exit 1
+          fi
+
           if [[ "$build_conclusion" != "success" ]]; then
-            echo "Source build job is not successful: ${build_conclusion:-missing}" >&2
+            echo "::error::Source build job is not successful: ${build_conclusion:-missing}"
             exit 1
           fi
 
@@ -52,12 +72,25 @@ jobs:
           echo "sha=$source_sha" >> "$GITHUB_OUTPUT"
 
       - name: Download built application
-        uses: actions/download-artifact@v4
-        with:
-          name: Sol-macOS-unsigned
-          repository: ${{ github.repository }}
-          run-id: ${{ steps.source.outputs.run-id }}
-          github-token: ${{ github.token }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ steps.source.outputs.run-id }}
+        run: |
+          for attempt in 1 2 3 4 5; do
+            rm -f Sol-macOS-unsigned.zip
+            if gh run download "$SOURCE_RUN_ID" \
+              --name Sol-macOS-unsigned \
+              --repo "$GITHUB_REPOSITORY"; then
+              exit 0
+            fi
+            if [[ "$attempt" -lt 5 ]]; then
+              echo "::warning::Artifact download attempt $attempt failed; retrying."
+              sleep "$((attempt * 5))"
+            fi
+          done
+
+          echo "::error::Unable to download the built application after 5 attempts."
+          exit 1
 
       - name: Publish development release
         env:
