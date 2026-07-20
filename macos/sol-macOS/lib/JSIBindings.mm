@@ -234,7 +234,7 @@ void install(jsi::Runtime &rt,
     auto promiseCtr = rt.global().getPropertyAsFunction(rt, "Promise");
     auto promise = promiseCtr.callAsConstructor(
       rt,
-      HOSTFN("executor", [queryStr, sortStr]) {
+      HOSTFN("executor", [=]) {
         auto resolve = std::make_shared<jsi::Value>(rt, arguments[0]);
 
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
