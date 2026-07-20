@@ -38,6 +38,7 @@ class FileSearchIndex {
         CREATE TABLE IF NOT EXISTS files (
           path TEXT PRIMARY KEY,
           name TEXT NOT NULL,
+          normalized_name TEXT NOT NULL DEFAULT '',
           is_folder INTEGER NOT NULL,
           parent_path TEXT,
           indexed_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -47,12 +48,147 @@ class FileSearchIndex {
         CREATE INDEX IF NOT EXISTS idx_parent ON files(parent_path);
       """
       
-      var errorMessage: UnsafeMutablePointer<CChar>? = nil
-      if sqlite3_exec(db, createTableSQL, nil, nil, &errorMessage) != SQLITE_OK {
-        if let error = errorMessage {
-          sqlite3_free(error)
+      guard executeSQL(createTableSQL, in: db) else {
+        sqlite3_close(db)
+        self.db = nil
+        return
+      }
+
+      if !self.hasColumn("normalized_name", in: db) {
+        guard executeSQL(
+          "ALTER TABLE files ADD COLUMN normalized_name TEXT NOT NULL DEFAULT '';",
+          in: db
+        ) else {
+          sqlite3_close(db)
+          self.db = nil
+          return
         }
       }
+
+      queue.async { [weak self] in
+        guard let self, let db = self.db else { return }
+        guard self.backfillNormalizedNames(in: db) else { return }
+        self.executeSQL(
+          "CREATE INDEX IF NOT EXISTS idx_normalized_name "
+            + "ON files(normalized_name, path);",
+          in: db
+        )
+      }
+    }
+  }
+
+  @discardableResult
+  private func executeSQL(_ sql: String, in db: OpaquePointer) -> Bool {
+    var errorMessage: UnsafeMutablePointer<CChar>?
+    let result = sqlite3_exec(db, sql, nil, nil, &errorMessage)
+    if let errorMessage {
+      sqlite3_free(errorMessage)
+    }
+    return result == SQLITE_OK
+  }
+
+  private func hasColumn(_ columnName: String, in db: OpaquePointer) -> Bool {
+    var statement: OpaquePointer?
+    guard sqlite3_prepare_v2(db, "PRAGMA table_info(files);", -1, &statement, nil)
+      == SQLITE_OK
+    else {
+      return false
+    }
+    defer { sqlite3_finalize(statement) }
+
+    while sqlite3_step(statement) == SQLITE_ROW {
+      guard let column = sqlite3_column_text(statement, 1) else { continue }
+      if String(cString: column) == columnName {
+        return true
+      }
+    }
+    return false
+  }
+
+  private func normalizedSearchText(_ value: String) -> String {
+    let locale = Locale(identifier: "en_US_POSIX")
+    let normalized = value
+      .folding(
+        options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
+        locale: locale
+      )
+      .lowercased(with: locale)
+    return normalized.isEmpty ? value.lowercased(with: locale) : normalized
+  }
+
+  private func backfillNormalizedNames(in db: OpaquePointer) -> Bool {
+    var updateStatement: OpaquePointer?
+    guard sqlite3_prepare_v2(
+      db,
+      "UPDATE files SET normalized_name = ? WHERE path = ?;",
+      -1,
+      &updateStatement,
+      nil
+    ) == SQLITE_OK else {
+      return false
+    }
+    defer { sqlite3_finalize(updateStatement) }
+
+    var lastRowID: Int64 = 0
+    while true {
+      var selectStatement: OpaquePointer?
+      guard sqlite3_prepare_v2(
+        db,
+        """
+        SELECT rowid, path, name
+        FROM files
+        WHERE normalized_name = '' AND rowid > ?
+        ORDER BY rowid ASC
+        LIMIT 500;
+        """,
+        -1,
+        &selectStatement,
+        nil
+      ) == SQLITE_OK else {
+        return false
+      }
+      sqlite3_bind_int64(selectStatement, 1, lastRowID)
+      var batch: [(rowID: Int64, path: String, normalizedName: String)] = []
+      while sqlite3_step(selectStatement) == SQLITE_ROW {
+        guard
+          let pathColumn = sqlite3_column_text(selectStatement, 1),
+          let nameColumn = sqlite3_column_text(selectStatement, 2)
+        else {
+          continue
+        }
+        batch.append((
+          rowID: sqlite3_column_int64(selectStatement, 0),
+          path: String(cString: pathColumn),
+          normalizedName: normalizedSearchText(String(cString: nameColumn))
+        ))
+      }
+      sqlite3_finalize(selectStatement)
+      guard !batch.isEmpty else { return true }
+
+      guard executeSQL("BEGIN TRANSACTION;", in: db) else { return false }
+      for entry in batch {
+        sqlite3_bind_text(
+          updateStatement,
+          1,
+          entry.normalizedName,
+          -1,
+          SQLITE_TRANSIENT
+        )
+        sqlite3_bind_text(updateStatement, 2, entry.path, -1, SQLITE_TRANSIENT)
+        guard sqlite3_step(updateStatement) == SQLITE_DONE else {
+          sqlite3_reset(updateStatement)
+          sqlite3_clear_bindings(updateStatement)
+          executeSQL("ROLLBACK;", in: db)
+          return false
+        }
+        sqlite3_reset(updateStatement)
+        sqlite3_clear_bindings(updateStatement)
+      }
+      guard executeSQL("COMMIT;", in: db) else {
+        executeSQL("ROLLBACK;", in: db)
+        return false
+      }
+      lastRowID = batch[batch.count - 1].rowID
     }
   }
   
@@ -165,8 +301,10 @@ class FileSearchIndex {
 
   private func _insertOrUpdateFile(path: String, name: String, isFolder: Bool, parentPath: String, db: OpaquePointer) {
     let insertSQL = """
-      INSERT OR REPLACE INTO files (path, name, is_folder, parent_path)
-      VALUES (?, ?, ?, ?)
+      INSERT OR REPLACE INTO files (
+        path, name, normalized_name, is_folder, parent_path
+      )
+      VALUES (?, ?, ?, ?, ?)
     """
     
     var statement: OpaquePointer?
@@ -174,8 +312,15 @@ class FileSearchIndex {
     if sqlite3_prepare_v2(db, insertSQL, -1, &statement, nil) == SQLITE_OK {
       sqlite3_bind_text(statement, 1, path, -1, SQLITE_TRANSIENT)
       sqlite3_bind_text(statement, 2, name, -1, SQLITE_TRANSIENT)
-      sqlite3_bind_int(statement, 3, isFolder ? 1 : 0)
-      sqlite3_bind_text(statement, 4, parentPath, -1, SQLITE_TRANSIENT)
+      sqlite3_bind_text(
+        statement,
+        3,
+        normalizedSearchText(name),
+        -1,
+        SQLITE_TRANSIENT
+      )
+      sqlite3_bind_int(statement, 4, isFolder ? 1 : 0)
+      sqlite3_bind_text(statement, 5, parentPath, -1, SQLITE_TRANSIENT)
       
       sqlite3_step(statement)
       sqlite3_finalize(statement)
@@ -183,7 +328,10 @@ class FileSearchIndex {
   }
   
   func searchFiles(query: String) -> [File] {
-    if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+    let normalizedQuery = normalizedSearchText(
+      query.trimmingCharacters(in: .whitespacesAndNewlines)
+    )
+    if normalizedQuery.isEmpty {
       return []
     }
 
@@ -192,11 +340,18 @@ class FileSearchIndex {
     queue.sync { [weak self] in
       guard let self = self, let db = self.db else { return }
       
-      let searchSQL = "SELECT path, name, is_folder FROM files LIMIT 1000"
+      let searchSQL = """
+        SELECT path, name, is_folder
+        FROM files
+        WHERE instr(normalized_name, ?) > 0
+        ORDER BY normalized_name ASC, path ASC
+        LIMIT 1000
+      """
       
       var statement: OpaquePointer?
       
       if sqlite3_prepare_v2(db, searchSQL, -1, &statement, nil) == SQLITE_OK {
+        sqlite3_bind_text(statement, 1, normalizedQuery, -1, SQLITE_TRANSIENT)
         while sqlite3_step(statement) == SQLITE_ROW {
           if let cPath = sqlite3_column_text(statement, 0),
              let cName = sqlite3_column_text(statement, 1) {
@@ -204,15 +359,11 @@ class FileSearchIndex {
             let name = String(cString: cName)
             let isFolder = sqlite3_column_int(statement, 2) != 0
             
-            // Apply fuzzy matching
-            let score = (name as NSString).scoreAgainst(query)
-            if score > 0.5 {
-              results.append(File(
-                path: path,
-                name: name,
-                is_folder: isFolder
-              ))
-            }
+            results.append(File(
+              path: path,
+              name: name,
+              is_folder: isFolder
+            ))
           }
         }
         
@@ -220,7 +371,7 @@ class FileSearchIndex {
       }
     }
     
-    return results.sorted { $0.name < $1.name }
+    return results
   }
   
   func clearIndex() {
