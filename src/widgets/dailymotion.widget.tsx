@@ -58,6 +58,7 @@ export const DailymotionWidget: FC = observer(() => {
 			<View className="h-16 px-5 flex-row items-center gap-3 border-b border-color">
 				<BackButton
 					onPress={() => {
+						store.ui.clearDailymotionDVRIntent();
 						store.ui.setQuery("");
 						store.ui.focusWidget(Widget.SEARCH);
 					}}

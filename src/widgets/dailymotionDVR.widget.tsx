@@ -8,7 +8,14 @@ import {
 } from "lib/SolNative";
 import { observer } from "mobx-react-lite";
 import prettyBytes from "pretty-bytes";
-import { type FC, useEffect, useMemo, useRef, useState } from "react";
+import {
+	type FC,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useStore } from "store";
 
@@ -196,17 +203,28 @@ const BoundaryRow: FC<BoundaryRowProps> = ({
 export const DailymotionDVRWidget: FC = observer(() => {
 	const store = useStore();
 	const streams = store.ui.dailymotionStreams;
-	const [sourceID, setSourceID] = useState(streams[0]?.id ?? CUSTOM_SOURCE);
+	const dailymotionDVRIntent = store.ui.dailymotionDVRIntent;
+	const [sourceID, setSourceID] = useState(
+		dailymotionDVRIntent?.streamID ?? streams[0]?.id ?? CUSTOM_SOURCE,
+	);
 	const [customURL, setCustomURL] = useState("");
 	const [qualityHeight, setQualityHeight] = useState<number | null>(null);
 	const [inspectionStatus, setInspectionStatus] =
 		useState<InspectionStatus>("idle");
 	const [inspection, setInspection] = useState<DailymotionDVRInspection>();
 	const [inspectionError, setInspectionError] = useState("");
-	const [startMode, setStartMode] = useState<BoundaryMode>("edge");
-	const [endMode, setEndMode] = useState<BoundaryMode>("edge");
-	const [startClock, setStartClock] = useState("");
-	const [endClock, setEndClock] = useState("");
+	const [startMode, setStartMode] = useState<BoundaryMode>(
+		dailymotionDVRIntent ? "clock" : "edge",
+	);
+	const [endMode, setEndMode] = useState<BoundaryMode>(
+		dailymotionDVRIntent ? "clock" : "edge",
+	);
+	const [startClock, setStartClock] = useState(
+		dailymotionDVRIntent?.startClock ?? "",
+	);
+	const [endClock, setEndClock] = useState(
+		dailymotionDVRIntent?.endClock ?? "",
+	);
 	const [destination, setDestination] = useState(DEFAULT_DESTINATION);
 	const [destinationCapacity, setDestinationCapacity] = useState<number | null>(null);
 	const [destinationCapacityError, setDestinationCapacityError] = useState(false);
@@ -219,19 +237,44 @@ export const DailymotionDVRWidget: FC = observer(() => {
 	const [isStarting, setIsStarting] = useState(false);
 	const inspectionSequence = useRef(0);
 	const startInFlight = useRef(false);
+	const startAttemptID = useRef(0);
+	const widgetMounted = useRef(true);
+	const handledDVRIntentID = useRef<number | null>(null);
+	const dailymotionDVRIntentRef = useRef(dailymotionDVRIntent);
+	dailymotionDVRIntentRef.current = dailymotionDVRIntent;
 
 	const selectedStream = streams.find((stream) => stream.id === sourceID);
 	const sourceURL =
 		sourceID === CUSTOM_SOURCE ? customURL.trim() : selectedStream?.url ?? "";
 	const sourceIsValid = Boolean(extractDailymotionVideoID(sourceURL));
 	const active = isActiveRecording(recording);
-	const controlsDisabled = active || isStarting;
+	const controlsDisabled = active || isStarting || Boolean(dailymotionDVRIntent);
+
+	useEffect(() => {
+		widgetMounted.current = true;
+		return () => {
+			widgetMounted.current = false;
+			startAttemptID.current += 1;
+		};
+	}, []);
 
 	useEffect(() => {
 		if (sourceID !== CUSTOM_SOURCE && !selectedStream) {
 			setSourceID(streams[0]?.id ?? CUSTOM_SOURCE);
 		}
 	}, [selectedStream, sourceID, streams]);
+
+	useEffect(() => {
+		if (!dailymotionDVRIntent) return;
+		setSourceID(dailymotionDVRIntent.streamID);
+		setQualityHeight(null);
+		setStartMode("clock");
+		setEndMode("clock");
+		setStartClock(dailymotionDVRIntent.startClock);
+		setEndClock(dailymotionDVRIntent.endClock);
+		setFilenameEdited(false);
+		setFormError("");
+	}, [dailymotionDVRIntent]);
 
 	useEffect(() => {
 		let mounted = true;
@@ -276,6 +319,9 @@ export const DailymotionDVRWidget: FC = observer(() => {
 
 	useEffect(() => {
 		const sequence = ++inspectionSequence.current;
+		const currentIntent = dailymotionDVRIntentRef.current;
+		const intentForInspection =
+			currentIntent?.streamID === sourceID ? currentIntent : null;
 		setInspection(undefined);
 		setInspectionError("");
 		if (!sourceIsValid || active) {
@@ -291,8 +337,14 @@ export const DailymotionDVRWidget: FC = observer(() => {
 					if (inspectionSequence.current !== sequence) return;
 					setInspection(nextInspection);
 					setInspectionStatus("ready");
-					setStartClock(formatClock(new Date(nextInspection.start)));
-					setEndClock(formatClock(new Date(nextInspection.end)));
+					setStartClock(
+						intentForInspection?.startClock ??
+							formatClock(new Date(nextInspection.start)),
+					);
+					setEndClock(
+						intentForInspection?.endClock ??
+							formatClock(new Date(nextInspection.end)),
+					);
 					if (
 						qualityHeight != null &&
 						!nextInspection.qualities.some(
@@ -316,7 +368,13 @@ export const DailymotionDVRWidget: FC = observer(() => {
 				inspectionSequence.current += 1;
 			}
 		};
-	}, [active, qualityHeight, sourceIsValid, sourceURL]);
+	}, [
+		active,
+		qualityHeight,
+		sourceID,
+		sourceIsValid,
+		sourceURL,
+	]);
 
 	const selection = useMemo(
 		() =>
@@ -394,7 +452,7 @@ export const DailymotionDVRWidget: FC = observer(() => {
 		}
 	};
 
-	const startRecording = async () => {
+	const startRecording = useCallback(async () => {
 		if (
 			startInFlight.current ||
 			!canRecord ||
@@ -402,6 +460,9 @@ export const DailymotionDVRWidget: FC = observer(() => {
 			!selection.end
 		)
 			return;
+		const attemptID = ++startAttemptID.current;
+		const isCurrentAttempt = () =>
+			widgetMounted.current && startAttemptID.current === attemptID;
 		startInFlight.current = true;
 		setIsStarting(true);
 		setFormError("");
@@ -410,6 +471,7 @@ export const DailymotionDVRWidget: FC = observer(() => {
 				sourceURL,
 				qualityHeight,
 			);
+			if (!isCurrentAttempt()) return;
 			if (!freshInspection.isDVR) {
 				throw new Error("This stream no longer exposes a live DVR window.");
 			}
@@ -424,6 +486,17 @@ export const DailymotionDVRWidget: FC = observer(() => {
 			if (!freshSelection.start || !freshSelection.end || freshSelection.error) {
 				throw new Error(freshSelection.error || "The selected range is no longer available.");
 			}
+			let recordingOutputPath = outputPath;
+			if (!filenameEdited) {
+				const automaticFilename = defaultFilename(
+					freshInspection.title,
+					freshSelection.start,
+					freshSelection.end,
+				);
+				setFilename(automaticFilename);
+				const destinationPath = destination.replace(/\/$/, "");
+				recordingOutputPath = `${destinationPath}/${safeFilename(automaticFilename)}`;
+			}
 			const state = await solNative.startDailymotionDVRRecording({
 				url: sourceURL,
 				qualityHeight,
@@ -431,18 +504,121 @@ export const DailymotionDVRWidget: FC = observer(() => {
 				end: freshSelection.end.toISOString(),
 				startAtDVRBeginning: startMode === "edge",
 				endAtDVREnd: endMode === "edge",
-				outputPath,
+				outputPath: recordingOutputPath,
 			});
+			if (!isCurrentAttempt()) {
+				if (state.id && isActiveRecording(state)) {
+					try {
+						await solNative.cancelDailymotionDVRRecording(state.id);
+					} catch {
+						// The native manager may already have completed or cancelled it.
+					}
+				}
+				return;
+			}
 			setRecording(state);
 		} catch (error) {
-			setFormError(
-				error instanceof Error ? error.message : "Could not start the recording.",
+			if (isCurrentAttempt()) {
+				setFormError(
+					error instanceof Error
+						? error.message
+						: "Could not start the recording.",
 				);
+			}
 		} finally {
-			startInFlight.current = false;
-			setIsStarting(false);
+			if (startAttemptID.current === attemptID) {
+				startInFlight.current = false;
+				if (widgetMounted.current) setIsStarting(false);
+			}
 		}
-	};
+	}, [
+		canRecord,
+		destination,
+		endClock,
+		endMode,
+		filenameEdited,
+		outputPath,
+		qualityHeight,
+		selection.end,
+		selection.start,
+		sourceURL,
+		startClock,
+		startMode,
+	]);
+
+	useEffect(() => {
+		const intent = dailymotionDVRIntent;
+		if (
+			!intent ||
+			intent.streamID !== sourceID ||
+			handledDVRIntentID.current === intent.id
+		) {
+			return;
+		}
+
+		const rejectIntent = (message: string) => {
+			handledDVRIntentID.current = intent.id;
+			store.ui.clearDailymotionDVRIntent(intent.id);
+			setFormError(message);
+		};
+
+		if (!selectedStream || !sourceIsValid) {
+			rejectIntent("The selected Dailymotion favorite is no longer available.");
+			return;
+		}
+		if (active) {
+			rejectIntent("Another Dailymotion recording is already running.");
+			return;
+		}
+		if (inspectionStatus === "error") {
+			rejectIntent(inspectionError || "Could not inspect this DVR.");
+			return;
+		}
+		if (inspectionStatus !== "ready" || !inspection) return;
+		if (!inspection.isDVR) {
+			rejectIntent("This stream does not expose a live DVR window.");
+			return;
+		}
+		if (!selection.start || !selection.end || selection.error) {
+			rejectIntent(
+				selection.error || "The requested recording range is not available.",
+			);
+			return;
+		}
+		if (destinationCapacityError) {
+			rejectIntent("Sol could not verify free space at this destination.");
+			return;
+		}
+		if (destinationCapacity == null) return;
+		if (lacksDiskSpace) {
+			rejectIntent(
+				"Not enough free space for this recording and the 256 MB safety margin.",
+			);
+			return;
+		}
+		if (!canRecord) return;
+
+		handledDVRIntentID.current = intent.id;
+		store.ui.clearDailymotionDVRIntent(intent.id);
+		void startRecording();
+	}, [
+		active,
+		canRecord,
+		dailymotionDVRIntent,
+		destinationCapacity,
+		destinationCapacityError,
+		inspection,
+		inspectionError,
+		inspectionStatus,
+		lacksDiskSpace,
+		selectedStream,
+		selection.end,
+		selection.error,
+		selection.start,
+		sourceID,
+		sourceIsValid,
+		startRecording,
+	]);
 
 	const cancelRecording = async () => {
 		if (!recording.id) return;
@@ -470,6 +646,7 @@ export const DailymotionDVRWidget: FC = observer(() => {
 						value={sourceID}
 						options={sourceOptions}
 						onValueChange={(value) => {
+							store.ui.clearDailymotionDVRIntent();
 							setSourceID(String(value));
 							setQualityHeight(null);
 							setFilenameEdited(false);

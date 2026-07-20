@@ -4,6 +4,131 @@ export type DailymotionStream = {
 	url: string;
 };
 
+export type DailymotionCommandResolution =
+	| { kind: "none" }
+	| { kind: "suggest"; streams: DailymotionStream[] }
+	| { kind: "watch"; stream: DailymotionStream }
+	| {
+			kind: "record";
+			stream: DailymotionStream;
+			startClock: string;
+			endClock: string;
+	  }
+	| { kind: "error"; message: string };
+
+const DAILYMOTION_CLOCK_PATTERN =
+	/^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/;
+const DAILYMOTION_COMMAND_USAGE =
+	"dm <favorite> rec HH:mm[:ss] HH:mm[:ss]";
+
+function normalizeDailymotionFavoriteName(value: string) {
+	return value
+		.normalize("NFD")
+		.replace(/[\u0300-\u036f]/g, "")
+		.trim()
+		.replace(/\s+/g, " ")
+		.toLowerCase();
+}
+
+function normalizeDailymotionClock(value: string) {
+	const match = value.match(DAILYMOTION_CLOCK_PATTERN);
+	if (!match) return null;
+	return `${match[1]}:${match[2]}:${match[3] ?? "00"}`;
+}
+
+function exactDailymotionFavoriteMatches(
+	streams: DailymotionStream[],
+	name: string,
+) {
+	const normalizedName = normalizeDailymotionFavoriteName(name);
+	return streams.filter(
+		(stream) =>
+			normalizeDailymotionFavoriteName(stream.name) === normalizedName,
+	);
+}
+
+function resolveExactDailymotionFavorite(
+	streams: DailymotionStream[],
+	name: string,
+): DailymotionStream | { kind: "error"; message: string } {
+	const matches = exactDailymotionFavoriteMatches(streams, name);
+	if (matches.length === 1) return matches[0];
+	if (matches.length > 1) {
+		return {
+			kind: "error",
+			message: `Several Dailymotion favorites are named “${name.trim()}”.`,
+		};
+	}
+	return {
+		kind: "error",
+		message: `No Dailymotion favorite named “${name.trim()}”.`,
+	};
+}
+
+export function resolveDailymotionCommand(
+	query: string,
+	streams: DailymotionStream[],
+): DailymotionCommandResolution {
+	const prefix = query.match(/^\s*dm(?:\s+(.*))?\s*$/i);
+	if (!prefix) return { kind: "none" };
+
+	const payload = prefix[1]?.trim() ?? "";
+	if (!payload) return { kind: "suggest", streams };
+
+	// Exact matches come first so a favorite containing the reserved word "rec"
+	// can still be opened normally.
+	const exactWatchMatches = exactDailymotionFavoriteMatches(streams, payload);
+	if (exactWatchMatches.length === 1) {
+		return { kind: "watch", stream: exactWatchMatches[0] };
+	}
+	if (exactWatchMatches.length > 1) {
+		return {
+			kind: "error",
+			message: `Several Dailymotion favorites are named “${payload}”.`,
+		};
+	}
+
+	const recording = payload.match(/^(.+)\s+rec\s+(\S+)\s+(\S+)$/i);
+	if (recording) {
+		const startClock = normalizeDailymotionClock(recording[2]);
+		const endClock = normalizeDailymotionClock(recording[3]);
+		if (!startClock || !endClock) {
+			return {
+				kind: "error",
+				message: `Invalid time. Usage: ${DAILYMOTION_COMMAND_USAGE}`,
+			};
+		}
+		const stream = resolveExactDailymotionFavorite(streams, recording[1]);
+		if (!("id" in stream)) return stream;
+		return {
+			kind: "record",
+			stream,
+			startClock,
+			endClock,
+		};
+	}
+
+	if (/\s+rec(?:\s|$)/i.test(payload)) {
+		return {
+			kind: "error",
+			message: `Incomplete command. Usage: ${DAILYMOTION_COMMAND_USAGE}`,
+		};
+	}
+
+	const normalizedPayload = normalizeDailymotionFavoriteName(payload);
+	const suggestions = streams.filter((stream) =>
+		normalizeDailymotionFavoriteName(stream.name).includes(normalizedPayload),
+	);
+	if (suggestions.length > 0) {
+		return { kind: "suggest", streams: suggestions };
+	}
+
+	return {
+		kind: "error",
+		message: `No Dailymotion favorite named “${payload}”.`,
+	};
+}
+
 type ParsedDailymotionSource = {
 	kind: "video" | "geoPlayer";
 	videoID: string;

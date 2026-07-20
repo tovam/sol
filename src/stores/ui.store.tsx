@@ -4,8 +4,10 @@ import { Parser } from "expr-eval";
 import { CONSTANTS } from "lib/constants";
 import {
 	type DailymotionStream,
+	dailymotionPlayerURL,
 	extractDailymotionVideoID,
 	normalizeDailymotionStreams,
+	resolveDailymotionCommand,
 } from "lib/dailymotion";
 import { fetchPublicIPAddress } from "lib/publicIp";
 import {
@@ -96,6 +98,13 @@ export enum Widget {
 }
 
 export type DailymotionMode = "watch" | "record";
+
+export type DailymotionDVRIntent = {
+	id: number;
+	streamID: string;
+	startClock: string;
+	endClock: string;
+};
 
 export enum ItemType {
 	FILE = "FILE",
@@ -288,6 +297,7 @@ export const createUIStore = (root: IRootStore) => {
 	// Guards against spurious writes during hydrate/reload
 	let isHydrating = false;
 	let fileSearchRequestId = 0;
+	let dailymotionDVRIntentID = 0;
 
 	const getSelectionCount = (item: Pick<Item, "id" | "name">) => {
 		const countById = store.frequencies[item.id];
@@ -589,6 +599,7 @@ export const createUIStore = (root: IRootStore) => {
 		disabledItemIds: [] as string[],
 		dailymotionStreams: [] as DailymotionStream[],
 		dailymotionMode: "watch" as DailymotionMode,
+		dailymotionDVRIntent: null as DailymotionDVRIntent | null,
 		editingCustomItem: null as Item | null,
 		apps: [] as Item[],
 		isLoading: false,
@@ -700,6 +711,64 @@ export const createUIStore = (root: IRootStore) => {
 				return [...allItems].sort(compareRankedItems);
 			}
 
+			const dailymotionCommand = resolveDailymotionCommand(
+				store.query,
+				store.dailymotionStreams,
+			);
+			if (dailymotionCommand.kind !== "none") {
+				const commandErrorItem = (message: string): Item => ({
+					id: "dailymotion_command_error",
+					icon: "!",
+					name: message,
+					subName:
+						"dm <favorite> · dm <favorite> rec HH:mm[:ss] HH:mm[:ss]",
+					type: ItemType.CONFIGURATION,
+					preventClose: true,
+					callback: () => {
+						void solNative.showToast(message, "error");
+					},
+				});
+				const watchItem = (stream: DailymotionStream): Item => ({
+					id: `dailymotion_command_watch_${stream.id}`,
+					icon: "▶",
+					name: `Open ${stream.name}`,
+					subName: `Dailymotion favorite · dm ${stream.name}`,
+					type: ItemType.CONFIGURATION,
+					callback: () => {
+						void store.openDailymotionFavorite(stream.id);
+					},
+				});
+
+				switch (dailymotionCommand.kind) {
+					case "suggest":
+						return dailymotionCommand.streams.length > 0
+							? dailymotionCommand.streams.map(watchItem)
+							: [commandErrorItem("No saved Dailymotion favorites.")];
+					case "watch":
+						return [watchItem(dailymotionCommand.stream)];
+					case "record":
+						return [
+							{
+								id: `dailymotion_command_record_${dailymotionCommand.stream.id}`,
+								icon: "●",
+								name: `Record ${dailymotionCommand.stream.name}`,
+								subName: `${dailymotionCommand.startClock} → ${dailymotionCommand.endClock} · Dailymotion DVR`,
+								type: ItemType.CONFIGURATION,
+								preventClose: true,
+								callback: () => {
+									store.queueDailymotionDVRIntent(
+										dailymotionCommand.stream.id,
+										dailymotionCommand.startClock,
+										dailymotionCommand.endClock,
+									);
+								},
+							},
+						];
+					case "error":
+						return [commandErrorItem(dailymotionCommand.message)];
+				}
+			}
+
 			if (minisearch.documentCount === 0) {
 				minisearch.addAll(allItems);
 			} else {
@@ -749,6 +818,13 @@ export const createUIStore = (root: IRootStore) => {
 			return finalResults;
 		},
 		get searchItems(): Item[] {
+			const hasDailymotionCommand =
+				resolveDailymotionCommand(store.query, store.dailymotionStreams).kind !==
+				"none";
+			if (hasDailymotionCommand) {
+				return store.items.filter((item) => !store.isItemDisabled(item.id));
+			}
+
 			if (store.searchTab === SearchTab.FILES) {
 				return store.indexedFileResults;
 			}
@@ -852,12 +928,58 @@ export const createUIStore = (root: IRootStore) => {
 				(stream) => stream.id !== id,
 			);
 		},
+		openDailymotionFavorite: async (streamID: string) => {
+			const stream = store.dailymotionStreams.find(
+				(candidate) => candidate.id === streamID,
+			);
+			const playerURL = stream ? dailymotionPlayerURL(stream.url) : null;
+			if (!stream || !playerURL) {
+				void solNative.showToast("Dailymotion favorite not found", "error");
+				return;
+			}
+
+			try {
+				const opened = await solNative.openDailymotionPlayer(playerURL);
+				if (!opened) throw new Error("The player window did not become visible");
+				void solNative.showToast(`${stream.name} opened`, "success");
+			} catch {
+				void solNative.showToast(
+					`Could not open ${stream.name}`,
+					"error",
+				);
+			}
+		},
+		queueDailymotionDVRIntent: (
+			streamID: string,
+			startClock: string,
+			endClock: string,
+		) => {
+			store.setQuery("");
+			store.dailymotionDVRIntent = {
+				id: ++dailymotionDVRIntentID,
+				streamID,
+				startClock,
+				endClock,
+			};
+			store.dailymotionMode = "record";
+			store.focusWidget(Widget.DAILYMOTION);
+		},
+		clearDailymotionDVRIntent: (intentID?: number) => {
+			if (
+				intentID == null ||
+				store.dailymotionDVRIntent?.id === intentID
+			) {
+				store.dailymotionDVRIntent = null;
+			}
+		},
 		showDailymotion: (mode: DailymotionMode) => {
 			store.setQuery("");
+			store.dailymotionDVRIntent = null;
 			store.dailymotionMode = mode;
 			store.focusWidget(Widget.DAILYMOTION);
 		},
 		setDailymotionMode: (mode: DailymotionMode) => {
+			if (mode !== "record") store.dailymotionDVRIntent = null;
 			store.dailymotionMode = mode;
 		},
 		setSelectedIndex: (idx: number) => {
@@ -1001,6 +1123,12 @@ export const createUIStore = (root: IRootStore) => {
 			solNative.setGlassAppearance(toJS(store.glassAppearance));
 		},
 		focusWidget: (widget: Widget) => {
+			if (
+				store.focusedWidget === Widget.DAILYMOTION &&
+				widget !== Widget.DAILYMOTION
+			) {
+				store.dailymotionDVRIntent = null;
+			}
 			if (store.searchTab === SearchTab.FILES && widget !== Widget.SEARCH) {
 				fileSearchRequestId += 1;
 				store.indexedFileResults = [];
@@ -1250,6 +1378,7 @@ export const createUIStore = (root: IRootStore) => {
 			store.indexedFileResults = [];
 			store.isLoading = false;
 			store.editingCustomItem = null;
+			store.dailymotionDVRIntent = null;
 			if (store.temporaryResult == null) {
 				store.setQuery("");
 			}
