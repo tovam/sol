@@ -380,7 +380,7 @@ export const DailymotionDVRWidget: FC = observer(() => {
 	const qualityOptions = [
 		{ label: "Auto (best available)", value: "auto" },
 		...(inspection?.qualities ?? []).map((quality) => ({
-			label: quality.label,
+			label: `Up to ${quality.label}`,
 			value: String(quality.height),
 		})),
 	];

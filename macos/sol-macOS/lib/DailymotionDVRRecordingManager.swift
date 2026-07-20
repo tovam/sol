@@ -430,7 +430,7 @@ final class DailymotionDVRRecordingManager {
     if let qualityHeight {
       arguments += [
         "--format",
-        "best[height=\(qualityHeight)]/best[height<=\(qualityHeight)]",
+        "best[height<=\(qualityHeight)]",
       ]
     } else {
       arguments += ["--format", "best"]
@@ -482,8 +482,7 @@ final class DailymotionDVRRecordingManager {
       guard
         let height = (format["height"] as? NSNumber)?.intValue,
         height > 0,
-        (format["vcodec"] as? String) != "none",
-        (format["acodec"] as? String) != "none"
+        (format["vcodec"] as? String) != "none"
       else { continue }
       let protocolName = (format["protocol"] as? String)?.lowercased() ?? ""
       let formatURL = (format["url"] as? String)?.lowercased() ?? ""
@@ -516,7 +515,7 @@ final class DailymotionDVRRecordingManager {
     let candidate: Double?
     if let qualityHeight {
       candidate = qualities
-        .first { ($0["height"] as? Int) == qualityHeight }?["bitrateKbps"] as? Double
+        .first { (($0["height"] as? Int) ?? .max) <= qualityHeight }?["bitrateKbps"] as? Double
     } else {
       candidate = qualities.first?["bitrateKbps"] as? Double
         ?? (metadata["tbr"] as? NSNumber)?.doubleValue
