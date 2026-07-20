@@ -488,7 +488,7 @@ export const SearchWidget: FC = observer(() => {
 						{showNetworkPanel && <NetworkPanel />}
 					</View>
 
-					<View className="h-9 px-4 flex-row items-center justify-end gap-1 subBg border-t border-color">
+					<View className="h-9 px-4 flex-row items-center justify-end gap-1 border-t border-color">
 						{store.ui.currentItem?.type === ItemType.CUSTOM && (
 							<>
 								<Text className="text-xs darker-text mr-1">Edit</Text>

@@ -4,6 +4,7 @@ import AppKit
 private final class SpotlightGlassHostView: NSView {
   static let glassInset: CGFloat = 2
   let glassView = NSGlassEffectView(frame: .zero)
+  private let contentClipView = NSView(frame: .zero)
   var requestedCornerRadius: CGFloat = 24 {
     didSet {
       updateResolvedCornerRadius()
@@ -12,6 +13,13 @@ private final class SpotlightGlassHostView: NSView {
 
   override init(frame frameRect: NSRect) {
     super.init(frame: frameRect)
+    wantsLayer = true
+    layer?.backgroundColor = NSColor.clear.cgColor
+    contentClipView.wantsLayer = true
+    contentClipView.layer?.backgroundColor = NSColor.clear.cgColor
+    contentClipView.layer?.cornerCurve = .circular
+    contentClipView.layer?.masksToBounds = true
+    glassView.contentView = contentClipView
     addSubview(glassView)
   }
 
@@ -29,7 +37,21 @@ private final class SpotlightGlassHostView: NSView {
       width: max(0, bounds.width - inset * 2),
       height: max(0, bounds.height - inset * 2)
     )
+    contentClipView.frame = glassView.bounds
+    contentClipView.subviews.forEach { $0.frame = contentClipView.bounds }
     updateResolvedCornerRadius()
+  }
+
+  func installContentView(_ rootView: NSView) {
+    contentClipView.subviews.forEach { $0.removeFromSuperview() }
+    rootView.frame = contentClipView.bounds
+    rootView.autoresizingMask = [.width, .height]
+    contentClipView.addSubview(rootView)
+  }
+
+  func layoutContentView(_ rootView: NSView) {
+    contentClipView.frame = glassView.bounds
+    rootView.frame = contentClipView.bounds
   }
 
   private func updateResolvedCornerRadius() {
@@ -43,6 +65,9 @@ private final class SpotlightGlassHostView: NSView {
     let resolvedRadius = min(requestedCornerRadius, maximumRadius)
     if abs(glassView.cornerRadius - resolvedRadius) > 0.01 {
       glassView.cornerRadius = resolvedRadius
+    }
+    if abs((contentClipView.layer?.cornerRadius ?? 0) - resolvedRadius) > 0.01 {
+      contentClipView.layer?.cornerRadius = resolvedRadius
     }
   }
 }
@@ -131,8 +156,7 @@ final class Panel: NSPanel, NSWindowDelegate {
     rootView.autoresizingMask = [.width, .height]
 
     if #available(macOS 26.0, *), let hostView = contentView as? SpotlightGlassHostView {
-      rootView.frame = hostView.glassView.bounds
-      hostView.glassView.contentView = rootView
+      hostView.installContentView(rootView)
     } else {
       rootView.frame = contentView?.bounds ?? .zero
       contentView?.addSubview(rootView)
@@ -156,7 +180,7 @@ final class Panel: NSPanel, NSWindowDelegate {
 
     if #available(macOS 26.0, *), let hostView = contentView as? SpotlightGlassHostView {
       hostView.layoutSubtreeIfNeeded()
-      installedRootView.frame = hostView.glassView.bounds
+      hostView.layoutContentView(installedRootView)
     } else {
       installedRootView.frame = contentView?.bounds ?? .zero
     }
