@@ -48,8 +48,7 @@ private enum FrameAnimationCurve {
   private var pendingPresentationFrame: NSRect?
   private var frameAnimationTimer: Timer?
   private var frameAnimationGeneration = 0
-  private var resizeAnimationGeneration = 0
-  private var resizeTargetFrame: NSRect?
+  private var frameAnimationTarget: NSRect?
 
   @objc static public let shared = PanelManager()
 
@@ -139,8 +138,6 @@ private enum FrameAnimationCurve {
       origin: positionedOrigin(for: windowSize, on: screen),
       size: windowSize
     )
-    resizeAnimationGeneration += 1
-    resizeTargetFrame = nil
     restingFrame = frame
     if presentationPhase == .opening || presentationPhase == .closing {
       pendingPresentationFrame = frame
@@ -219,6 +216,7 @@ private enum FrameAnimationCurve {
       return
     }
 
+    let wasOpening = presentationPhase == .opening
     stopFrameAnimation()
     presentationPhase = .closing
     pendingPresentationFrame = nil
@@ -232,8 +230,9 @@ private enum FrameAnimationCurve {
       return
     }
 
+    let closingBaseFrame = wasOpening ? (restingFrame ?? mainWindow.frame) : mainWindow.frame
     animateFrame(
-      to: closingFrame(around: restingFrame ?? mainWindow.frame),
+      to: closingFrame(around: closingBaseFrame),
       alpha: 0,
       duration: 0.085,
       curve: .easeIn
@@ -288,6 +287,7 @@ private enum FrameAnimationCurve {
     let startFrame = mainWindow.frame
     let startAlpha = mainWindow.alphaValue
     let startTime = CACurrentMediaTime()
+    frameAnimationTarget = targetFrame
     frameAnimationGeneration += 1
     let generation = frameAnimationGeneration
 
@@ -310,6 +310,7 @@ private enum FrameAnimationCurve {
       if self.frameAnimationTimer === timer {
         self.frameAnimationTimer = nil
       }
+      self.frameAnimationTarget = nil
       self.mainWindow.setFrame(targetFrame, display: true)
       self.mainWindow.alphaValue = targetAlpha
       self.mainWindow.layoutInstalledRootView()
@@ -324,6 +325,7 @@ private enum FrameAnimationCurve {
     frameAnimationGeneration += 1
     frameAnimationTimer?.invalidate()
     frameAnimationTimer = nil
+    frameAnimationTarget = nil
   }
 
   private func interpolatedFrame(
@@ -390,49 +392,40 @@ private enum FrameAnimationCurve {
   }
 
   private func setSearchFrame(_ frame: NSRect, on screen: NSScreen) {
-    if let resizeTargetFrame, framesAreNearlyEqual(resizeTargetFrame, frame) {
+    if let frameAnimationTarget, framesAreNearlyEqual(frameAnimationTarget, frame) {
       return
     }
 
-    resizeAnimationGeneration += 1
-    let generation = resizeAnimationGeneration
     let currentFrame = mainWindow.frame
-    let staysOnSameScreen = mainWindow.screen === screen
-    let keepsWidth = abs(currentFrame.width - frame.width) < 1
-    let keepsTopEdge = abs(currentFrame.maxY - frame.maxY) < 1
-    let changesHeight = abs(currentFrame.height - frame.height) >= 1
-    let shouldAnimate = mainWindow.isVisible
-      && staysOnSameScreen
-      && keepsWidth
-      && keepsTopEdge
-      && changesHeight
-      && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-
-    guard shouldAnimate else {
-      resizeTargetFrame = nil
-      mainWindow.setFrame(frame, display: true)
+    if framesAreNearlyEqual(currentFrame, frame) {
+      stopFrameAnimation()
+      mainWindow.setFrame(frame, display: mainWindow.isVisible)
       mainWindow.layoutInstalledRootView()
       return
     }
 
-    resizeTargetFrame = frame
-    let timingFunction = CAMediaTimingFunction(controlPoints: 0.16, 1, 0.3, 1)
-    NSAnimationContext.runAnimationGroup(
-      { context in
-        context.duration = 0.18
-        context.timingFunction = timingFunction
-        mainWindow.animator().setFrame(frame, display: true)
-      },
-      completionHandler: { [weak self] in
-        guard let self, self.resizeAnimationGeneration == generation else {
-          return
-        }
+    let staysOnSameScreen = mainWindow.screen.map {
+      framesAreNearlyEqual($0.frame, screen.frame)
+    } ?? false
+    let shouldAnimate = presentationPhase == .visible
+      && mainWindow.isVisible
+      && staysOnSameScreen
+      && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
 
-        self.resizeTargetFrame = nil
-        self.mainWindow.setFrame(frame, display: true)
-        self.mainWindow.layoutInstalledRootView()
-      }
-    )
+    guard shouldAnimate else {
+      stopFrameAnimation()
+      mainWindow.setFrame(frame, display: mainWindow.isVisible)
+      mainWindow.layoutInstalledRootView()
+      return
+    }
+
+    let isExpanding = frame.height > currentFrame.height
+    animateFrame(
+      to: frame,
+      alpha: mainWindow.alphaValue,
+      duration: isExpanding ? 0.24 : 0.18,
+      curve: .easeInOut
+    ) {}
   }
 
   private func framesAreNearlyEqual(_ lhs: NSRect, _ rhs: NSRect) -> Bool {
