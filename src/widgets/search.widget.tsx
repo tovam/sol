@@ -154,7 +154,6 @@ function getItemMetadata(item: Item, username: string) {
 		case ItemType.APPLICATION:
 			details.push("Application");
 			if (item.url) details.push(parentDirectory(item.url, username));
-			if (item.isRunning) details.push("Running");
 			break;
 		case ItemType.FILE:
 			details.push("File");
@@ -250,7 +249,16 @@ function ItemIcon({
 	}
 
 	return (
-		<View className="w-8 h-8 shrink-0 items-center justify-center">{icon}</View>
+		<View className="relative w-8 h-8 shrink-0 items-center justify-center">
+			{icon}
+			{item.type === ItemType.APPLICATION && item.isRunning && (
+				<View
+					accessible
+					accessibilityLabel={`${item.name} is running`}
+					className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-[#5f936d] dark:bg-[#75a681] border border-black/20 dark:border-white/20"
+				/>
+			)}
+		</View>
 	);
 }
 
