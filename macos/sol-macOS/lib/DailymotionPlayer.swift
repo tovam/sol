@@ -689,7 +689,7 @@ private final class DailymotionControlsView: NSVisualEffectView,
       clockTimeField.widthAnchor.constraint(equalToConstant: 64),
       liveButton.widthAnchor.constraint(equalToConstant: 46),
       ratePopUp.widthAnchor.constraint(equalToConstant: 80),
-      qualityPopUp.widthAnchor.constraint(equalToConstant: 80),
+      qualityPopUp.widthAnchor.constraint(equalToConstant: 84),
       volumeButton.widthAnchor.constraint(equalToConstant: 32),
       volumeSlider.widthAnchor.constraint(greaterThanOrEqualToConstant: 40),
       volumeSlider.widthAnchor.constraint(lessThanOrEqualToConstant: 96),
@@ -1558,7 +1558,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
 
   private func toolbarHeight(forContentWidth width: CGFloat) -> CGFloat {
     controlsView?.toolbarHeight(forContentWidth: width)
-      ?? (width < 480
+      ?? (width < 528
         ? DailymotionControlsView.twoRowHeight
         : DailymotionControlsView.singleRowHeight)
   }
