@@ -1,3 +1,6 @@
+import AppKit
+import QuartzCore
+
 enum PreferredScreen {
   case frontmost
   case withMouse
@@ -9,6 +12,7 @@ enum PreferredScreen {
   private let mainWindow: Panel = Panel(contentRect: .zero)
   private var rootView: NSView?
   private var searchWindowPosition = NSPoint(x: 50, y: 20)
+  private let openScaleAnimationKey = "sol.open.scale"
 
   @objc static public let shared = PanelManager()
 
@@ -69,19 +73,57 @@ enum PreferredScreen {
       return
     }
 
+    let shouldAnimate = shouldAnimateOpening()
+    mainWindow.contentView?.layer?.removeAnimation(forKey: openScaleAnimationKey)
+    mainWindow.alphaValue = shouldAnimate ? 0 : 1
     mainWindow.setFrameOrigin(positionedOrigin(for: mainWindow.frame.size, on: screen))
 
     mainWindow.setIsVisible(true)
 
     mainWindow.makeKeyAndOrderFront(self)
 
+    if shouldAnimate {
+      animateOpening()
+    }
+
     SolEmitter.sharedInstance.onShow(target: nil)
   }
 
   @objc func hideWindow() {
+    mainWindow.contentView?.layer?.removeAnimation(forKey: openScaleAnimationKey)
+    mainWindow.alphaValue = 1
     mainWindow.setIsVisible(false)
     SolEmitter.sharedInstance.onHide()
     HotKeyManager.shared.settingsHotKey.isPaused = true
+  }
+
+  private func shouldAnimateOpening() -> Bool {
+    return !mainWindow.isVisible
+      && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+      && mainWindow.frame.width > 1
+      && mainWindow.frame.height > 1
+      && mainWindow.contentView?.layer != nil
+  }
+
+  private func animateOpening() {
+    guard let layer = mainWindow.contentView?.layer else {
+      mainWindow.alphaValue = 1
+      return
+    }
+
+    let timingFunction = CAMediaTimingFunction(controlPoints: 0.16, 1, 0.3, 1)
+    let scale = CABasicAnimation(keyPath: "transform.scale")
+    scale.fromValue = 1.022
+    scale.toValue = 1
+    scale.duration = 0.16
+    scale.timingFunction = timingFunction
+    layer.add(scale, forKey: openScaleAnimationKey)
+
+    NSAnimationContext.runAnimationGroup { context in
+      context.duration = 0.09
+      context.timingFunction = timingFunction
+      mainWindow.animator().alphaValue = 1
+    }
   }
 
   @objc func resetSize() {
