@@ -709,6 +709,9 @@ export const createKeystrokeStore = (root: IRootStore) => {
 				// up key
 				case 126: {
 					switch (root.ui.focusedWidget) {
+						case Widget.AI_MODEL_PICKER:
+							break;
+
 						case Widget.SCRATCHPAD:
 							break;
 
@@ -757,6 +760,9 @@ export const createKeystrokeStore = (root: IRootStore) => {
 				// down key
 				case 125: {
 					switch (root.ui.focusedWidget) {
+						case Widget.AI_MODEL_PICKER:
+							break;
+
 						case Widget.CLIPBOARD: {
 							root.ui.selectedIndex = Math.min(
 								root.ui.selectedIndex + 1,
