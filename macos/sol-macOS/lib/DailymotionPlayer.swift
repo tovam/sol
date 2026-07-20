@@ -1266,6 +1266,11 @@ private final class DailymotionControlsView: NSVisualEffectView,
 final class DailymotionPlayerController: NSObject, NSWindowDelegate {
   static let shared = DailymotionPlayerController()
 
+  private enum ResizeDriver {
+    case width
+    case height
+  }
+
   private var panel: FloatingVideoPanel?
   private var webView: WKWebView?
   private var controlsView: DailymotionControlsView?
@@ -1312,6 +1317,8 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
   private var isApplyingAspectFrame = false
   private var isTransitioningFullscreen = false
   private var needsAspectReconciliationAfterLiveResize = false
+  private var liveResizeStartContentSize: NSSize?
+  private var liveResizeDriver: ResizeDriver?
 
   func open(urlString: String, completion: @escaping (Bool) -> Void) {
     guard let source = DailymotionPlayerSource.parse(urlString) else {
@@ -1406,13 +1413,44 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
       forFrameRect: NSRect(origin: .zero, size: proposedFrameSize)
     ).size
     let currentContentSize = sender.contentRect(forFrameRect: sender.frame).size
+    let resizeReference = liveResizeStartContentSize ?? currentContentSize
+    let proposedDriver = dominantResizeDriver(
+      proposed: proposedContentSize,
+      relativeTo: resizeReference
+    )
+    let resizeDriver: ResizeDriver
+    if sender.inLiveResize {
+      if liveResizeStartContentSize == nil {
+        liveResizeStartContentSize = currentContentSize
+      }
+      resizeDriver = liveResizeDriver ?? proposedDriver
+      if liveResizeDriver == nil {
+        liveResizeDriver = proposedDriver
+      }
+    } else {
+      resizeDriver = proposedDriver
+    }
     let constrainedContentSize = aspectConstrainedContentSize(
       proposed: proposedContentSize,
-      current: currentContentSize
+      driver: resizeDriver
     )
     return sender.frameRect(
       forContentRect: NSRect(origin: .zero, size: constrainedContentSize)
     ).size
+  }
+
+  func windowWillStartLiveResize(_ notification: Notification) {
+    guard
+      let window = notification.object as? NSWindow,
+      let panel,
+      window === panel
+    else {
+      return
+    }
+    liveResizeStartContentSize = window.contentRect(
+      forFrameRect: window.frame
+    ).size
+    liveResizeDriver = nil
   }
 
   func windowDidEndLiveResize(_ notification: Notification) {
@@ -1423,6 +1461,8 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     else {
       return
     }
+    liveResizeStartContentSize = nil
+    liveResizeDriver = nil
     if needsAspectReconciliationAfterLiveResize {
       needsAspectReconciliationAfterLiveResize = false
       reconcilePanelAspectRatio()
@@ -1463,14 +1503,12 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
 
   private func aspectConstrainedContentSize(
     proposed: NSSize,
-    current: NSSize
+    driver: ResizeDriver
   ) -> NSSize {
     let minimumWidth = CGFloat(320)
     let ratio = max(videoAspectRatio, 0.01)
-    let widthDelta = abs(proposed.width - current.width) / max(current.width, 1)
-    let heightDelta = abs(proposed.height - current.height) / max(current.height, 1)
 
-    if widthDelta >= heightDelta {
+    if driver == .width {
       let width = max(minimumWidth, proposed.width)
       return NSSize(
         width: width,
@@ -1499,12 +1537,23 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
 
     let width = max(
       minimumWidth,
-      (proposed.height - toolbarHeight(forContentWidth: current.width)) * ratio
+      (proposed.height - toolbarHeight(forContentWidth: proposed.width)) * ratio
     )
     return NSSize(
       width: width,
       height: width / ratio + toolbarHeight(forContentWidth: width)
     )
+  }
+
+  private func dominantResizeDriver(
+    proposed: NSSize,
+    relativeTo reference: NSSize
+  ) -> ResizeDriver {
+    let widthDelta = abs(proposed.width - reference.width)
+      / max(reference.width, 1)
+    let heightDelta = abs(proposed.height - reference.height)
+      / max(reference.height, 1)
+    return widthDelta >= heightDelta ? .width : .height
   }
 
   private func updatePanelMinimumSize() {
@@ -1547,7 +1596,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
       if targetContentSize.height > maximumContentHeight {
         targetContentSize = aspectConstrainedContentSize(
           proposed: NSSize(width: width, height: maximumContentHeight),
-          current: targetContentSize
+          driver: .height
         )
       }
     }
@@ -1633,6 +1682,8 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     resolvedVideoAspectFrameToken = nil
     isTransitioningFullscreen = false
     needsAspectReconciliationAfterLiveResize = false
+    liveResizeStartContentSize = nil
+    liveResizeDriver = nil
 
     let contentController = WKUserContentController()
     contentController.add(self, name: dailymotionBridgeName)
