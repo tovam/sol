@@ -18,6 +18,41 @@ private final class FloatingVideoPanel: NSPanel {
 
 private final class NonInteractiveDailymotionWebView: WKWebView {
   override func hitTest(_ point: NSPoint) -> NSView? {
+    frame.contains(point) ? self : nil
+  }
+
+  override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+    true
+  }
+
+  override func resetCursorRects() {
+    addCursorRect(bounds, cursor: .openHand)
+  }
+
+  override func mouseDown(with event: NSEvent) {
+    guard
+      let window,
+      !window.styleMask.contains(.fullScreen)
+    else {
+      return
+    }
+
+    NSCursor.closedHand.push()
+    defer { NSCursor.pop() }
+    window.performDrag(with: event)
+  }
+
+  override func mouseDragged(with event: NSEvent) {}
+  override func mouseUp(with event: NSEvent) {}
+  override func rightMouseDown(with event: NSEvent) {}
+  override func rightMouseDragged(with event: NSEvent) {}
+  override func rightMouseUp(with event: NSEvent) {}
+  override func otherMouseDown(with event: NSEvent) {}
+  override func otherMouseDragged(with event: NSEvent) {}
+  override func otherMouseUp(with event: NSEvent) {}
+  override func scrollWheel(with event: NSEvent) {}
+
+  override func menu(for event: NSEvent) -> NSMenu? {
     nil
   }
 }
