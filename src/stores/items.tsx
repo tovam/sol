@@ -624,8 +624,19 @@ export function createBaseItems(store: IRootStore) {
 			alias: "dailymotion video stream floating always on top pip flux",
 			type: ItemType.CONFIGURATION,
 			callback: () => {
-				store.ui.setQuery("");
-				store.ui.focusWidget(Widget.DAILYMOTION);
+				store.ui.showDailymotion("watch");
+			},
+			preventClose: true,
+		},
+		{
+			id: "dailymotion_dvr_recording",
+			icon: "●",
+			name: "Record Dailymotion DVR",
+			alias:
+				"dailymotion dvr pvr live stream record recording rec enregistrer enregistrement flux",
+			type: ItemType.CONFIGURATION,
+			callback: () => {
+				store.ui.showDailymotion("record");
 			},
 			preventClose: true,
 		},

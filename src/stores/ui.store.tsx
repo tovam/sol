@@ -95,6 +95,8 @@ export enum Widget {
 	HISTORY = "HISTORY",
 }
 
+export type DailymotionMode = "watch" | "record";
+
 export enum ItemType {
 	FILE = "FILE",
 	APPLICATION = "APPLICATION",
@@ -586,6 +588,7 @@ export const createUIStore = (root: IRootStore) => {
 		customItems: [] as Item[],
 		disabledItemIds: [] as string[],
 		dailymotionStreams: [] as DailymotionStream[],
+		dailymotionMode: "watch" as DailymotionMode,
 		editingCustomItem: null as Item | null,
 		apps: [] as Item[],
 		isLoading: false,
@@ -848,6 +851,14 @@ export const createUIStore = (root: IRootStore) => {
 			store.dailymotionStreams = store.dailymotionStreams.filter(
 				(stream) => stream.id !== id,
 			);
+		},
+		showDailymotion: (mode: DailymotionMode) => {
+			store.setQuery("");
+			store.dailymotionMode = mode;
+			store.focusWidget(Widget.DAILYMOTION);
+		},
+		setDailymotionMode: (mode: DailymotionMode) => {
+			store.dailymotionMode = mode;
 		},
 		setSelectedIndex: (idx: number) => {
 			store.selectedIndex = idx;

@@ -12,6 +12,57 @@ export type SearchWindowPosition = {
 	y: number;
 };
 
+export type DailymotionDVRQuality = {
+	height: number;
+	label: string;
+	fps?: number;
+	bitrateKbps?: number;
+};
+
+export type DailymotionDVRInspection = {
+	title: string;
+	thumbnail?: string;
+	start: string;
+	end: string;
+	duration: number;
+	isDVR: boolean;
+	targetDuration: number;
+	bitrateKbps?: number;
+	qualities: DailymotionDVRQuality[];
+};
+
+export type DailymotionDVRRecordingState = {
+	id?: string;
+	status:
+		| "idle"
+		| "preparing"
+		| "recording"
+		| "finalizing"
+		| "cancelling"
+		| "cancelled"
+		| "completed"
+		| "error";
+	progress?: number;
+	message?: string;
+	error?: string;
+	elapsed?: number;
+	duration?: number;
+	bytes?: number;
+	estimatedBytes?: number;
+	availableBytes?: number;
+	outputPath?: string;
+};
+
+export type DailymotionDVRRecordingOptions = {
+	url: string;
+	qualityHeight: number | null;
+	start: string;
+	end: string;
+	startAtDVRBeginning: boolean;
+	endAtDVREnd: boolean;
+	outputPath: string;
+};
+
 class SolNative extends NativeEventEmitter {
 	openFile: (path: string) => void;
 	openWithFinder: (path: string) => void;
@@ -69,6 +120,7 @@ class SolNative extends NativeEventEmitter {
 	resetWindowSize: typeof global.__SolProxy.resetWindowSize;
 	setWindowHeight: typeof global.__SolProxy.setHeight;
 	openFinderAt: (path: string) => void;
+	revealFileInFinder: (path: string) => void;
 	resizeTopLeft: () => void;
 	resizeTopRight: () => void;
 	resizeBottomLeft: () => void;
@@ -91,6 +143,16 @@ class SolNative extends NativeEventEmitter {
 	toggleDND: () => void;
 	toggleScreenRuler: () => void;
 	openDailymotionPlayer: (url: string) => Promise<boolean>;
+	inspectDailymotionDVR: (
+		url: string,
+		qualityHeight: number | null,
+	) => Promise<DailymotionDVRInspection>;
+	startDailymotionDVRRecording: (
+		options: DailymotionDVRRecordingOptions,
+	) => Promise<DailymotionDVRRecordingState>;
+	cancelDailymotionDVRRecording: (jobID: string) => Promise<boolean>;
+	getDailymotionDVRRecordingState: () => Promise<DailymotionDVRRecordingState>;
+	getDailymotionDVRDestinationCapacity: (path: string) => Promise<number>;
 	getNetworkInfo: () => Promise<{
 		connection?: string;
 		ssid?: string;
@@ -201,6 +263,7 @@ class SolNative extends NativeEventEmitter {
 		this.setWindowRelativeSize = module.setWindowRelativeSize;
 		this.setWindowHeight = module.setWindowHeight;
 		this.openFinderAt = module.openFinderAt;
+		this.revealFileInFinder = module.revealFileInFinder;
 		this.resizeTopLeft = module.resizeTopLeft;
 		this.resizeTopRight = module.resizeTopRight;
 		this.resizeBottomLeft = module.resizeBottomLeft;
@@ -227,6 +290,15 @@ class SolNative extends NativeEventEmitter {
 		this.useBackgroundOverlay = module.useBackgroundOverlay;
 		this.toggleScreenRuler = module.toggleScreenRuler;
 		this.openDailymotionPlayer = module.openDailymotionPlayer;
+		this.inspectDailymotionDVR = module.inspectDailymotionDVR;
+		this.startDailymotionDVRRecording =
+			module.startDailymotionDVRRecording;
+		this.cancelDailymotionDVRRecording =
+			module.cancelDailymotionDVRRecording;
+		this.getDailymotionDVRRecordingState =
+			module.getDailymotionDVRRecordingState;
+		this.getDailymotionDVRDestinationCapacity =
+			module.getDailymotionDVRDestinationCapacity;
 		this.getNetworkInfo = module.getNetworkInfo;
 
 		this.securelyRetrieve = module.securelyRetrieve;

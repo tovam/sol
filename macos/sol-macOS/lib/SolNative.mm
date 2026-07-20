@@ -84,6 +84,7 @@ RCT_EXTERN_METHOD(turnOffVerticalArrowsListeners)
 RCT_EXTERN_METHOD(checkForUpdates)
 RCT_EXTERN_METHOD(setWindowRelativeSize : (nonnull NSNumber)relative)
 RCT_EXTERN_METHOD(openFinderAt : (NSString)path)
+RCT_EXTERN_METHOD(revealFileInFinder : (NSString)path)
 RCT_EXTERN_METHOD(setShowWindowOn : (NSString)on)
 RCT_EXTERN_METHOD(setGlassAppearance : (NSDictionary)settings)
 RCT_EXTERN_METHOD(setSearchWindowPosition : (NSDictionary)position)
@@ -91,6 +92,17 @@ RCT_EXTERN_METHOD(useBackgroundOverlay : (BOOL)v)
 RCT_EXTERN_METHOD(toggleDND)
 RCT_EXTERN_METHOD(toggleScreenRuler)
 RCT_EXTERN_METHOD(openDailymotionPlayer : (NSString)url resolver : (
+    RCTPromiseResolveBlock)resolve rejecter : (RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(inspectDailymotionDVR : (NSString)url qualityHeight : (
+    nullable NSNumber *)qualityHeight resolver : (RCTPromiseResolveBlock)
+    resolve rejecter : (RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(startDailymotionDVRRecording : (NSDictionary)options resolver : (
+    RCTPromiseResolveBlock)resolve rejecter : (RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(cancelDailymotionDVRRecording : (NSString)jobID resolver : (
+    RCTPromiseResolveBlock)resolve rejecter : (RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(getDailymotionDVRRecordingState : (RCTPromiseResolveBlock)
+    resolve rejecter : (RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(getDailymotionDVRDestinationCapacity : (NSString)path resolver : (
     RCTPromiseResolveBlock)resolve rejecter : (RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(getNetworkInfo : (RCTPromiseResolveBlock)
                       resolve rejecter : (RCTPromiseRejectBlock)reject)

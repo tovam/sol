@@ -60,6 +60,7 @@ class SolNative: RCTEventEmitter {
       "onStatusBarItemClick",
       "hotkey",
       "applicationsChanged",
+      "dailymotionDVRRecordingChanged",
     ]
   }
 
@@ -425,6 +426,12 @@ class SolNative: RCTEventEmitter {
     NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path)
   }
 
+  @objc func revealFileInFinder(_ path: String) {
+    DispatchQueue.main.async {
+      NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
+    }
+  }
+
   @objc func setShowWindowOn(_ on: String) {
     switch on {
     case "screenWithFrontmost":
@@ -477,6 +484,80 @@ class SolNative: RCTEventEmitter {
     DailymotionPlayerController.shared.open(urlString: url) { opened in
       resolve(opened)
     }
+  }
+
+  @objc func inspectDailymotionDVR(
+    _ url: String,
+    qualityHeight: NSNumber?,
+    resolver resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    DailymotionDVRRecordingManager.shared.inspect(
+      pageURL: url,
+      qualityHeight: qualityHeight?.intValue
+    ) { result in
+      DispatchQueue.main.async {
+        switch result {
+        case .success(let inspection):
+          resolve(inspection)
+        case .failure(let error):
+          reject("DailymotionDVRInspectionError", error.localizedDescription, error)
+        }
+      }
+    }
+  }
+
+  @objc func startDailymotionDVRRecording(
+    _ options: NSDictionary,
+    resolver resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    guard let request = options as? [String: Any] else {
+      reject("DailymotionDVRRecordingError", "Invalid recording options", nil)
+      return
+    }
+    DailymotionDVRRecordingManager.shared.start(options: request) { result in
+      DispatchQueue.main.async {
+        switch result {
+        case .success(let state):
+          resolve(state)
+        case .failure(let error):
+          reject("DailymotionDVRRecordingError", error.localizedDescription, error)
+        }
+      }
+    }
+  }
+
+  @objc func cancelDailymotionDVRRecording(
+    _ jobID: String,
+    resolver resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    DailymotionDVRRecordingManager.shared.cancel(jobID: jobID) { result in
+      DispatchQueue.main.async {
+        switch result {
+        case .success(let cancelled):
+          resolve(cancelled)
+        case .failure(let error):
+          reject("DailymotionDVRRecordingError", error.localizedDescription, error)
+        }
+      }
+    }
+  }
+
+  @objc func getDailymotionDVRRecordingState(
+    _ resolve: RCTPromiseResolveBlock,
+    rejecter _: RCTPromiseRejectBlock
+  ) {
+    resolve(DailymotionDVRRecordingManager.shared.currentState())
+  }
+
+  @objc func getDailymotionDVRDestinationCapacity(
+    _ path: String,
+    resolver resolve: RCTPromiseResolveBlock,
+    rejecter _: RCTPromiseRejectBlock
+  ) {
+    resolve(DailymotionDVRRecordingManager.shared.availableCapacity(path: path))
   }
 
   @objc func getNetworkInfo(

@@ -87,6 +87,11 @@ class AppDelegate: RCTAppDelegate, UNUserNotificationCenterDelegate {
     PanelManager.shared.showWindow()
   }
 
+  override func applicationWillTerminate(_ notification: Notification) {
+    DailymotionDVRRecordingManager.shared.shutdown()
+    super.applicationWillTerminate(notification)
+  }
+
   func userNotificationCenter(
     _ center: UNUserNotificationCenter,
     willPresent notification: UNNotification,

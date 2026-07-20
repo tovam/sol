@@ -5,6 +5,7 @@ import {
 	extractDailymotionVideoID,
 } from "lib/dailymotion";
 import { solNative } from "lib/SolNative";
+import { observer } from "mobx-react-lite";
 import { type FC, useEffect, useState } from "react";
 import {
 	Clipboard,
@@ -15,8 +16,9 @@ import {
 } from "react-native";
 import { useStore } from "store";
 import { Widget } from "stores/ui.store";
+import { DailymotionDVRWidget } from "./dailymotionDVR.widget";
 
-export const DailymotionWidget: FC = () => {
+export const DailymotionWidget: FC = observer(() => {
 	const store = useStore();
 	const [url, setURL] = useState("");
 	const [error, setError] = useState("");
@@ -49,6 +51,7 @@ export const DailymotionWidget: FC = () => {
 		}
 	};
 	const openCurrent = () => void openPlayer(url);
+	const mode = store.ui.dailymotionMode;
 
 	return (
 		<View className="fullWindow">
@@ -60,9 +63,11 @@ export const DailymotionWidget: FC = () => {
 					}}
 				/>
 				<View className="flex-1">
-					<Text className="text-xl font-semibold text">Dailymotion Player</Text>
+					<Text className="text-xl font-semibold text">Dailymotion</Text>
 					<Text className="text-xs darker-text">
-						Always on top, resizable, and visible on every Space
+						{mode === "watch"
+							? "Floating player"
+							: "Download a clock range from a live DVR"}
 					</Text>
 				</View>
 				<TouchableOpacity
@@ -72,6 +77,34 @@ export const DailymotionWidget: FC = () => {
 					<Text className="text text-sm">Saved streams</Text>
 				</TouchableOpacity>
 			</View>
+
+			<View className="h-10 flex-row border-b border-color">
+				{(["watch", "record"] as const).map((nextMode) => (
+					<TouchableOpacity
+						key={nextMode}
+						className={`flex-1 items-center justify-center border-b-2 ${
+							mode === nextMode
+								? "border-accent-strong"
+								: "border-transparent"
+						}`}
+						onPress={() => store.ui.setDailymotionMode(nextMode)}
+					>
+						<Text
+							className={
+								mode === nextMode
+									? "text-accent font-semibold"
+									: "darker-text"
+							}
+						>
+							{nextMode === "watch" ? "Watch" : "Record DVR"}
+						</Text>
+					</TouchableOpacity>
+				))}
+			</View>
+
+			{mode === "record" ? (
+				<DailymotionDVRWidget />
+			) : (
 
 			<ScrollView
 				className="flex-1"
@@ -141,6 +174,7 @@ export const DailymotionWidget: FC = () => {
 					<Text className="text-white font-semibold">Open floating player</Text>
 				</TouchableOpacity>
 			</ScrollView>
+			)}
 		</View>
 	);
-};
+});
