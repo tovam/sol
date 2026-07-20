@@ -4,6 +4,10 @@ import WebKit
 private let dailymotionBridgeName = "solDailymotion"
 private let dailymotionMinimumDVRWindow = 10.0
 private let dailymotionMaximumTimelineClockDrift = 10 * 60.0
+private let dailymotionSilentVolume = 0.001
+private let dailymotionVolumeConfirmationTimeout = 1.0
+private let dailymotionMediaUnmuteRetryDelay = 0.75
+private let dailymotionMaximumMediaUnmuteAttempts = 3
 private let dailymotionSupportedQualityValues = [
   "240", "380", "480", "720", "1080", "1440", "2160",
 ]
@@ -186,6 +190,13 @@ private struct DailymotionBridgeState {
   var error: String?
 }
 
+private struct DailymotionDesiredVolumeCommand {
+  let revision: Int
+  let targetVolume: Double
+  let targetMuted: Bool
+  let requiresMediaUnmute: Bool
+}
+
 private protocol DailymotionControlsViewDelegate: AnyObject {
   func controlsDidTogglePlayback(_ controls: DailymotionControlsView)
   func controls(_ controls: DailymotionControlsView, seekBy seconds: Double)
@@ -201,6 +212,7 @@ private protocol DailymotionControlsViewDelegate: AnyObject {
     _ controls: DailymotionControlsView,
     didSelectQuality quality: String
   )
+  func controlsDidToggleMute(_ controls: DailymotionControlsView)
   func controls(_ controls: DailymotionControlsView, didSetVolume volume: Double)
   func controlsDidToggleFullscreen(_ controls: DailymotionControlsView)
 }
@@ -427,7 +439,7 @@ private final class DailymotionControlsView: NSVisualEffectView,
   private let liveButton = NSButton(title: "LIVE", target: nil, action: nil)
   private let ratePopUp = NSPopUpButton(frame: .zero, pullsDown: false)
   private let qualityPopUp = NSPopUpButton(frame: .zero, pullsDown: false)
-  private let volumeImage = NSImageView()
+  private let volumeButton = NSButton()
   private let volumeSlider = DailymotionTrackingSlider(
     value: 1,
     minValue: 0,
@@ -453,7 +465,7 @@ private final class DailymotionControlsView: NSVisualEffectView,
   private let rates = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
 
   private static let liveTwoRowBreakpoint: CGFloat = 600
-  private static let regularTwoRowBreakpoint: CGFloat = 460
+  private static let regularTwoRowBreakpoint: CGFloat = 480
   private static let singleRowHeight: CGFloat = 36
   private static let twoRowHeight: CGFloat = 68
 
@@ -516,12 +528,12 @@ private final class DailymotionControlsView: NSVisualEffectView,
     )
     setFullscreen(false)
 
-    volumeImage.image = NSImage(
-      systemSymbolName: "speaker.wave.2.fill",
-      accessibilityDescription: "Volume"
+    configureButton(
+      volumeButton,
+      action: #selector(toggleMute),
+      toolTip: "Mute"
     )
-    volumeImage.contentTintColor = .secondaryLabelColor
-    volumeImage.imageScaling = .scaleProportionallyDown
+    volumeButton.contentTintColor = .secondaryLabelColor
 
     volumeSlider.target = self
     volumeSlider.action = #selector(changeVolume)
@@ -561,7 +573,7 @@ private final class DailymotionControlsView: NSVisualEffectView,
     )
     configureHorizontalStack(
       settingsGroup,
-      views: [ratePopUp, qualityPopUp, volumeImage, volumeSlider]
+      views: [ratePopUp, qualityPopUp, volumeButton, volumeSlider]
     )
     [
       playbackSeparator,
@@ -640,7 +652,7 @@ private final class DailymotionControlsView: NSVisualEffectView,
       liveButton.widthAnchor.constraint(equalToConstant: 42),
       ratePopUp.widthAnchor.constraint(equalToConstant: 52),
       qualityPopUp.widthAnchor.constraint(equalToConstant: 64),
-      volumeImage.widthAnchor.constraint(equalToConstant: 14),
+      volumeButton.widthAnchor.constraint(equalToConstant: 26),
       volumeSlider.widthAnchor.constraint(greaterThanOrEqualToConstant: 32),
       fullscreenButton.widthAnchor.constraint(equalToConstant: 28),
       playButton.heightAnchor.constraint(equalToConstant: 26),
@@ -650,6 +662,7 @@ private final class DailymotionControlsView: NSVisualEffectView,
       liveButton.heightAnchor.constraint(equalToConstant: 26),
       ratePopUp.heightAnchor.constraint(equalToConstant: 26),
       qualityPopUp.heightAnchor.constraint(equalToConstant: 26),
+      volumeButton.heightAnchor.constraint(equalToConstant: 26),
       fullscreenButton.heightAnchor.constraint(equalToConstant: 26),
     ])
 
@@ -780,6 +793,7 @@ private final class DailymotionControlsView: NSVisualEffectView,
     renderQualityControl(state, ready: ready)
 
     playButton.isEnabled = ready
+    volumeButton.isEnabled = ready
     volumeSlider.isEnabled = ready
     backwardButton.isHidden = false
     forwardButton.isHidden = false
@@ -795,6 +809,7 @@ private final class DailymotionControlsView: NSVisualEffectView,
       forwardButton.isHidden = true
       seekSlider.isHidden = true
       ratePopUp.isEnabled = false
+      volumeButton.isEnabled = false
       volumeSlider.isEnabled = false
       timeLabel.stringValue = "OFF AIR"
       return
@@ -993,18 +1008,22 @@ private final class DailymotionControlsView: NSVisualEffectView,
   }
 
   private func setVolumeSymbol(muted: Bool, volume: Double) {
+    let isSilent = muted || volume <= dailymotionSilentVolume
     let symbol: String
-    if muted || volume <= 0 {
+    if isSilent {
       symbol = "speaker.slash.fill"
     } else if volume < 0.35 {
       symbol = "speaker.wave.1.fill"
     } else {
       symbol = "speaker.wave.2.fill"
     }
-    volumeImage.image = NSImage(
+    volumeButton.image = NSImage(
       systemSymbolName: symbol,
-      accessibilityDescription: muted ? "Muted" : "Volume"
+      accessibilityDescription: isSilent ? "Unmute" : "Mute"
     )
+    volumeButton.title = volumeButton.image == nil ? (isSilent ? "×" : "") : ""
+    volumeButton.toolTip = isSilent ? "Unmute" : "Mute"
+    volumeButton.setAccessibilityLabel(isSilent ? "Unmute" : "Mute")
   }
 
   private func setPlaySymbol(_ name: String) {
@@ -1215,6 +1234,10 @@ private final class DailymotionControlsView: NSVisualEffectView,
     delegate?.controls(self, didSetVolume: volumeSlider.doubleValue)
   }
 
+  @objc private func toggleMute() {
+    delegate?.controlsDidToggleMute(self)
+  }
+
   @objc private func toggleFullscreen() {
     delegate?.controlsDidToggleFullscreen(self)
   }
@@ -1241,6 +1264,22 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
   private var metadataRequestGeneration = 0
   private var liveMetadataTimer: Timer?
   private var state = DailymotionBridgeState()
+  private var lastAudibleVolume = 1.0
+  private var canonicalVolume = 1.0
+  private var canonicalMuted = false
+  private var volumeCommandRevision = 0
+  private var lastDispatchedVolumeRevision = 0
+  private var desiredVolumeCommand: DailymotionDesiredVolumeCommand?
+  private var volumeCommandIsInFlight = false
+  private var volumeCommandNeedsSend = false
+  private var volumeCommandFallbackWorkItem: DispatchWorkItem?
+  private var shouldKeepMediaUnmuted = false
+  private var attemptedMediaUnmuteFrameToken: String?
+  private var confirmedUnmutedMediaFrameToken: String?
+  private var trackedMediaUnmuteFrameToken: String?
+  private var mediaUnmuteAttemptCount = 0
+  private var mediaUnmuteRetryWorkItem: DispatchWorkItem?
+  private var mediaUnmuteRetryGeneration = 0
   private var liveDVRRateCap = 2.0
   private var candidateLiveDVRRateCap: Double?
   private var candidateLiveDVRRateCapSamples = 0
@@ -1348,6 +1387,10 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     resetLiveDVRRateTracking()
     state = DailymotionBridgeState()
     state.isMuted = source.startsMuted
+    lastAudibleVolume = 1
+    canonicalVolume = state.volume
+    canonicalMuted = source.startsMuted
+    shouldKeepMediaUnmuted = !source.startsMuted
 
     let contentController = WKUserContentController()
     contentController.add(self, name: dailymotionBridgeName)
@@ -1446,6 +1489,11 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     metadataRequestGeneration += 1
     liveMetadataTimer?.invalidate()
     liveMetadataTimer = nil
+    volumeCommandFallbackWorkItem?.cancel()
+    volumeCommandFallbackWorkItem = nil
+    mediaUnmuteRetryWorkItem?.cancel()
+    mediaUnmuteRetryWorkItem = nil
+    mediaUnmuteRetryGeneration += 1
     webView?.stopLoading()
     webView?.navigationDelegate = nil
     webView?.uiDelegate = nil
@@ -1466,6 +1514,18 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     mediaFrameLastSeen = .distantPast
     sdkFallbackDidStart = false
     sessionID = ""
+    volumeCommandRevision += 1
+    lastDispatchedVolumeRevision = 0
+    desiredVolumeCommand = nil
+    volumeCommandIsInFlight = false
+    volumeCommandNeedsSend = false
+    canonicalVolume = 1
+    canonicalMuted = false
+    shouldKeepMediaUnmuted = false
+    attemptedMediaUnmuteFrameToken = nil
+    confirmedUnmutedMediaFrameToken = nil
+    trackedMediaUnmuteFrameToken = nil
+    mediaUnmuteAttemptCount = 0
     resetLiveDVRRateTracking()
   }
 
@@ -1623,15 +1683,15 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     state.ready = bool(body["ready"]) ?? state.ready
     state.isPlaying = bool(body["isPlaying"]) ?? state.isPlaying
     state.isBuffering = bool(body["isBuffering"]) ?? state.isBuffering
-    state.isMuted = bool(body["isMuted"]) ?? state.isMuted
     state.currentTime = finiteDouble(body["time"]) ?? state.currentTime
     state.duration = positiveFiniteDouble(body["duration"])
     state.playbackRate = finiteDouble(body["rate"]) ?? state.playbackRate
     state.availableQualities = stringArray(body["qualities"])
     state.selectedQuality = body["quality"] as? String
-    state.volume = finiteDouble(body["volume"]).map {
-      min(max($0, 0), 1)
-    } ?? state.volume
+    applyReportedAudioState(
+      volume: finiteDouble(body["volume"]),
+      muted: bool(body["isMuted"])
+    )
     state.isAdPlaying = bool(body["adPlaying"]) ?? state.isAdPlaying
     state.adTime = finiteDouble(body["adTime"]) ?? state.adTime
     state.adDuration = positiveFiniteDouble(body["adDuration"])
@@ -1673,6 +1733,9 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     if !isCurrentFrame {
       state.mediaTimelineStartDate = nil
       state.seekableObservedAt = nil
+      if trackedMediaUnmuteFrameToken != frameToken {
+        resetMediaUnmuteFrameTracking(for: frameToken)
+      }
     }
     mediaFrame = frameInfo
     mediaFrameToken = frameToken
@@ -1721,6 +1784,18 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     // The SDK is canonical for playback and advertising. The media bridge is
     // still useful there because the public SDK does not expose DVR ranges.
     if state.backend == "sdk" {
+      if shouldKeepMediaUnmuted
+        || desiredVolumeCommand?.requiresMediaUnmute == true
+      {
+        applyReportedAudioState(
+          // Keep the SDK as the only volume authority. The media bridge is
+          // used here solely to verify that the underlying video is audible.
+          volume: nil,
+          muted: bool(body["isMuted"]),
+          fromMediaFrame: true
+        )
+      }
+      enqueueMediaUnmuteRetryIfNeeded()
       updateLiveDVRRateCapFromFreshMediaState()
       notifyStateChange()
       return
@@ -1730,13 +1805,15 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     state.ready = bool(body["ready"]) ?? state.ready
     state.isPlaying = bool(body["isPlaying"]) ?? state.isPlaying
     state.isBuffering = bool(body["isBuffering"]) ?? state.isBuffering
-    state.isMuted = bool(body["isMuted"]) ?? state.isMuted
     state.currentTime = finiteDouble(body["time"]) ?? state.currentTime
     state.duration = positiveFiniteDouble(body["duration"])
     state.playbackRate = finiteDouble(body["rate"]) ?? state.playbackRate
-    state.volume = finiteDouble(body["volume"]).map {
-      min(max($0, 0), 1)
-    } ?? state.volume
+    applyReportedAudioState(
+      volume: finiteDouble(body["volume"]),
+      muted: bool(body["isMuted"]),
+      fromMediaFrame: true
+    )
+    enqueueMediaUnmuteRetryIfNeeded()
     state.error = body["error"] as? String
     updateLiveDVRRateCapFromFreshMediaState()
     notifyStateChange()
@@ -1853,17 +1930,37 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
   }
 
   private func clearMediaFrame() {
+    if let mediaFrameToken {
+      trackedMediaUnmuteFrameToken = mediaFrameToken
+    }
     mediaFrame = nil
     mediaFrameToken = nil
     mediaFrameIsMain = false
     mediaFrameIsPlaying = false
     mediaFrameArea = 0
     mediaFrameLastSeen = .distantPast
+    cancelMediaUnmuteRetry()
+    attemptedMediaUnmuteFrameToken = nil
+    confirmedUnmutedMediaFrameToken = nil
     state.mediaCurrentTime = nil
     state.seekableStart = nil
     state.seekableEnd = nil
     state.mediaTimelineStartDate = nil
     state.seekableObservedAt = nil
+  }
+
+  private func resetMediaUnmuteFrameTracking(for frameToken: String? = nil) {
+    cancelMediaUnmuteRetry()
+    attemptedMediaUnmuteFrameToken = nil
+    confirmedUnmutedMediaFrameToken = nil
+    trackedMediaUnmuteFrameToken = frameToken
+    mediaUnmuteAttemptCount = 0
+  }
+
+  private func cancelMediaUnmuteRetry() {
+    mediaUnmuteRetryGeneration += 1
+    mediaUnmuteRetryWorkItem?.cancel()
+    mediaUnmuteRetryWorkItem = nil
   }
 
   private func bool(_ value: Any?) -> Bool? {
@@ -1880,6 +1977,257 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
   private func positiveFiniteDouble(_ value: Any?) -> Double? {
     guard let value = finiteDouble(value), value > 0 else { return nil }
     return value
+  }
+
+  private func rememberAudibleVolume(_ volume: Double) {
+    guard volume.isFinite, volume > dailymotionSilentVolume else { return }
+    lastAudibleVolume = min(max(volume, 0), 1)
+  }
+
+  private func applyReportedAudioState(
+    volume reportedVolume: Double?,
+    muted reportedMuted: Bool?,
+    fromMediaFrame: Bool = false
+  ) {
+    let normalizedVolume = reportedVolume.map { min(max($0, 0), 1) }
+    if let normalizedVolume {
+      canonicalVolume = normalizedVolume
+      rememberAudibleVolume(normalizedVolume)
+    }
+    if let reportedMuted {
+      canonicalMuted = reportedMuted
+    }
+    if fromMediaFrame, let frameToken = mediaFrameToken {
+      if reportedMuted == false, shouldKeepMediaUnmuted {
+        confirmedUnmutedMediaFrameToken = frameToken
+        cancelMediaUnmuteRetry()
+      } else if reportedMuted == true, shouldKeepMediaUnmuted {
+        if confirmedUnmutedMediaFrameToken == frameToken {
+          confirmedUnmutedMediaFrameToken = nil
+        }
+        if attemptedMediaUnmuteFrameToken == frameToken {
+          scheduleMediaUnmuteRetry(for: frameToken)
+        }
+      }
+    }
+
+    if let desiredVolumeCommand {
+      let commandWasDispatched = lastDispatchedVolumeRevision
+        == desiredVolumeCommand.revision
+      let volumeMatches = normalizedVolume.map {
+        abs($0 - desiredVolumeCommand.targetVolume) <= 0.01
+      } ?? (
+        abs(canonicalVolume - desiredVolumeCommand.targetVolume) <= 0.01
+      )
+      let mediaUnmuteWasConfirmed = mediaFrameToken.map {
+        confirmedUnmutedMediaFrameToken == $0
+      } ?? false
+      let muteMatches = !desiredVolumeCommand.requiresMediaUnmute
+        || (
+          reportedMuted == false
+            && (fromMediaFrame || mediaFrame == nil)
+        )
+        || mediaUnmuteWasConfirmed
+
+      guard commandWasDispatched && volumeMatches && muteMatches else {
+        return
+      }
+
+      volumeCommandFallbackWorkItem?.cancel()
+      volumeCommandFallbackWorkItem = nil
+      self.desiredVolumeCommand = nil
+      volumeCommandNeedsSend = false
+    }
+
+    state.volume = canonicalVolume
+    state.isMuted = shouldKeepMediaUnmuted ? false : canonicalMuted
+  }
+
+  private func requestVolume(_ volume: Double, muted: Bool) {
+    let normalizedVolume = min(max(volume, 0), 1)
+    shouldKeepMediaUnmuted = !muted
+      && normalizedVolume > dailymotionSilentVolume
+    resetMediaUnmuteFrameTracking()
+
+    volumeCommandFallbackWorkItem?.cancel()
+    volumeCommandFallbackWorkItem = nil
+    volumeCommandRevision += 1
+    desiredVolumeCommand = DailymotionDesiredVolumeCommand(
+      revision: volumeCommandRevision,
+      targetVolume: normalizedVolume,
+      targetMuted: muted,
+      requiresMediaUnmute: shouldKeepMediaUnmuted
+    )
+    volumeCommandNeedsSend = true
+
+    state.volume = normalizedVolume
+    state.isMuted = muted
+    notifyStateChange()
+    processVolumeCommandQueue()
+  }
+
+  private func processVolumeCommandQueue() {
+    guard
+      !volumeCommandIsInFlight,
+      volumeCommandNeedsSend,
+      let command = desiredVolumeCommand
+    else {
+      return
+    }
+
+    volumeCommandNeedsSend = false
+    volumeCommandFallbackWorkItem?.cancel()
+    volumeCommandFallbackWorkItem = nil
+    volumeCommandIsInFlight = true
+    lastDispatchedVolumeRevision = command.revision
+    if command.requiresMediaUnmute, let mediaFrameToken {
+      if trackedMediaUnmuteFrameToken != mediaFrameToken {
+        resetMediaUnmuteFrameTracking(for: mediaFrameToken)
+      }
+      if attemptedMediaUnmuteFrameToken != mediaFrameToken {
+        attemptedMediaUnmuteFrameToken = mediaFrameToken
+        mediaUnmuteAttemptCount += 1
+      }
+    }
+
+    let revision = command.revision
+    let expectedSessionID = sessionID
+    sendCommand("volume", value: command.targetVolume) { [weak self] succeeded in
+      guard let self, self.sessionID == expectedSessionID else {
+        return
+      }
+
+      self.volumeCommandIsInFlight = false
+      guard
+        self.desiredVolumeCommand?.revision == revision,
+        !self.volumeCommandNeedsSend
+      else {
+        self.processVolumeCommandQueue()
+        return
+      }
+
+      guard succeeded else {
+        self.volumeCommandFallbackWorkItem?.cancel()
+        self.volumeCommandFallbackWorkItem = nil
+        self.desiredVolumeCommand = nil
+        self.shouldKeepMediaUnmuted = !self.canonicalMuted
+          && self.canonicalVolume > dailymotionSilentVolume
+        if !self.shouldKeepMediaUnmuted {
+          self.resetMediaUnmuteFrameTracking()
+        }
+        self.state.volume = self.canonicalVolume
+        self.state.isMuted = self.shouldKeepMediaUnmuted
+          ? false
+          : self.canonicalMuted
+        self.notifyStateChange()
+        return
+      }
+
+      self.scheduleVolumeCommandFallback(command, sessionID: expectedSessionID)
+    }
+  }
+
+  private func scheduleVolumeCommandFallback(
+    _ command: DailymotionDesiredVolumeCommand,
+    sessionID expectedSessionID: String
+  ) {
+    volumeCommandFallbackWorkItem?.cancel()
+    let workItem = DispatchWorkItem { [weak self] in
+      guard
+        let self,
+        self.sessionID == expectedSessionID,
+        self.desiredVolumeCommand?.revision == command.revision
+      else {
+        return
+      }
+
+      self.desiredVolumeCommand = nil
+      self.volumeCommandNeedsSend = false
+      self.volumeCommandFallbackWorkItem = nil
+      self.canonicalVolume = command.targetVolume
+      self.canonicalMuted = command.targetMuted
+      self.state.volume = command.targetVolume
+      self.state.isMuted = self.shouldKeepMediaUnmuted
+        ? false
+        : command.targetMuted
+      self.notifyStateChange()
+    }
+    volumeCommandFallbackWorkItem = workItem
+    DispatchQueue.main.asyncAfter(
+      deadline: .now() + dailymotionVolumeConfirmationTimeout,
+      execute: workItem
+    )
+  }
+
+  private func enqueueMediaUnmuteRetryIfNeeded() {
+    guard
+      shouldKeepMediaUnmuted,
+      let frameToken = mediaFrameToken,
+      attemptedMediaUnmuteFrameToken != frameToken,
+      confirmedUnmutedMediaFrameToken != frameToken,
+      mediaUnmuteAttemptCount < dailymotionMaximumMediaUnmuteAttempts
+    else {
+      return
+    }
+
+    attemptedMediaUnmuteFrameToken = frameToken
+    mediaUnmuteAttemptCount += 1
+    let targetVolume = desiredVolumeCommand?.targetVolume
+      ?? (state.volume > dailymotionSilentVolume
+        ? state.volume
+        : lastAudibleVolume > dailymotionSilentVolume
+          ? lastAudibleVolume
+          : 1)
+    volumeCommandFallbackWorkItem?.cancel()
+    volumeCommandFallbackWorkItem = nil
+    volumeCommandRevision += 1
+    desiredVolumeCommand = DailymotionDesiredVolumeCommand(
+      revision: volumeCommandRevision,
+      targetVolume: targetVolume,
+      targetMuted: false,
+      requiresMediaUnmute: true
+    )
+    state.volume = targetVolume
+    state.isMuted = false
+    notifyStateChange()
+    volumeCommandNeedsSend = true
+    processVolumeCommandQueue()
+  }
+
+  private func scheduleMediaUnmuteRetry(for frameToken: String) {
+    guard
+      mediaUnmuteRetryWorkItem == nil,
+      mediaUnmuteAttemptCount < dailymotionMaximumMediaUnmuteAttempts
+    else {
+      return
+    }
+
+    mediaUnmuteRetryGeneration += 1
+    let retryGeneration = mediaUnmuteRetryGeneration
+    let expectedSessionID = sessionID
+    let workItem = DispatchWorkItem { [weak self] in
+      guard let self else { return }
+      guard
+        self.mediaUnmuteRetryGeneration == retryGeneration,
+        self.sessionID == expectedSessionID,
+        self.shouldKeepMediaUnmuted,
+        self.mediaFrameToken == frameToken,
+        self.confirmedUnmutedMediaFrameToken != frameToken,
+        self.mediaUnmuteAttemptCount
+          < dailymotionMaximumMediaUnmuteAttempts
+      else {
+        return
+      }
+
+      self.mediaUnmuteRetryWorkItem = nil
+      self.attemptedMediaUnmuteFrameToken = nil
+      self.enqueueMediaUnmuteRetryIfNeeded()
+    }
+    mediaUnmuteRetryWorkItem = workItem
+    DispatchQueue.main.asyncAfter(
+      deadline: .now() + dailymotionMediaUnmuteRetryDelay,
+      execute: workItem
+    )
   }
 
   private func stringArray(_ value: Any?) -> [String] {
@@ -1945,14 +2293,24 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
         // Dailymotion models mute and volume separately. Moving Sol's volume
         // slider is an explicit request for audible output, so mirror it in
         // the media frame to clear an initial autoplay mute when possible.
-        if command == "volume", let mediaFrame = self.mediaFrame {
+        if
+          command == "volume",
+          primaryFrame == nil,
+          let mediaFrame = self.mediaFrame
+        {
           self.executeCommand(
             command,
             value: normalizedValue,
             in: mediaFrame,
-            webView: webView,
-            completion: nil
-          )
+            webView: webView
+          ) { mirrored in
+            // Waiting here keeps rapid volume requests strictly ordered.
+            if !mirrored {
+              self.clearMediaFrame()
+            }
+            completion?(true)
+          }
+          return
         }
         completion?(true)
         return
@@ -1970,9 +2328,13 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
         command,
         value: normalizedValue,
         in: mediaFrame,
-        webView: webView,
-        completion: completion
-      )
+        webView: webView
+      ) { [weak self] succeeded in
+        if !succeeded {
+          self?.clearMediaFrame()
+        }
+        completion?(succeeded)
+      }
     }
   }
 
@@ -2345,7 +2707,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
             case "rate": video.playbackRate = value; break;
             case "volume":
               video.volume = Math.min(Math.max(value, 0), 1);
-              if (value > 0) video.muted = false;
+              video.muted = value <= 0.001;
               break;
             default: return false;
           }
@@ -2573,7 +2935,29 @@ extension DailymotionPlayerController: DailymotionControlsViewDelegate {
     _ controls: DailymotionControlsView,
     didSetVolume volume: Double
   ) {
-    sendCommand("volume", value: volume)
+    let normalizedVolume = min(max(volume, 0), 1)
+    if normalizedVolume > dailymotionSilentVolume {
+      rememberAudibleVolume(normalizedVolume)
+    } else {
+      rememberAudibleVolume(state.volume)
+    }
+    requestVolume(normalizedVolume, muted: false)
+  }
+
+  fileprivate func controlsDidToggleMute(
+    _ controls: DailymotionControlsView
+  ) {
+    let isSilent = state.isMuted || state.volume <= dailymotionSilentVolume
+    let targetVolume: Double
+    if isSilent {
+      targetVolume = lastAudibleVolume > dailymotionSilentVolume
+        ? lastAudibleVolume
+        : 1
+    } else {
+      rememberAudibleVolume(state.volume)
+      targetVolume = 0
+    }
+    requestVolume(targetVolume, muted: !isSilent)
   }
 
   fileprivate func controlsDidToggleFullscreen(
