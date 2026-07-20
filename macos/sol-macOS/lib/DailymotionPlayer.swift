@@ -188,7 +188,21 @@ private final class DailymotionControlsView: NSVisualEffectView,
     target: nil,
     action: nil
   )
+  private let playbackGroup = NSStackView()
+  private let timelineGroup = NSStackView()
+  private let liveGroup = NSStackView()
+  private let settingsGroup = NSStackView()
+  private let primaryRow = NSStackView()
+  private let secondaryRow = NSStackView()
+  private let compactSpacer = NSView()
+  private let rowsStack = NSStackView()
+  private var toolbarHeightConstraint: NSLayoutConstraint?
+  private var usesTwoRows = false
   private let rates = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
+
+  private static let twoRowBreakpoint: CGFloat = 540
+  private static let singleRowHeight: CGFloat = 44
+  private static let twoRowHeight: CGFloat = 72
 
   override init(frame frameRect: NSRect) {
     super.init(frame: frameRect)
@@ -262,28 +276,51 @@ private final class DailymotionControlsView: NSVisualEffectView,
     clockTimeField.toolTip = "Jump to local time (HH:mm or HH:mm:ss)"
     clockTimeField.isHidden = true
 
-    let stack = NSStackView(views: [
-      playButton,
-      backwardButton,
-      forwardButton,
-      seekSlider,
-      timeLabel,
-      clockTimeField,
-      liveButton,
-      ratePopUp,
-      volumeImage,
-      volumeSlider,
-    ])
-    stack.orientation = .horizontal
-    stack.alignment = .centerY
-    stack.distribution = .fill
-    stack.spacing = 6
-    stack.detachesHiddenViews = true
-    stack.translatesAutoresizingMaskIntoConstraints = false
-    addSubview(stack)
+    configureHorizontalStack(
+      playbackGroup,
+      views: [playButton, backwardButton, forwardButton]
+    )
+    configureHorizontalStack(
+      timelineGroup,
+      views: [seekSlider, timeLabel]
+    )
+    configureHorizontalStack(
+      liveGroup,
+      views: [clockTimeField, liveButton]
+    )
+    configureHorizontalStack(
+      settingsGroup,
+      views: [ratePopUp, volumeImage, volumeSlider]
+    )
+    configureHorizontalStack(
+      primaryRow,
+      views: [playbackGroup, timelineGroup, liveGroup, settingsGroup]
+    )
+    configureHorizontalStack(secondaryRow, views: [])
+    secondaryRow.isHidden = true
+
+    rowsStack.orientation = .vertical
+    rowsStack.alignment = .width
+    rowsStack.distribution = .fill
+    rowsStack.spacing = 4
+    rowsStack.detachesHiddenViews = true
+    rowsStack.addArrangedSubview(primaryRow)
+    rowsStack.addArrangedSubview(secondaryRow)
+    rowsStack.translatesAutoresizingMaskIntoConstraints = false
+    addSubview(rowsStack)
 
     seekSlider.setContentHuggingPriority(.defaultLow, for: .horizontal)
     seekSlider.setContentCompressionResistancePriority(
+      .defaultLow,
+      for: .horizontal
+    )
+    timelineGroup.setContentHuggingPriority(.defaultLow, for: .horizontal)
+    timelineGroup.setContentCompressionResistancePriority(
+      .defaultLow,
+      for: .horizontal
+    )
+    compactSpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+    compactSpacer.setContentCompressionResistancePriority(
       .defaultLow,
       for: .horizontal
     )
@@ -292,11 +329,16 @@ private final class DailymotionControlsView: NSVisualEffectView,
       for: .horizontal
     )
 
+    let toolbarHeightConstraint = heightAnchor.constraint(
+      equalToConstant: Self.singleRowHeight
+    )
+    self.toolbarHeightConstraint = toolbarHeightConstraint
     NSLayoutConstraint.activate([
-      stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
-      stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
-      stack.topAnchor.constraint(equalTo: topAnchor, constant: 5),
-      stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -5),
+      toolbarHeightConstraint,
+      rowsStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+      rowsStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+      rowsStack.topAnchor.constraint(equalTo: topAnchor, constant: 5),
+      rowsStack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -5),
       playButton.widthAnchor.constraint(equalToConstant: 28),
       backwardButton.widthAnchor.constraint(equalToConstant: 36),
       forwardButton.widthAnchor.constraint(equalToConstant: 36),
@@ -315,6 +357,66 @@ private final class DailymotionControlsView: NSVisualEffectView,
   @available(*, unavailable)
   required init?(coder: NSCoder) {
     fatalError("init(coder:) has not been implemented")
+  }
+
+  override func layout() {
+    let shouldUseTwoRows = bounds.width < Self.twoRowBreakpoint
+    if shouldUseTwoRows != usesTwoRows {
+      setUsesTwoRows(shouldUseTwoRows)
+    }
+    super.layout()
+  }
+
+  private func configureHorizontalStack(
+    _ stack: NSStackView,
+    views: [NSView]
+  ) {
+    stack.orientation = .horizontal
+    stack.alignment = .centerY
+    stack.distribution = .fill
+    stack.spacing = 6
+    stack.detachesHiddenViews = true
+    views.forEach(stack.addArrangedSubview)
+  }
+
+  private func setUsesTwoRows(_ usesTwoRows: Bool) {
+    self.usesTwoRows = usesTwoRows
+
+    let movableViews = [
+      playbackGroup,
+      timelineGroup,
+      liveGroup,
+      settingsGroup,
+      compactSpacer,
+    ]
+    for view in movableViews {
+      if primaryRow.arrangedSubviews.contains(view) {
+        primaryRow.removeArrangedSubview(view)
+      }
+      if secondaryRow.arrangedSubviews.contains(view) {
+        secondaryRow.removeArrangedSubview(view)
+      }
+      view.removeFromSuperview()
+    }
+
+    if usesTwoRows {
+      primaryRow.addArrangedSubview(playbackGroup)
+      primaryRow.addArrangedSubview(timelineGroup)
+      secondaryRow.addArrangedSubview(liveGroup)
+      secondaryRow.addArrangedSubview(compactSpacer)
+      secondaryRow.addArrangedSubview(settingsGroup)
+      secondaryRow.isHidden = false
+      toolbarHeightConstraint?.constant = Self.twoRowHeight
+    } else {
+      primaryRow.addArrangedSubview(playbackGroup)
+      primaryRow.addArrangedSubview(timelineGroup)
+      primaryRow.addArrangedSubview(liveGroup)
+      primaryRow.addArrangedSubview(settingsGroup)
+      secondaryRow.isHidden = true
+      toolbarHeightConstraint?.constant = Self.singleRowHeight
+    }
+
+    needsLayout = true
   }
 
   func render(_ state: DailymotionBridgeState) {
@@ -710,7 +812,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     panel.hasShadow = true
     panel.isReleasedWhenClosed = false
     panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-    panel.contentMinSize = NSSize(width: 560, height: 314)
+    panel.contentMinSize = NSSize(width: 320, height: 250)
     panel.center()
 
     self.panel = panel
@@ -767,7 +869,6 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
       controlsView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
       controlsView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
       controlsView.topAnchor.constraint(equalTo: contentView.topAnchor),
-      controlsView.heightAnchor.constraint(equalToConstant: 44),
       webView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
       webView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
       webView.topAnchor.constraint(equalTo: controlsView.bottomAnchor),
