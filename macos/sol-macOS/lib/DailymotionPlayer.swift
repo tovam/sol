@@ -215,6 +215,7 @@ private protocol DailymotionControlsViewDelegate: AnyObject {
   func controlsDidToggleMute(_ controls: DailymotionControlsView)
   func controls(_ controls: DailymotionControlsView, didSetVolume volume: Double)
   func controlsDidToggleFullscreen(_ controls: DailymotionControlsView)
+  func controlsDidChangeToolbarHeight(_ controls: DailymotionControlsView)
 }
 
 private final class DailymotionTrackingSlider: NSControl {
@@ -466,8 +467,8 @@ private final class DailymotionControlsView: NSVisualEffectView,
 
   private static let liveTwoRowBreakpoint: CGFloat = 600
   private static let regularTwoRowBreakpoint: CGFloat = 480
-  private static let singleRowHeight: CGFloat = 36
-  private static let twoRowHeight: CGFloat = 68
+  fileprivate static let singleRowHeight: CGFloat = 36
+  fileprivate static let twoRowHeight: CGFloat = 68
 
   override init(frame frameRect: NSRect) {
     super.init(frame: frameRect)
@@ -675,14 +676,19 @@ private final class DailymotionControlsView: NSVisualEffectView,
   }
 
   override func layout() {
-    let breakpoint = liveGroup.isHidden
-      ? Self.regularTwoRowBreakpoint
-      : Self.liveTwoRowBreakpoint
-    let shouldUseTwoRows = bounds.width < breakpoint
+    let shouldUseTwoRows = toolbarHeight(forContentWidth: bounds.width)
+      == Self.twoRowHeight
     if shouldUseTwoRows != usesTwoRows {
       setUsesTwoRows(shouldUseTwoRows)
     }
     super.layout()
+  }
+
+  func toolbarHeight(forContentWidth width: CGFloat) -> CGFloat {
+    let breakpoint = liveGroup.isHidden
+      ? Self.regularTwoRowBreakpoint
+      : Self.liveTwoRowBreakpoint
+    return width < breakpoint ? Self.twoRowHeight : Self.singleRowHeight
   }
 
   private func configureHorizontalStack(
@@ -779,6 +785,7 @@ private final class DailymotionControlsView: NSVisualEffectView,
       }
     }
     needsLayout = true
+    delegate?.controlsDidChangeToolbarHeight(self)
   }
 
   func render(_ state: DailymotionBridgeState) {
@@ -1286,6 +1293,12 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
   private var lastLiveDVREdgeDelay: Double?
   private var pendingAutomaticRate: Double?
   private var pendingAutomaticRateRequestedAt = Date.distantPast
+  private var videoAspectRatio = CGFloat(16.0 / 9.0)
+  private var hasResolvedVideoAspectRatio = false
+  private var resolvedVideoAspectFrameToken: String?
+  private var isApplyingAspectFrame = false
+  private var isTransitioningFullscreen = false
+  private var needsAspectReconciliationAfterLiveResize = false
 
   func open(urlString: String, completion: @escaping (Bool) -> Void) {
     guard let source = DailymotionPlayerSource.parse(urlString) else {
@@ -1308,6 +1321,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     source = nil
     panel = nil
     state = DailymotionBridgeState()
+    isTransitioningFullscreen = false
   }
 
   func windowWillEnterFullScreen(_ notification: Notification) {
@@ -1318,6 +1332,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     else {
       return
     }
+    isTransitioningFullscreen = true
     panel.level = .normal
   }
 
@@ -1329,7 +1344,19 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     else {
       return
     }
+    isTransitioningFullscreen = false
     controlsView?.setFullscreen(true)
+  }
+
+  func windowWillExitFullScreen(_ notification: Notification) {
+    guard
+      let window = notification.object as? NSWindow,
+      let panel,
+      window === panel
+    else {
+      return
+    }
+    isTransitioningFullscreen = true
   }
 
   func windowDidExitFullScreen(_ notification: Notification) {
@@ -1340,8 +1367,53 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     else {
       return
     }
+    isTransitioningFullscreen = false
     panel.level = .floating
     controlsView?.setFullscreen(false)
+    DispatchQueue.main.async { [weak self] in
+      self?.reconcilePanelAspectRatio()
+    }
+  }
+
+  func windowWillResize(
+    _ sender: NSWindow,
+    to proposedFrameSize: NSSize
+  ) -> NSSize {
+    guard
+      let panel,
+      sender === panel,
+      !isApplyingAspectFrame,
+      !isTransitioningFullscreen,
+      !panel.styleMask.contains(.fullScreen)
+    else {
+      return proposedFrameSize
+    }
+
+    let proposedContentSize = sender.contentRect(
+      forFrameRect: NSRect(origin: .zero, size: proposedFrameSize)
+    ).size
+    let currentContentSize = sender.contentRect(forFrameRect: sender.frame).size
+    let constrainedContentSize = aspectConstrainedContentSize(
+      proposed: proposedContentSize,
+      current: currentContentSize
+    )
+    return sender.frameRect(
+      forContentRect: NSRect(origin: .zero, size: constrainedContentSize)
+    ).size
+  }
+
+  func windowDidEndLiveResize(_ notification: Notification) {
+    guard
+      let window = notification.object as? NSWindow,
+      let panel,
+      window === panel
+    else {
+      return
+    }
+    if needsAspectReconciliationAfterLiveResize {
+      needsAspectReconciliationAfterLiveResize = false
+      reconcilePanelAspectRatio()
+    }
   }
 
   private func playerWindow() -> FloatingVideoPanel {
@@ -1369,6 +1441,158 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     return panel
   }
 
+  private func toolbarHeight(forContentWidth width: CGFloat) -> CGFloat {
+    controlsView?.toolbarHeight(forContentWidth: width)
+      ?? (width < 480
+        ? DailymotionControlsView.twoRowHeight
+        : DailymotionControlsView.singleRowHeight)
+  }
+
+  private func aspectConstrainedContentSize(
+    proposed: NSSize,
+    current: NSSize
+  ) -> NSSize {
+    let minimumWidth = CGFloat(320)
+    let ratio = max(videoAspectRatio, 0.01)
+    let widthDelta = abs(proposed.width - current.width) / max(current.width, 1)
+    let heightDelta = abs(proposed.height - current.height) / max(current.height, 1)
+
+    if widthDelta >= heightDelta {
+      let width = max(minimumWidth, proposed.width)
+      return NSSize(
+        width: width,
+        height: width / ratio + toolbarHeight(forContentWidth: width)
+      )
+    }
+
+    let candidates = [
+      DailymotionControlsView.singleRowHeight,
+      DailymotionControlsView.twoRowHeight,
+    ].compactMap { toolbarHeight -> NSSize? in
+      guard proposed.height > toolbarHeight else { return nil }
+      let width = max(minimumWidth, (proposed.height - toolbarHeight) * ratio)
+      guard abs(self.toolbarHeight(forContentWidth: width) - toolbarHeight) < 0.5
+      else {
+        return nil
+      }
+      return NSSize(width: width, height: width / ratio + toolbarHeight)
+    }
+
+    if let closest = candidates.min(by: {
+      abs($0.width - proposed.width) < abs($1.width - proposed.width)
+    }) {
+      return closest
+    }
+
+    let width = max(
+      minimumWidth,
+      (proposed.height - toolbarHeight(forContentWidth: current.width)) * ratio
+    )
+    return NSSize(
+      width: width,
+      height: width / ratio + toolbarHeight(forContentWidth: width)
+    )
+  }
+
+  private func updatePanelMinimumSize() {
+    let minimumWidth = CGFloat(320)
+    panel?.contentMinSize = NSSize(
+      width: minimumWidth,
+      height: minimumWidth / max(videoAspectRatio, 0.01)
+        + toolbarHeight(forContentWidth: minimumWidth)
+    )
+  }
+
+  private func reconcilePanelAspectRatio() {
+    guard
+      let panel,
+      !isApplyingAspectFrame,
+      !isTransitioningFullscreen,
+      !panel.styleMask.contains(.fullScreen)
+    else {
+      return
+    }
+    guard !panel.inLiveResize else {
+      needsAspectReconciliationAfterLiveResize = true
+      return
+    }
+
+    let currentFrame = panel.frame
+    let currentContentRect = panel.contentRect(forFrameRect: currentFrame)
+    let width = max(currentContentRect.width, 320)
+    var targetContentSize = NSSize(
+      width: width,
+      height: width / max(videoAspectRatio, 0.01)
+        + toolbarHeight(forContentWidth: width)
+    )
+    if let screen = panel.screen {
+      let frameChromeHeight = currentFrame.height - currentContentRect.height
+      let maximumContentHeight = max(
+        0,
+        screen.visibleFrame.height - frameChromeHeight
+      )
+      if targetContentSize.height > maximumContentHeight {
+        targetContentSize = aspectConstrainedContentSize(
+          proposed: NSSize(width: width, height: maximumContentHeight),
+          current: targetContentSize
+        )
+      }
+    }
+    let targetFrameSize = panel.frameRect(
+      forContentRect: NSRect(origin: .zero, size: targetContentSize)
+    ).size
+    guard
+      abs(targetFrameSize.width - currentFrame.width) > 0.5
+        || abs(targetFrameSize.height - currentFrame.height) > 0.5
+    else {
+      return
+    }
+
+    var targetFrame = currentFrame
+    targetFrame.size = targetFrameSize
+    targetFrame.origin.y = currentFrame.maxY - targetFrameSize.height
+    isApplyingAspectFrame = true
+    panel.setFrame(targetFrame, display: true)
+    isApplyingAspectFrame = false
+  }
+
+  private func resolveVideoAspectRatio(from body: [String: Any]) {
+    if
+      let source,
+      case .sdk = source.backend,
+      state.backend != "media"
+    {
+      guard
+        state.backend == "sdk",
+        state.hasReliableAdState,
+        !state.isAdPlaying
+      else {
+        return
+      }
+    }
+    guard
+      let frameToken = mediaFrameToken,
+      !hasResolvedVideoAspectRatio
+        || resolvedVideoAspectFrameToken != frameToken
+        || state.backend == "sdk",
+      let width = positiveFiniteDouble(body["videoWidth"]),
+      let height = positiveFiniteDouble(body["videoHeight"])
+    else {
+      return
+    }
+    let ratio = width / height
+    guard ratio.isFinite, ratio >= 0.2, ratio <= 5 else { return }
+
+    let resolvedRatio = CGFloat(ratio)
+    let ratioChanged = abs(videoAspectRatio - resolvedRatio) > 0.001
+    videoAspectRatio = resolvedRatio
+    hasResolvedVideoAspectRatio = true
+    resolvedVideoAspectFrameToken = frameToken
+    guard ratioChanged else { return }
+    updatePanelMinimumSize()
+    reconcilePanelAspectRatio()
+  }
+
   private func load(
     _ source: DailymotionPlayerSource,
     in panel: FloatingVideoPanel
@@ -1391,6 +1615,11 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     canonicalVolume = state.volume
     canonicalMuted = source.startsMuted
     shouldKeepMediaUnmuted = !source.startsMuted
+    videoAspectRatio = CGFloat(16.0 / 9.0)
+    hasResolvedVideoAspectRatio = false
+    resolvedVideoAspectFrameToken = nil
+    isTransitioningFullscreen = false
+    needsAspectReconciliationAfterLiveResize = false
 
     let contentController = WKUserContentController()
     contentController.add(self, name: dailymotionBridgeName)
@@ -1438,6 +1667,8 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     self.userContentController = contentController
     self.webView = webView
     self.controlsView = controlsView
+    updatePanelMinimumSize()
+    reconcilePanelAspectRatio()
     refreshVideoMetadata(for: source)
     startMetadataTimerIfNeeded()
 
@@ -1743,6 +1974,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     mediaFrameIsPlaying = isPlaying
     mediaFrameArea = area
     mediaFrameLastSeen = Date()
+    resolveVideoAspectRatio(from: body)
 
     if !(state.backend == "sdk" && state.isAdPlaying) {
       state.mediaCurrentTime = finiteDouble(body["time"])
@@ -2653,6 +2885,8 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
           timelineStartMs: timelineStartMs(video),
           rate: finite(video.playbackRate),
           volume: finite(video.volume),
+          videoWidth: finite(video.videoWidth),
+          videoHeight: finite(video.videoHeight),
           area: video.clientWidth * video.clientHeight,
           error: video.error ? `Media error ${video.error.code}` : null,
         });
@@ -2964,6 +3198,15 @@ extension DailymotionPlayerController: DailymotionControlsViewDelegate {
     _ controls: DailymotionControlsView
   ) {
     panel?.toggleFullScreen(nil)
+  }
+
+  fileprivate func controlsDidChangeToolbarHeight(
+    _ controls: DailymotionControlsView
+  ) {
+    DispatchQueue.main.async { [weak self] in
+      self?.updatePanelMinimumSize()
+      self?.reconcilePanelAspectRatio()
+    }
   }
 }
 
