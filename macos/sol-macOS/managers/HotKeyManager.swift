@@ -49,6 +49,15 @@ final class HotKeyManager {
         return $0
       }
 
+      if
+        $0.keyCode == 36,
+        $0.window?.identifier == dailymotionPlayerWindowIdentifier,
+        let fieldEditor = $0.window?.firstResponder as? NSTextView,
+        fieldEditor.isFieldEditor
+      {
+        return $0
+      }
+
       let commandEnter =
         $0.keyCode == 36 && $0.modifierFlags.contains(.command)
         && !$0.modifierFlags.contains(.shift)

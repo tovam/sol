@@ -4,6 +4,9 @@ import WebKit
 private let dailymotionBridgeName = "solDailymotion"
 private let dailymotionMinimumDVRWindow = 10.0
 private let dailymotionMaximumTimelineClockDrift = 10 * 60.0
+let dailymotionPlayerWindowIdentifier = NSUserInterfaceItemIdentifier(
+  "com.ospfranco.sol.dailymotion-player"
+)
 
 private final class FloatingVideoPanel: NSPanel {
   override var canBecomeKey: Bool { true }
@@ -272,6 +275,7 @@ private final class DailymotionControlsView: NSVisualEffectView,
     clockTimeField.focusRingType = .none
     clockTimeField.target = self
     clockTimeField.action = #selector(seekToClockTime)
+    clockTimeField.cell?.sendsActionOnEndEditing = false
     clockTimeField.delegate = self
     clockTimeField.toolTip = "Jump to local time (HH:mm or HH:mm:ss)"
     clockTimeField.isHidden = true
@@ -806,6 +810,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
       backing: .buffered,
       defer: false
     )
+    panel.identifier = dailymotionPlayerWindowIdentifier
     panel.delegate = self
     panel.level = .floating
     panel.hidesOnDeactivate = false
@@ -1746,19 +1751,17 @@ extension DailymotionPlayerController: DailymotionControlsViewDelegate {
       return
     }
 
-    let target: Double
-    if let timelineStartDate = state.mediaTimelineStartDate {
-      target = targetDate.timeIntervalSince(timelineStartDate)
-    } else {
-      let observedAt = state.seekableObservedAt ?? now
-      target = rangeEnd - observedAt.timeIntervalSince(targetDate)
-    }
+    let delayFromLiveEdge = max(0, now.timeIntervalSince(targetDate))
+    let rangeObservedAt = state.seekableObservedAt ?? now
+    let rangeSampleAge = max(0, now.timeIntervalSince(rangeObservedAt))
+    let estimatedLiveEdge = rangeEnd + rangeSampleAge
+    let target = estimatedLiveEdge - delayFromLiveEdge
 
     let tolerance = 1.0
     guard
       target.isFinite,
       target >= rangeStart - tolerance,
-      target <= rangeEnd + tolerance
+      target <= estimatedLiveEdge + tolerance
     else {
       completion("That time is outside the available DVR window")
       return
@@ -1766,7 +1769,10 @@ extension DailymotionPlayerController: DailymotionControlsViewDelegate {
 
     sendCommand(
       "seek",
-      value: min(max(target, rangeStart), max(rangeStart, rangeEnd - 0.05))
+      value: min(
+        max(target, rangeStart),
+        max(rangeStart, estimatedLiveEdge - 0.05)
+      )
     ) { succeeded in
       completion(succeeded ? nil : "Dailymotion could not seek to that time")
     }
