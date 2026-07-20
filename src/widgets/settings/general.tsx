@@ -27,21 +27,39 @@ const GlassAppearanceSettings = observer(() => {
 	const [tintOpacity, setTintOpacity] = useState(
 		String(Math.round(appearance.tintOpacity * 100)),
 	);
+	const [shadowOpacity, setShadowOpacity] = useState(
+		String(Math.round(appearance.shadowOpacity * 100)),
+	);
+	const [shadowRadius, setShadowRadius] = useState(
+		String(appearance.shadowRadius),
+	);
+	const [shadowOffsetY, setShadowOffsetY] = useState(
+		String(appearance.shadowOffsetY),
+	);
 
 	useEffect(() => {
 		setStyle(appearance.style);
 		setCornerRadius(String(appearance.cornerRadius));
 		setTintColor(appearance.tintColor ?? "");
 		setTintOpacity(String(Math.round(appearance.tintOpacity * 100)));
+		setShadowOpacity(String(Math.round(appearance.shadowOpacity * 100)));
+		setShadowRadius(String(appearance.shadowRadius));
+		setShadowOffsetY(String(appearance.shadowOffsetY));
 	}, [
 		appearance.style,
 		appearance.cornerRadius,
 		appearance.tintColor,
 		appearance.tintOpacity,
+		appearance.shadowOpacity,
+		appearance.shadowRadius,
+		appearance.shadowOffsetY,
 	]);
 
 	const parsedRadius = Number(cornerRadius.replace(",", "."));
 	const parsedOpacity = Number(tintOpacity.replace(",", "."));
+	const parsedShadowOpacity = Number(shadowOpacity.replace(",", "."));
+	const parsedShadowRadius = Number(shadowRadius.replace(",", "."));
+	const parsedShadowOffsetY = Number(shadowOffsetY.replace(",", "."));
 	const normalizedTint = tintColor.trim();
 	const tintIsValid =
 		normalizedTint === "" || /^#[\dA-Fa-f]{6}$/.test(normalizedTint);
@@ -54,6 +72,18 @@ const GlassAppearanceSettings = observer(() => {
 		Number.isFinite(parsedOpacity) &&
 		parsedOpacity >= 0 &&
 		parsedOpacity <= 100 &&
+		shadowOpacity.trim() !== "" &&
+		Number.isFinite(parsedShadowOpacity) &&
+		parsedShadowOpacity >= 0 &&
+		parsedShadowOpacity <= 100 &&
+		shadowRadius.trim() !== "" &&
+		Number.isFinite(parsedShadowRadius) &&
+		parsedShadowRadius >= 0 &&
+		parsedShadowRadius <= 32 &&
+		shadowOffsetY.trim() !== "" &&
+		Number.isFinite(parsedShadowOffsetY) &&
+		parsedShadowOffsetY >= -16 &&
+		parsedShadowOffsetY <= 16 &&
 		tintIsValid;
 
 	const reset = () => {
@@ -61,6 +91,9 @@ const GlassAppearanceSettings = observer(() => {
 		setCornerRadius("24");
 		setTintColor("");
 		setTintOpacity("0");
+		setShadowOpacity("32");
+		setShadowRadius("12");
+		setShadowOffsetY("3");
 		store.ui.resetGlassAppearance();
 	};
 
@@ -147,10 +180,69 @@ const GlassAppearanceSettings = observer(() => {
 				<Text className="text-xs darker-text w-5">%</Text>
 			</View>
 
+			<View className="border-t border-lightBorder dark:border-darkBorder" />
+
+			<View>
+				<Text className="text-sm text">Shadow</Text>
+				<Text className="text-xxs text-neutral-500 dark:text-neutral-400 mt-1">
+					A subtle black shadow separates the glass from the background
+				</Text>
+			</View>
+
+			<View className="flex-row items-center gap-2">
+				<View className="flex-1">
+					<Text className="text-sm text">Opacity</Text>
+					<Text className="text-xxs text-neutral-500 dark:text-neutral-400">
+						0–100%; Spotlight-like starts around 30%
+					</Text>
+				</View>
+				<Input
+					bordered
+					className="w-20"
+					inputClassName="text-right"
+					value={shadowOpacity}
+					onChangeText={setShadowOpacity}
+				/>
+				<Text className="text-xs darker-text w-5">%</Text>
+			</View>
+
+			<View className="flex-row items-center gap-2">
+				<View className="flex-1">
+					<Text className="text-sm text">Blur radius</Text>
+					<Text className="text-xxs text-neutral-500 dark:text-neutral-400">
+						0–32 pt; controls the shadow size and softness
+					</Text>
+				</View>
+				<Input
+					bordered
+					className="w-20"
+					inputClassName="text-right"
+					value={shadowRadius}
+					onChangeText={setShadowRadius}
+				/>
+				<Text className="text-xs darker-text w-5">pt</Text>
+			</View>
+
+			<View className="flex-row items-center gap-2">
+				<View className="flex-1">
+					<Text className="text-sm text">Vertical offset</Text>
+					<Text className="text-xxs text-neutral-500 dark:text-neutral-400">
+						−16–16 pt; positive values move the shadow down
+					</Text>
+				</View>
+				<Input
+					bordered
+					className="w-20"
+					inputClassName="text-right"
+					value={shadowOffsetY}
+					onChangeText={setShadowOffsetY}
+				/>
+				<Text className="text-xs darker-text w-5">pt</Text>
+			</View>
+
 			{!valuesAreValid && (
 				<Text className="text-xs text-red-500">
-					Use a radius from 0 to 32, an intensity from 0 to 100, and a
-					#RRGGBB color.
+					Check the ranges above and use a valid #RRGGBB tint color.
 				</Text>
 			)}
 
@@ -169,6 +261,9 @@ const GlassAppearanceSettings = observer(() => {
 							cornerRadius: parsedRadius,
 							tintColor: normalizedTint || null,
 							tintOpacity: normalizedTint ? parsedOpacity / 100 : 0,
+							shadowOpacity: parsedShadowOpacity / 100,
+							shadowRadius: parsedShadowRadius,
+							shadowOffsetY: parsedShadowOffsetY,
 						});
 					}}
 				>

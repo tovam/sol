@@ -12,6 +12,7 @@ enum PreferredScreen {
   private let mainWindow: Panel = Panel(contentRect: .zero)
   private var rootView: NSView?
   private var searchWindowPosition = NSPoint(x: 50, y: 20)
+  private var currentContentSize = NSSize(width: 680, height: 450)
   private let openScaleAnimationKey = "sol.open.scale"
   private var resizeAnimationGeneration = 0
   private var resizeTargetFrame: NSRect?
@@ -27,14 +28,21 @@ enum PreferredScreen {
     style: String,
     cornerRadius: Double,
     tintHex: String?,
-    tintOpacity: Double
+    tintOpacity: Double,
+    shadowOpacity: Double,
+    shadowRadius: Double,
+    shadowOffsetY: Double
   ) {
     mainWindow.applyGlassAppearance(
       style: style,
       cornerRadius: cornerRadius,
       tintHex: tintHex,
-      tintOpacity: tintOpacity
+      tintOpacity: tintOpacity,
+      shadowOpacity: shadowOpacity,
+      shadowRadius: shadowRadius,
+      shadowOffsetY: shadowOffsetY
     )
+    resizeForCurrentContentSize()
   }
 
   func setSearchWindowPosition(x: Double, y: Double) {
@@ -52,6 +60,9 @@ enum PreferredScreen {
 
   private func positionedOrigin(for windowSize: NSSize, on screen: NSScreen) -> NSPoint {
     let visibleFrame = screen.visibleFrame
+    let contentInsets = mainWindow.contentInsets
+    let contentWidth = max(0, windowSize.width - contentInsets.left - contentInsets.right)
+    let contentHeight = max(0, windowSize.height - contentInsets.top - contentInsets.bottom)
     let requestedCenterX =
       visibleFrame.minX + visibleFrame.width * searchWindowPosition.x / 100
     let requestedTopY =
@@ -60,9 +71,32 @@ enum PreferredScreen {
     let maximumY = max(visibleFrame.minY, visibleFrame.maxY - windowSize.height)
 
     return NSPoint(
-      x: floor(min(max(requestedCenterX - windowSize.width / 2, visibleFrame.minX), maximumX)),
-      y: floor(min(max(requestedTopY - windowSize.height, visibleFrame.minY), maximumY))
+      x: floor(
+        min(
+          max(requestedCenterX - contentWidth / 2 - contentInsets.left, visibleFrame.minX),
+          maximumX
+        )
+      ),
+      y: floor(
+        min(
+          max(requestedTopY - contentHeight - contentInsets.bottom, visibleFrame.minY),
+          maximumY
+        )
+      )
     )
+  }
+
+  private func resizeForCurrentContentSize() {
+    guard let screen = getPreferredScreen() else { return }
+    let windowSize = mainWindow.windowSize(forContentSize: currentContentSize)
+    let frame = NSRect(
+      origin: positionedOrigin(for: windowSize, on: screen),
+      size: windowSize
+    )
+    resizeAnimationGeneration += 1
+    resizeTargetFrame = nil
+    mainWindow.setFrame(frame, display: mainWindow.isVisible)
+    mainWindow.layoutInstalledRootView()
   }
 
   @objc func showWindow(target: String? = nil) {
@@ -129,6 +163,7 @@ enum PreferredScreen {
   }
 
   @objc func resetSize() {
+    currentContentSize = baseSize
     let size = mainWindow.windowSize(forContentSize: baseSize)
     let origin = getPreferredScreen().map { positionedOrigin(for: size, on: $0) } ?? .zero
     let frame = NSRect(origin: origin, size: size)
@@ -143,6 +178,7 @@ enum PreferredScreen {
     }
 
     let contentSize = NSSize(width: Int(baseSize.width), height: finalHeight)
+    currentContentSize = contentSize
     let windowSize = mainWindow.windowSize(forContentSize: contentSize)
     guard
       let screen =
@@ -220,6 +256,7 @@ enum PreferredScreen {
       width: screenSize.width * CGFloat(proportion),
       height: screenSize.height * CGFloat(proportion)
     )
+    currentContentSize = contentSize
     let size = mainWindow.windowSize(forContentSize: contentSize)
     let origin = getPreferredScreen().map { positionedOrigin(for: size, on: $0) } ?? .zero
 

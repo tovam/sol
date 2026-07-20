@@ -1,10 +1,16 @@
 import AppKit
+import QuartzCore
 
 @available(macOS 26.0, *)
 private final class SpotlightGlassHostView: NSView {
   static let glassInset: CGFloat = 2
   let glassView = NSGlassEffectView(frame: .zero)
+  private let panelClipView = NSView(frame: .zero)
   private let contentClipView = NSView(frame: .zero)
+  private let shadowLayer = CALayer()
+  private var shadowOpacity: CGFloat = 0.32
+  private var shadowRadius: CGFloat = 12
+  private var shadowOffsetY: CGFloat = 3
   var requestedCornerRadius: CGFloat = 24 {
     didSet {
       updateResolvedCornerRadius()
@@ -15,16 +21,26 @@ private final class SpotlightGlassHostView: NSView {
     super.init(frame: frameRect)
     wantsLayer = true
     layer?.backgroundColor = NSColor.clear.cgColor
-    // The glass elevation can draw into its 2 pt breathing room. Clip that
-    // room to a concentric outer curve so it never reveals a square backing.
-    layer?.cornerCurve = .circular
-    layer?.masksToBounds = true
+    layer?.masksToBounds = false
+
+    shadowLayer.shadowColor = NSColor.black.cgColor
+    shadowLayer.masksToBounds = false
+    layer?.insertSublayer(shadowLayer, at: 0)
+
+    // Keep the Liquid Glass clip separate from the outer host: the glass must
+    // stay clipped to rounded corners, while its shadow must be free to draw
+    // into the transparent window margin around it.
+    panelClipView.wantsLayer = true
+    panelClipView.layer?.backgroundColor = NSColor.clear.cgColor
+    panelClipView.layer?.cornerCurve = .circular
+    panelClipView.layer?.masksToBounds = true
     contentClipView.wantsLayer = true
     contentClipView.layer?.backgroundColor = NSColor.clear.cgColor
     contentClipView.layer?.cornerCurve = .circular
     contentClipView.layer?.masksToBounds = true
     glassView.contentView = contentClipView
-    addSubview(glassView)
+    panelClipView.addSubview(glassView)
+    addSubview(panelClipView)
   }
 
   @available(*, unavailable)
@@ -34,16 +50,40 @@ private final class SpotlightGlassHostView: NSView {
 
   override func layout() {
     super.layout()
+    let shadowInsets = resolvedShadowInsets
+    panelClipView.frame = NSRect(
+      x: shadowInsets.left,
+      y: shadowInsets.bottom,
+      width: max(0, bounds.width - shadowInsets.left - shadowInsets.right),
+      height: max(0, bounds.height - shadowInsets.top - shadowInsets.bottom)
+    )
     let inset = Self.glassInset
     glassView.frame = NSRect(
       x: inset,
       y: inset,
-      width: max(0, bounds.width - inset * 2),
-      height: max(0, bounds.height - inset * 2)
+      width: max(0, panelClipView.bounds.width - inset * 2),
+      height: max(0, panelClipView.bounds.height - inset * 2)
     )
     contentClipView.frame = glassView.bounds
     contentClipView.subviews.forEach { $0.frame = contentClipView.bounds }
     updateResolvedCornerRadius()
+  }
+
+  var contentInsets: NSEdgeInsets {
+    let shadowInsets = resolvedShadowInsets
+    return NSEdgeInsets(
+      top: shadowInsets.top + Self.glassInset,
+      left: shadowInsets.left + Self.glassInset,
+      bottom: shadowInsets.bottom + Self.glassInset,
+      right: shadowInsets.right + Self.glassInset
+    )
+  }
+
+  func applyShadowAppearance(opacity: CGFloat, radius: CGFloat, offsetY: CGFloat) {
+    shadowOpacity = min(max(opacity, 0), 1)
+    shadowRadius = min(max(radius, 0), 32)
+    shadowOffsetY = min(max(offsetY, -16), 16)
+    needsLayout = true
   }
 
   func installContentView(_ rootView: NSView) {
@@ -69,14 +109,14 @@ private final class SpotlightGlassHostView: NSView {
     let resolvedRadius = min(requestedCornerRadius, maximumRadius)
     let outerMaximumRadius = max(
       0,
-      min(bounds.width, bounds.height) / 2
+      min(panelClipView.bounds.width, panelClipView.bounds.height) / 2
     )
     let outerRadius = min(
       resolvedRadius + Self.glassInset,
       outerMaximumRadius
     )
-    if abs((layer?.cornerRadius ?? 0) - outerRadius) > 0.01 {
-      layer?.cornerRadius = outerRadius
+    if abs((panelClipView.layer?.cornerRadius ?? 0) - outerRadius) > 0.01 {
+      panelClipView.layer?.cornerRadius = outerRadius
     }
     if abs(glassView.cornerRadius - resolvedRadius) > 0.01 {
       glassView.cornerRadius = resolvedRadius
@@ -84,6 +124,36 @@ private final class SpotlightGlassHostView: NSView {
     if abs((contentClipView.layer?.cornerRadius ?? 0) - resolvedRadius) > 0.01 {
       contentClipView.layer?.cornerRadius = resolvedRadius
     }
+
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    shadowLayer.frame = NSRect(
+      x: panelClipView.frame.minX + glassView.frame.minX,
+      y: panelClipView.frame.minY + glassView.frame.minY,
+      width: glassView.frame.width,
+      height: glassView.frame.height
+    )
+    shadowLayer.shadowOpacity = Float(shadowOpacity)
+    shadowLayer.shadowRadius = shadowRadius
+    shadowLayer.shadowOffset = CGSize(width: 0, height: -shadowOffsetY)
+    shadowLayer.shadowPath = CGPath(
+      roundedRect: shadowLayer.bounds,
+      cornerWidth: resolvedRadius,
+      cornerHeight: resolvedRadius,
+      transform: nil
+    )
+    CATransaction.commit()
+  }
+
+  private var resolvedShadowInsets: NSEdgeInsets {
+    guard shadowOpacity > 0 else { return NSEdgeInsetsZero }
+    let blurExtent = ceil(shadowRadius + 2)
+    return NSEdgeInsets(
+      top: max(0, ceil(blurExtent - shadowOffsetY)),
+      left: blurExtent,
+      bottom: max(0, ceil(blurExtent + shadowOffsetY)),
+      right: blurExtent
+    )
   }
 }
 
@@ -179,14 +249,21 @@ final class Panel: NSPanel, NSWindowDelegate {
   }
 
   func windowSize(forContentSize contentSize: NSSize) -> NSSize {
-    if #available(macOS 26.0, *), contentView is SpotlightGlassHostView {
-      let padding = SpotlightGlassHostView.glassInset * 2
+    if #available(macOS 26.0, *), let hostView = contentView as? SpotlightGlassHostView {
+      let insets = hostView.contentInsets
       return NSSize(
-        width: contentSize.width + padding,
-        height: contentSize.height + padding
+        width: contentSize.width + insets.left + insets.right,
+        height: contentSize.height + insets.top + insets.bottom
       )
     }
     return contentSize
+  }
+
+  var contentInsets: NSEdgeInsets {
+    if #available(macOS 26.0, *), let hostView = contentView as? SpotlightGlassHostView {
+      return hostView.contentInsets
+    }
+    return NSEdgeInsetsZero
   }
 
   func layoutInstalledRootView() {
@@ -205,7 +282,10 @@ final class Panel: NSPanel, NSWindowDelegate {
     style: String,
     cornerRadius: Double,
     tintHex: String?,
-    tintOpacity: Double
+    tintOpacity: Double,
+    shadowOpacity: Double,
+    shadowRadius: Double,
+    shadowOffsetY: Double
   ) {
     let safeRadius = CGFloat(min(max(cornerRadius, 0), 32))
     let safeOpacity = CGFloat(min(max(tintOpacity, 0), 1))
@@ -225,6 +305,11 @@ final class Panel: NSPanel, NSWindowDelegate {
       let glassView = hostView.glassView
       glassView.style = style == "regular" ? .regular : .clear
       hostView.requestedCornerRadius = safeRadius
+      hostView.applyShadowAppearance(
+        opacity: CGFloat(shadowOpacity),
+        radius: CGFloat(shadowRadius),
+        offsetY: CGFloat(shadowOffsetY)
+      )
       glassView.tintColor = tintColor
       hostView.needsLayout = true
       hostView.layoutSubtreeIfNeeded()

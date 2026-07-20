@@ -223,6 +223,9 @@ export const DEFAULT_GLASS_APPEARANCE: GlassAppearance = {
 	cornerRadius: 24,
 	tintColor: null,
 	tintOpacity: 0,
+	shadowOpacity: 0.32,
+	shadowRadius: 12,
+	shadowOffsetY: 3,
 };
 
 export const DEFAULT_SEARCH_WINDOW_POSITION: SearchWindowPosition = {
@@ -281,6 +284,18 @@ const normalizeGlassAppearance = (value: unknown): GlassAppearance => {
 		source.tintOpacity,
 		DEFAULT_GLASS_APPEARANCE.tintOpacity,
 	);
+	const rawShadowOpacity = parseConfigNumber(
+		source.shadowOpacity,
+		DEFAULT_GLASS_APPEARANCE.shadowOpacity,
+	);
+	const rawShadowRadius = parseConfigNumber(
+		source.shadowRadius,
+		DEFAULT_GLASS_APPEARANCE.shadowRadius,
+	);
+	const rawShadowOffsetY = parseConfigNumber(
+		source.shadowOffsetY,
+		DEFAULT_GLASS_APPEARANCE.shadowOffsetY,
+	);
 	const rawTint =
 		typeof source.tintColor === "string" ? source.tintColor.trim() : "";
 	const tintColor = /^#[\dA-Fa-f]{6}$/.test(rawTint) ? rawTint : null;
@@ -290,6 +305,9 @@ const normalizeGlassAppearance = (value: unknown): GlassAppearance => {
 		cornerRadius: Math.min(Math.max(rawRadius, 0), 32),
 		tintColor,
 		tintOpacity: tintColor ? Math.min(Math.max(rawOpacity, 0), 1) : 0,
+		shadowOpacity: Math.min(Math.max(rawShadowOpacity, 0), 1),
+		shadowRadius: Math.min(Math.max(rawShadowRadius, 0), 32),
+		shadowOffsetY: Math.min(Math.max(rawShadowOffsetY, -16), 16),
 	};
 };
 

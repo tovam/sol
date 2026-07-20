@@ -5,6 +5,9 @@ export type GlassAppearance = {
 	cornerRadius: number;
 	tintColor: string | null;
 	tintOpacity: number;
+	shadowOpacity: number;
+	shadowRadius: number;
+	shadowOffsetY: number;
 };
 
 export type SearchWindowPosition = {

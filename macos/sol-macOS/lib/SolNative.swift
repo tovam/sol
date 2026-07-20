@@ -448,13 +448,19 @@ class SolNative: RCTEventEmitter {
     let cornerRadius = (settings["cornerRadius"] as? NSNumber)?.doubleValue ?? 24
     let tintHex = settings["tintColor"] as? String
     let tintOpacity = (settings["tintOpacity"] as? NSNumber)?.doubleValue ?? 0
+    let shadowOpacity = (settings["shadowOpacity"] as? NSNumber)?.doubleValue ?? 0.32
+    let shadowRadius = (settings["shadowRadius"] as? NSNumber)?.doubleValue ?? 12
+    let shadowOffsetY = (settings["shadowOffsetY"] as? NSNumber)?.doubleValue ?? 3
 
     DispatchQueue.main.async {
       PanelManager.shared.setGlassAppearance(
         style: style,
         cornerRadius: cornerRadius,
         tintHex: tintHex,
-        tintOpacity: tintOpacity
+        tintOpacity: tintOpacity,
+        shadowOpacity: shadowOpacity,
+        shadowRadius: shadowRadius,
+        shadowOffsetY: shadowOffsetY
       )
     }
   }
