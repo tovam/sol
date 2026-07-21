@@ -18,6 +18,7 @@ import MiniSearch from "minisearch";
 interface Props<T> {
 	value: T;
 	style?: ViewStyle;
+	containerStyle?: ViewStyle;
 	className?: string;
 	onValueChange: (t: T) => void;
 	options: Array<{
@@ -33,6 +34,7 @@ interface Props<T> {
 export const Dropdown = ({
 	value,
 	style,
+	containerStyle,
 	className,
 	options,
 	onValueChange,
@@ -88,7 +90,7 @@ export const Dropdown = ({
 	}, [searchQuery, options, miniSearch]);
 
 	return (
-		<View style={{ zIndex: isOpen ? 1000 : 0 }}>
+		<View style={[{ zIndex: isOpen ? 1000 : 0 }, containerStyle]}>
 			<TouchableOpacity
 				onLayout={(e) => {
 					const {

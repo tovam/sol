@@ -13,6 +13,7 @@ import { useStore } from "store";
 
 type Props = {
 	compact?: boolean;
+	fluid?: boolean;
 	disabled?: boolean;
 	onSelectionChange?: () => void;
 	showError?: boolean;
@@ -26,6 +27,7 @@ const PROVIDERS: Array<{ id: AIProvider; label: string }> = [
 export const AIProviderModelControls = observer(
 	({
 		compact = false,
+		fluid = false,
 		disabled = false,
 		onSelectionChange,
 		showError = !compact,
@@ -77,8 +79,14 @@ export const AIProviderModelControls = observer(
 		};
 
 		return (
-			<View className={showError ? "gap-1" : undefined}>
-				<View className="flex-row items-center gap-2">
+			<View
+				className={`${showError ? "gap-1" : ""} ${fluid ? "flex-1" : ""}`}
+				style={fluid ? { minWidth: 0 } : undefined}
+			>
+				<View
+					className={`flex-row items-center gap-2 ${fluid ? "flex-1" : ""}`}
+					style={fluid ? { minWidth: 0 } : undefined}
+				>
 					<View className="flex-row p-0.5 rounded-lg border border-color subBg">
 						{PROVIDERS.map((option) => {
 							const selected = provider === option.id;
@@ -116,7 +124,12 @@ export const AIProviderModelControls = observer(
 						placeholder={loading ? "Loading models…" : "Choose a model"}
 						disabled={controlsDisabled || loading || modelOptions.length === 0}
 						className={compact ? "h-7" : "h-8"}
-						style={{ width: compact ? 175 : 300 }}
+						containerStyle={fluid ? { flex: 1, minWidth: 160 } : undefined}
+						style={
+							fluid
+								? { width: "100%" }
+								: { width: compact ? 175 : 300 }
+						}
 					/>
 
 					<TouchableOpacity

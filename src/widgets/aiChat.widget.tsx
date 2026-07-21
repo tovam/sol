@@ -117,47 +117,57 @@ export const AIChatWidget = observer(() => {
 
 	return (
 		<View className="fullWindow">
-			<View
-				className="h-14 px-4 flex-row items-center gap-2 border-b border-color"
-				style={{ zIndex: 20 }}
-			>
-				<BackButton
-					onPress={() => {
-						store.ui.setQuery("");
-						store.ui.focusWidget(Widget.SEARCH);
-					}}
-				/>
-				<View className="flex-1 flex-row items-center gap-2">
-					<Text className="text-lg font-semibold text">AI Chat</Text>
-					<Text className="text-xs darker-text">saved locally</Text>
+			<View className="border-b border-color" style={{ zIndex: 30 }}>
+				<View className="h-12 px-4 flex-row items-center gap-2">
+					<BackButton
+						onPress={() => {
+							store.ui.setQuery("");
+							store.ui.focusWidget(Widget.SEARCH);
+						}}
+					/>
+					<View className="flex-1 flex-row items-baseline gap-2">
+						<Text className="text-lg font-semibold text">AI</Text>
+						<Text className="text-xs darker-text">saved locally</Text>
+					</View>
+					<View className="h-8 flex-row items-center rounded-lg subBg overflow-hidden">
+						<TouchableOpacity
+							className="h-full px-3 items-center justify-center"
+							onPress={() => store.ui.openAIHistory()}
+						>
+							<Text className="text text-xs">
+								History ({store.ai.conversations.length})
+							</Text>
+						</TouchableOpacity>
+						<View className="w-px h-4 bg-neutral-300 dark:bg-neutral-600" />
+						<TouchableOpacity
+							disabled={isConversationLoading}
+							className={`h-full px-3 items-center justify-center ${
+								isConversationLoading ? "opacity-50" : ""
+							}`}
+							onPress={() => store.ui.showSettings("AI")}
+						>
+							<Text className="text text-xs">Settings</Text>
+						</TouchableOpacity>
+						<View className="w-px h-4 bg-neutral-300 dark:bg-neutral-600" />
+						<TouchableOpacity
+							disabled={loading}
+							className={`h-full px-3 items-center justify-center ${
+								loading ? "opacity-50" : ""
+							}`}
+							onPress={newConversation}
+						>
+							<Text className="text-accent text-xs font-semibold">New</Text>
+						</TouchableOpacity>
+					</View>
 				</View>
-				<AIProviderModelControls compact disabled={isConversationLoading} />
-				<TouchableOpacity
-					className="px-2.5 py-1.5 rounded-lg subBg border border-color"
-					onPress={() => store.ui.openAIHistory()}
-				>
-					<Text className="text text-xs">
-						History ({store.ai.conversations.length})
-					</Text>
-				</TouchableOpacity>
-				<TouchableOpacity
-					disabled={isConversationLoading}
-					className={`px-2.5 py-1.5 rounded-lg subBg border border-color ${
-						isConversationLoading ? "opacity-50" : ""
-					}`}
-					onPress={() => store.ui.showSettings("AI")}
-				>
-					<Text className="text text-xs">Settings</Text>
-				</TouchableOpacity>
-				<TouchableOpacity
-					disabled={loading}
-					className={`px-2.5 py-1.5 rounded-lg subBg border border-color ${
-						loading ? "opacity-50" : ""
-					}`}
-					onPress={newConversation}
-				>
-					<Text className="text text-xs">New</Text>
-				</TouchableOpacity>
+				<View className="h-11 px-4 flex-row items-center gap-3 border-t border-color subBg">
+					<Text className="text-xs font-semibold darker-text">Provider & model</Text>
+					<AIProviderModelControls
+						compact
+						fluid
+						disabled={isConversationLoading}
+					/>
+				</View>
 			</View>
 
 			<ScrollView
