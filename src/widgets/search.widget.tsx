@@ -372,6 +372,7 @@ export const SearchWidget: FC = observer(() => {
 	const selectedIndex = store.ui.selectedIndex;
 	const listRef = useRef<LegendListRef | null>(null);
 	const items = store.ui.searchItems;
+	const selectedItemId = items[selectedIndex]?.id;
 	const activeTab = store.ui.searchTab;
 	const activeTabConfig =
 		SEARCH_TABS.find((tab) => tab.value === activeTab) ?? SEARCH_TABS[0];
@@ -406,12 +407,12 @@ export const SearchWidget: FC = observer(() => {
 
 	useEffect(() => {
 		if (focused && items.length && selectedIndex < items.length) {
-			listRef.current?.scrollToIndex({
+			void listRef.current?.scrollIndexIntoView({
 				index: selectedIndex,
-				viewOffset: 80,
+				animated: false,
 			});
 		}
-	}, [focused, selectedIndex, items]);
+	}, [focused, selectedIndex, selectedItemId, items.length]);
 
 	useEffect(() => {
 		if (activeTab !== SearchTab.FILES) return;
