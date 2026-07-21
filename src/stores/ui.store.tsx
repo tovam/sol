@@ -1718,10 +1718,36 @@ export const createUIStore = (root: IRootStore) => {
 			//   }
 			// }
 		},
-		getApps: () => {
-			solNative.getApplications().then((apps) => {
-				store.updateApps(apps);
-			});
+		getApps: async () => {
+			const apps = await solNative.getApplications();
+			store.updateApps(apps);
+		},
+		setApplicationRunning: (path: string, isRunning: boolean) => {
+			const application = store.apps.find((item) => item.url === path);
+			if (!application) return;
+			application.isRunning = isRunning;
+			minisearch.removeAll();
+		},
+		killApplication: async (item: Item) => {
+			if (item.type !== ItemType.APPLICATION || !item.url || !item.isRunning) {
+				return;
+			}
+
+			store.setApplicationRunning(item.url, false);
+			try {
+				const didTerminate = await solNative.forceQuitApplication(item.url);
+				if (!didTerminate) {
+					throw new Error("the application is still running");
+				}
+				await store.getApps();
+				void solNative.showToast(`${item.name} stopped`, "success");
+			} catch (error) {
+				await store.getApps().catch(() => undefined);
+				void solNative.showToast(
+					`Could not stop ${item.name}: ${String(error)}`,
+					"error",
+				);
+			}
 		},
 		onShow: ({ target }: { target?: string }) => {
 			store.getApps();

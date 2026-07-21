@@ -331,6 +331,26 @@ const ItemRow = observer(({ item, index }: { item: Item; index: number }) => {
 						{renderToKeys(store.ui.shortcuts[item.id])}
 					</View>
 				)}
+
+				{item.type === ItemType.APPLICATION && item.isRunning && (
+					<TouchableOpacity
+						accessibilityRole="button"
+						accessibilityLabel={`Force quit ${item.name}`}
+						onPress={(event) => {
+							event.stopPropagation();
+							void store.ui.killApplication(item);
+						}}
+						className="ml-3 h-8 px-2.5 items-center justify-center rounded-lg bg-red-500/10 dark:bg-red-400/15"
+					>
+						<Text
+							className={clsx("text-xs font-medium text-red-700 dark:text-red-300", {
+								"text-white": isActive,
+							})}
+						>
+							Kill
+						</Text>
+					</TouchableOpacity>
+				)}
 			</View>
 		</TouchableOpacity>
 	);

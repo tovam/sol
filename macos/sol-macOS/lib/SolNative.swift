@@ -777,6 +777,60 @@ class SolNative: RCTEventEmitter {
     }
   }
 
+  @objc func forceQuitApplication(
+    _ path: String,
+    resolver resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    DispatchQueue.main.async {
+      let targetURL = URL(fileURLWithPath: path)
+        .standardizedFileURL
+        .resolvingSymlinksInPath()
+      let currentProcessIdentifier = ProcessInfo.processInfo.processIdentifier
+      let matchingApplications = NSWorkspace.shared.runningApplications.filter { application in
+        guard application.processIdentifier != currentProcessIdentifier,
+          let bundleURL = application.bundleURL
+        else {
+          return false
+        }
+        return bundleURL.standardizedFileURL.resolvingSymlinksInPath() == targetURL
+      }
+
+      // The application may already have stopped between rendering the row and
+      // pressing the button. That is still the desired final state.
+      guard !matchingApplications.isEmpty else {
+        resolve(true)
+        return
+      }
+
+      let accepted = matchingApplications.map { $0.forceTerminate() }
+      guard accepted.contains(true) else {
+        reject(
+          "ApplicationTerminationError",
+          "macOS refused to terminate the application.",
+          nil
+        )
+        return
+      }
+
+      func waitForTermination(_ attemptsRemaining: Int) {
+        if matchingApplications.allSatisfy({ $0.isTerminated }) {
+          resolve(true)
+          return
+        }
+        guard attemptsRemaining > 0 else {
+          resolve(false)
+          return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+          waitForTermination(attemptsRemaining - 1)
+        }
+      }
+
+      waitForTermination(20)
+    }
+  }
+
   @objc func setStatusBarItemTitle(_ title: String) {
     StatusBarItemManager.shared.setStatusBarTitle(title)
   }

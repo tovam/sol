@@ -205,6 +205,7 @@ class SolNative extends NativeEventEmitter {
 	getSafariBookmarks: () => Promise<any>;
 	quit: () => void;
 	restartApplication: () => void;
+	forceQuitApplication: (path: string) => Promise<boolean>;
 	setStatusBarItemTitle: (title: string) => void;
 	setMediaKeyForwardingEnabled: (enabled: boolean) => Promise<void>;
 	getWifiPassword: typeof global.__SolProxy.getWifiPassword;
@@ -354,6 +355,7 @@ class SolNative extends NativeEventEmitter {
 
 		this.quit = module.quit;
 		this.restartApplication = module.restartApplication;
+		this.forceQuitApplication = module.forceQuitApplication;
 
 		this.setStatusBarItemTitle = module.setStatusBarItemTitle;
 		this.setMediaKeyForwardingEnabled = module.setMediaKeyForwardingEnabled;
