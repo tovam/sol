@@ -4,7 +4,22 @@ import LaunchAtLogin
 import React
 import UserNotifications
 
-private let keychain = Keychain(service: "Sol")
+// The original "Sol" item can retain an ACL from an earlier ad-hoc build and
+// keep prompting after every replacement. New writes use a versioned service
+// whose ACL is created by the persistently signed app.
+private let keychain = Keychain(service: "com.ospfranco.sol.secure.v2")
+private let legacyKeychain = Keychain(service: "Sol")
+
+private enum SolKeychainMigrationError: LocalizedError {
+  case verificationFailed
+
+  var errorDescription: String? {
+    switch self {
+    case .verificationFailed:
+      return "The migrated Keychain value could not be verified."
+    }
+  }
+}
 
 @objc(SolNative)
 class SolNative: RCTEventEmitter {
@@ -595,8 +610,25 @@ class SolNative: RCTEventEmitter {
     rejecter reject: RCTPromiseRejectBlock
   ) {
     do {
-      let value = try keychain.get(key as String)
-      resolve(value)
+      let keyString = key as String
+      if let value = try keychain.get(keyString) {
+        resolve(value)
+        return
+      }
+
+      guard let legacyValue = try legacyKeychain.get(keyString) else {
+        resolve(nil)
+        return
+      }
+
+      // Copy first and verify before leaving the legacy item untouched as a
+      // fallback. Future reads stop here at the new service and never ask the
+      // old ACL for access again.
+      try keychain.set(legacyValue, key: keyString)
+      guard try keychain.get(keyString) == legacyValue else {
+        throw SolKeychainMigrationError.verificationFailed
+      }
+      resolve(legacyValue)
     } catch {
       reject("KeychainRetrieveError", error.localizedDescription, error)
     }
@@ -608,7 +640,9 @@ class SolNative: RCTEventEmitter {
     rejecter reject: RCTPromiseRejectBlock
   ) {
     do {
-      try keychain.remove(key as String)
+      let keyString = key as String
+      try keychain.remove(keyString)
+      try legacyKeychain.remove(keyString)
       resolve(true)
     } catch {
       reject("KeychainRemoveError", error.localizedDescription, error)
