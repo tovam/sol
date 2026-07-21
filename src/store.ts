@@ -49,6 +49,7 @@ const createRootStore = (): IRootStore => {
 		store.calendar.cleanUp();
 		store.keystroke.cleanUp();
 		store.clipboard.cleanUp();
+		store.scripts.cleanUp();
 		store.timer.cleanUp();
 	};
 

@@ -1,8 +1,14 @@
 import { makeAutoObservable } from "mobx";
 import { solNative } from "lib/SolNative";
 import { parseScriptCommandMetadata } from "lib/scriptCommands";
+import type { EmitterSubscription } from "react-native";
 import { ItemType } from "./ui.store";
 import type { IRootStore } from "store";
+
+let folderWatcher:
+	| ReturnType<typeof solNative.createFolderWatcher>
+	| undefined;
+let onShowListener: EmitterSubscription | undefined;
 
 const getScriptsPath = () =>
 	`/Users/${solNative.userName()}/.config/sol/scripts`;
@@ -25,9 +31,6 @@ export type ScriptsStore = ReturnType<typeof createScriptsStore>;
 
 export const createScriptsStore = (_root: IRootStore) => {
 	const scriptsPath = getScriptsPath();
-	const _folderWatcher = solNative.createFolderWatcher(scriptsPath, () => {
-		store.loadScripts();
-	});
 
 	const store = makeAutoObservable({
 		scripts: [] as Item[],
@@ -81,12 +84,28 @@ export const createScriptsStore = (_root: IRootStore) => {
 			}
 			store.scripts = scriptItems;
 		},
+
+		cleanUp() {
+			onShowListener?.remove();
+			onShowListener = undefined;
+			if (folderWatcher) folderWatcher = undefined;
+		},
 	});
 
-	// Initial load
-	store.loadScripts();
+	// Keep the native HostObject alive for as long as the store exists. If it is
+	// only held by a local variable, Hermes can collect it and silently stop the
+	// FSEvents stream.
+	folderWatcher = solNative.createFolderWatcher(scriptsPath, () => {
+		store.loadScripts();
+	});
 
-	// Watch for changes
+	// Refreshing when Sol opens also covers changes made while it was asleep or
+	// before the native watcher was ready.
+	onShowListener = solNative.addListener("onShow", () => {
+		store.loadScripts();
+	});
+
+	store.loadScripts();
 
 	return store;
 };
