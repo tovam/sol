@@ -2,6 +2,7 @@ import { TextInput } from "components/TextInput";
 import {
 	dailymotionPlayerURL,
 	extractDailymotionVideoID,
+	suggestDailymotionDirectCommand,
 } from "lib/dailymotion";
 import { solNative } from "lib/SolNative";
 import { observer } from "mobx-react-lite";
@@ -13,20 +14,24 @@ export const DailymotionSettings = observer(() => {
 	const store = useStore();
 	const [name, setName] = useState("");
 	const [url, setURL] = useState("");
+	const [command, setCommand] = useState("");
 	const [error, setError] = useState("");
 	const currentVideoID = extractDailymotionVideoID(url);
 	const isUpdating = store.ui.dailymotionStreams.some(
 		(stream) => stream.id === currentVideoID,
 	);
+	const suggestedCommand = suggestDailymotionDirectCommand(name);
 
 	const save = () => {
-		if (!store.ui.saveDailymotionStream(name, url)) {
-			setError("Paste a valid Dailymotion video, dai.ly, or player URL");
+		const saveError = store.ui.saveDailymotionStream(name, url, command);
+		if (saveError) {
+			setError(saveError);
 			return;
 		}
 		setError("");
 		setName("");
 		setURL("");
+		setCommand("");
 	};
 
 	const preview = (streamURL: string) => {
@@ -73,6 +78,40 @@ export const DailymotionSettings = observer(() => {
 						placeholder="https://www.dailymotion.com/video/…"
 					/>
 				</View>
+				<View>
+					<Text className="text-xs font-semibold darker-text mb-1">
+						Direct command (optional)
+					</Text>
+					<View className="flex-row items-center gap-2">
+						<TextInput
+							enableFocusRing={false}
+							autoCapitalize="none"
+							autoCorrect={false}
+							className="flex-1 text-sm text px-3 py-2 rounded-lg border border-color"
+							value={command}
+							onChangeText={setCommand}
+							onSubmitEditing={save}
+							placeholder={suggestedCommand || "news-live"}
+						/>
+						<TouchableOpacity
+							disabled={!suggestedCommand}
+							className="px-3 py-2"
+							onPress={() => setCommand(suggestedCommand)}
+						>
+							<Text
+								className={
+									suggestedCommand ? "text-sm text-accent" : "text-sm darker-text"
+								}
+							>
+								Use name
+							</Text>
+						</TouchableOpacity>
+					</View>
+					<Text className="text-xs darker-text mt-1">
+						For example, “news” opens this favorite directly; “dm{" "}
+						{name.trim() || "name"}” still works.
+					</Text>
+				</View>
 				{!!error && <Text className="text-sm text-red-500">{error}</Text>}
 				<TouchableOpacity
 					className="py-3 rounded-xl bg-accent-strong items-center"
@@ -104,12 +143,18 @@ export const DailymotionSettings = observer(() => {
 								<Text className="text-xs darker-text" numberOfLines={1}>
 									{stream.url}
 								</Text>
+								<Text className="text-xs darker-text" numberOfLines={1}>
+									{stream.command
+										? `Direct command: ${stream.command} · dm ${stream.name}`
+										: `Command: dm ${stream.name}`}
+								</Text>
 							</TouchableOpacity>
 							<TouchableOpacity
 								className="px-3 py-2 rounded-lg bg-neutral-200 dark:bg-neutral-700"
 								onPress={() => {
 									setName(stream.name);
 									setURL(stream.url);
+									setCommand(stream.command ?? "");
 									setError("");
 								}}
 							>

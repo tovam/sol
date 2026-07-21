@@ -7,7 +7,9 @@ import {
 	dailymotionPlayerURL,
 	extractDailymotionVideoID,
 	normalizeDailymotionStreams,
+	resolveDailymotionDirectCommand,
 	resolveDailymotionCommand,
+	validateDailymotionDirectCommand,
 } from "lib/dailymotion";
 import {
 	analyzeFileSearchEdit,
@@ -962,11 +964,15 @@ export const createUIStore = (root: IRootStore) => {
 				];
 			}
 
+			const directDailymotionStream = resolveDailymotionDirectCommand(
+				store.query,
+				store.dailymotionStreams,
+			);
 			const dailymotionCommand = resolveDailymotionCommand(
 				store.query,
 				store.dailymotionStreams,
 			);
-			if (dailymotionCommand.kind !== "none") {
+			if (directDailymotionStream || dailymotionCommand.kind !== "none") {
 				const commandErrorItem = (message: string): Item => {
 					const isIncomplete = message.startsWith("Incomplete command.");
 					const toastMessage = isIncomplete
@@ -992,14 +998,23 @@ export const createUIStore = (root: IRootStore) => {
 					id: `dailymotion_command_watch_${stream.id}`,
 					icon: "▶",
 					name: `Open ${stream.name}`,
-					subName: `Dailymotion favorite · dm ${stream.name}`,
+					subName: [
+						"Dailymotion favorite",
+						...(stream.command ? [stream.command] : []),
+						`dm ${stream.name}`,
+					].join(" · "),
 					type: ItemType.CONFIGURATION,
 					callback: () => {
 						void store.openDailymotionFavorite(stream.id);
 					},
 				});
+				if (directDailymotionStream) {
+					return [watchItem(directDailymotionStream)];
+				}
 
 				switch (dailymotionCommand.kind) {
+					case "none":
+						return [];
 					case "suggest":
 						return dailymotionCommand.streams.length > 0
 							? dailymotionCommand.streams.map(watchItem)
@@ -1098,12 +1113,22 @@ export const createUIStore = (root: IRootStore) => {
 		},
 		get searchItems(): Item[] {
 			const hasAICommand = resolveAICommandPrompt(store.query) !== null;
+			const hasDirectDailymotionCommand =
+				resolveDailymotionDirectCommand(
+					store.query,
+					store.dailymotionStreams,
+				) !== null;
 			const hasDailymotionCommand =
 				resolveDailymotionCommand(store.query, store.dailymotionStreams).kind !==
 				"none";
 			const hasUserScriptCommand =
 				resolveUserScriptCommand(store.query, root.scripts.scripts).length > 0;
-			if (hasAICommand || hasDailymotionCommand || hasUserScriptCommand) {
+			if (
+				hasAICommand ||
+				hasDirectDailymotionCommand ||
+				hasDailymotionCommand ||
+				hasUserScriptCommand
+			) {
 				return store.items.filter((item) => !store.isItemDisabled(item.id));
 			}
 
@@ -1187,13 +1212,30 @@ export const createUIStore = (root: IRootStore) => {
 		setSettingsSection: (section: SettingsSection) => {
 			store.settingsSection = section;
 		},
-		saveDailymotionStream: (name: string, url: string) => {
+		saveDailymotionStream: (name: string, url: string, command: string) => {
 			const videoID = extractDailymotionVideoID(url);
-			if (!videoID) return false;
+			if (!videoID) {
+				return "Paste a valid Dailymotion video, dai.ly, or player URL";
+			}
+			const normalizedCommand = command.trim();
+			const commandError = validateDailymotionDirectCommand(normalizedCommand);
+			if (commandError) return commandError;
+			const conflictingStream = normalizedCommand
+				? store.dailymotionStreams.find(
+						(candidate) =>
+							candidate.id !== videoID &&
+							candidate.command?.toLowerCase() ===
+								normalizedCommand.toLowerCase(),
+					)
+				: undefined;
+			if (conflictingStream) {
+				return `“${normalizedCommand}” is already used by ${conflictingStream.name}`;
+			}
 			const stream: DailymotionStream = {
 				id: videoID,
 				name: name.trim() || `Dailymotion ${videoID}`,
 				url: url.trim(),
+				...(normalizedCommand ? { command: normalizedCommand } : {}),
 			};
 			const existingIndex = store.dailymotionStreams.findIndex(
 				(candidate) => candidate.id === videoID,
@@ -1203,7 +1245,7 @@ export const createUIStore = (root: IRootStore) => {
 			} else {
 				store.dailymotionStreams.push(stream);
 			}
-			return true;
+			return null;
 		},
 		removeDailymotionStream: (id: string) => {
 			store.dailymotionStreams = store.dailymotionStreams.filter(

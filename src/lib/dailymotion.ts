@@ -2,6 +2,7 @@ export type DailymotionStream = {
 	id: string;
 	name: string;
 	url: string;
+	command?: string;
 };
 
 export type DailymotionCommandResolution =
@@ -18,6 +19,9 @@ export type DailymotionCommandResolution =
 
 const DAILYMOTION_CLOCK_PATTERN =
 	/^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/;
+const DAILYMOTION_DIRECT_COMMAND_PATTERN =
+	/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+const RESERVED_DAILYMOTION_DIRECT_COMMANDS = new Set(["ai", "ia", "dm"]);
 const DAILYMOTION_COMMAND_USAGE =
 	"dm <favorite> rec HH:mm[:ss] HH:mm[:ss]";
 
@@ -28,6 +32,44 @@ function normalizeDailymotionFavoriteName(value: string) {
 		.trim()
 		.replace(/\s+/g, " ")
 		.toLowerCase();
+}
+
+export function validateDailymotionDirectCommand(value: string) {
+	const command = value.trim();
+	if (!command) return null;
+	if (!DAILYMOTION_DIRECT_COMMAND_PATTERN.test(command)) {
+		return "Direct command must be 1–64 letters, numbers, dots, dashes or underscores";
+	}
+	if (RESERVED_DAILYMOTION_DIRECT_COMMANDS.has(command.toLowerCase())) {
+		return `“${command}” is reserved by Sol`;
+	}
+	return null;
+}
+
+export function suggestDailymotionDirectCommand(name: string) {
+	const base = normalizeDailymotionFavoriteName(name)
+		.replace(/[^a-z0-9._-]+/g, "-")
+		.replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, "")
+		.slice(0, 64);
+	if (!base) return "";
+	const candidate = RESERVED_DAILYMOTION_DIRECT_COMMANDS.has(base)
+		? `${base}-live`
+		: base;
+	return validateDailymotionDirectCommand(candidate) == null ? candidate : "";
+}
+
+export function resolveDailymotionDirectCommand(
+	query: string,
+	streams: DailymotionStream[],
+) {
+	const command = query.trim();
+	if (!DAILYMOTION_DIRECT_COMMAND_PATTERN.test(command)) return null;
+	const normalizedCommand = command.toLowerCase();
+	return (
+		streams.find(
+			(stream) => stream.command?.toLowerCase() === normalizedCommand,
+		) ?? null
+	);
 }
 
 function normalizeDailymotionClock(value: string) {
@@ -216,13 +258,31 @@ export function normalizeDailymotionStreams(
 			typeof record.name === "string" && record.name.trim()
 				? record.name.trim()
 				: `Dailymotion ${videoID}`;
+		const commandCandidate =
+			typeof record.command === "string" ? record.command.trim() : "";
+		const command =
+			commandCandidate &&
+			validateDailymotionDirectCommand(commandCandidate) == null
+				? commandCandidate
+				: undefined;
 		streams.set(videoID, {
 			id: videoID,
 			name,
 			url: record.url.trim(),
+			...(command ? { command } : {}),
 		});
 	}
-	return [...streams.values()];
+
+	const usedCommands = new Set<string>();
+	return [...streams.values()].map((stream) => {
+		if (!stream.command) return stream;
+		const normalizedCommand = stream.command.toLowerCase();
+		if (usedCommands.has(normalizedCommand)) {
+			return { id: stream.id, name: stream.name, url: stream.url };
+		}
+		usedCommands.add(normalizedCommand);
+		return stream;
+	});
 }
 
 export function dailymotionEmbedURL(videoID: string) {
