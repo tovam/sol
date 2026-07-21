@@ -218,7 +218,9 @@ export const RootContainer = observer(() => {
 
   return (
     <View>
-      <View onLayout={store.ui.setWindowHeight}>{subWindow}</View>
+      {store.ui.initialHydrationComplete && (
+        <View onLayout={store.ui.setWindowHeight}>{subWindow}</View>
+      )}
       {store.ui.confirmDialogShown && (
         <View className="absolute bottom-0 top-0 left-0 right-0 bg-black/50 items-center justify-center">
           <View className="bg-white dark:bg-neutral-800 p-6 gap-1 rounded-xl border border-color">

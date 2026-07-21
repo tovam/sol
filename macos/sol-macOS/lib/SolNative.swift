@@ -628,6 +628,13 @@ class SolNative: RCTEventEmitter {
     }
   }
 
+  @objc func completeInitialPresentation(_ height: NSNumber) {
+    DispatchQueue.main.async {
+      PanelManager.shared.setHeight(height.intValue)
+      PanelManager.shared.markInitialPresentationReady()
+    }
+  }
+
   @objc func useBackgroundOverlay(_ v: Bool) {
     //    appDelegate?.useBackgroundOverlay = v
   }

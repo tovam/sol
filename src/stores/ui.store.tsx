@@ -416,6 +416,7 @@ const normalizeGlassAppearance = (value: unknown): GlassAppearance => {
 export const createUIStore = (root: IRootStore) => {
 	// Guards against spurious writes during hydrate/reload
 	let isHydrating = false;
+	let initialPresentationReadySent = false;
 	let fileSearchRequestId = 0;
 	let fileSearchPrefetchTimer: ReturnType<typeof setTimeout> | undefined;
 	let fileSearchCacheEpoch = 0;
@@ -696,6 +697,9 @@ export const createUIStore = (root: IRootStore) => {
 			}
 		} finally {
 			isHydrating = false;
+			runInAction(() => {
+				store.initialHydrationComplete = true;
+			});
 		}
 	};
 
@@ -814,6 +818,7 @@ export const createUIStore = (root: IRootStore) => {
 			...DEFAULT_SEARCH_WINDOW_ANIMATION,
 		} as SearchWindowAnimation,
 		glassAppearance: { ...DEFAULT_GLASS_APPEARANCE } as GlassAppearance,
+		initialHydrationComplete: false,
 		query: "",
 		selectedIndex: 0,
 		focusedWidget: Widget.SEARCH,
@@ -2221,7 +2226,19 @@ export const createUIStore = (root: IRootStore) => {
 		},
 
 		setWindowHeight(e: LayoutChangeEvent) {
-			solNative.setWindowHeight(e.nativeEvent.layout.height);
+			const height = Math.ceil(e.nativeEvent.layout.height);
+
+			if (
+				height > 0 &&
+				store.initialHydrationComplete &&
+				!initialPresentationReadySent
+			) {
+				initialPresentationReadySent = true;
+				solNative.completeInitialPresentation(height);
+				return;
+			}
+
+			solNative.setWindowHeight(height);
 		},
 
 		setShowInAppBrowserBookmarks: (v: boolean) => {

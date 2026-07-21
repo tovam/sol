@@ -135,6 +135,7 @@ class SolNative extends NativeEventEmitter {
 	setWindowRelativeSize: (relativeSize: number) => void;
 	resetWindowSize: typeof global.__SolProxy.resetWindowSize;
 	setWindowHeight: typeof global.__SolProxy.setHeight;
+	completeInitialPresentation: (height: number) => void;
 	openFinderAt: (path: string) => void;
 	revealFileInFinder: (path: string) => void;
 	resizeTopLeft: () => void;
@@ -303,6 +304,7 @@ class SolNative extends NativeEventEmitter {
 		this.clearIndex = global.__SolProxy.clearIndex;
 
 		this.setWindowHeight = global.__SolProxy.setHeight;
+		this.completeInitialPresentation = module.completeInitialPresentation;
 		this.resetWindowSize = global.__SolProxy.resetWindowSize;
 		this.hideWindow = global.__SolProxy.hideWindow;
 		this.setShowWindowOn = module.setShowWindowOn;

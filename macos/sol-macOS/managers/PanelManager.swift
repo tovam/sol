@@ -108,6 +108,9 @@ private final class ClosingAnimationPanel: NSPanel {
   private var frameAnimationTarget: NSRect?
   private var closingAnimationWindow: ClosingAnimationPanel?
   private var searchWindowAnimation = SearchWindowAnimationConfiguration()
+  private var isInitialPresentationReady = false
+  private var hasPendingShowRequest = false
+  private var pendingShowTarget: String?
 
   @objc static public let shared = PanelManager()
 
@@ -233,8 +236,27 @@ private final class ClosingAnimationPanel: NSPanel {
     mainWindow.layoutInstalledRootView()
   }
 
+  @objc func markInitialPresentationReady() {
+    guard !isInitialPresentationReady else { return }
+
+    isInitialPresentationReady = true
+    mainWindow.layoutInstalledRootView()
+
+    guard hasPendingShowRequest else { return }
+    let target = pendingShowTarget
+    hasPendingShowRequest = false
+    pendingShowTarget = nil
+    showWindow(target: target)
+  }
+
   @objc func showWindow(target: String? = nil) {
     HotKeyManager.shared.settingsHotKey.isPaused = false
+
+    guard isInitialPresentationReady else {
+      hasPendingShowRequest = true
+      pendingShowTarget = target
+      return
+    }
 
     guard
       let screen =
