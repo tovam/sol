@@ -30,8 +30,8 @@ const SEARCH_TABS = [
 		label: "Applications",
 		placeholder: "Search applications",
 	},
-	{ value: SearchTab.FILES, label: "Files", placeholder: "Search files" },
 	{ value: SearchTab.ACTIONS, label: "Actions", placeholder: "Search actions" },
+	{ value: SearchTab.FILES, label: "Files", placeholder: "Search files" },
 ];
 
 function TemporaryResultView({
@@ -363,6 +363,13 @@ export const SearchWidget: FC = observer(() => {
 		store.ui.temporaryResult?.kind === "text"
 			? store.ui.temporaryResult.actionLabel
 			: undefined;
+	const fileCountLabel = store.ui.isLoading
+		? store.ui.files.length > 0
+			? `${store.ui.files.length}…`
+			: "…"
+		: store.ui.files.length >= 1000
+			? "1000+"
+			: String(store.ui.files.length);
 	const [listViewportHeight, setListViewportHeight] = useState(0);
 	const [listContentHeight, setListContentHeight] = useState(0);
 	const [listOffset, setListOffset] = useState(0);
@@ -416,6 +423,10 @@ export const SearchWidget: FC = observer(() => {
 				<View className="h-9 px-3 flex-row items-center border-b border-color">
 					{SEARCH_TABS.map((tab) => {
 						const isActive = tab.value === activeTab;
+						const label =
+							tab.value === SearchTab.FILES && isActive && !!store.ui.query
+								? `${tab.label} (${fileCountLabel})`
+								: tab.label;
 						return (
 							<TouchableOpacity
 								key={tab.value}
@@ -427,7 +438,7 @@ export const SearchWidget: FC = observer(() => {
 											"text font-semibold": isActive,
 										})}
 									>
-										{tab.label}
+										{label}
 									</Text>
 									{isActive && (
 										<View className="absolute bottom-0 left-3 right-3 h-[2px] bg-accent-strong" />

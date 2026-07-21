@@ -155,8 +155,8 @@ const resolveAICommandPrompt = (query: string) =>
 export const SEARCH_TAB_ORDER = [
 	SearchTab.ALL,
 	SearchTab.APPLICATIONS,
-	SearchTab.FILES,
 	SearchTab.ACTIONS,
+	SearchTab.FILES,
 ] as const;
 
 export enum ScratchPadColor {
