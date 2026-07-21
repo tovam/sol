@@ -103,6 +103,27 @@ export const createKeystrokeStore = (root: IRootStore) => {
 						break;
 					}
 
+					const selectedItem = root.ui.currentItem;
+					const selectedScript =
+						selectedItem?.type === ItemType.USER_SCRIPT
+							? root.scripts.scripts.find(
+									(script) => script.id === selectedItem.id,
+								)
+							: undefined;
+					const selectedScriptCommand =
+						selectedScript?.command ?? selectedItem?.command;
+					if (
+						root.ui.focusedWidget === Widget.SEARCH &&
+						!meta &&
+						!shift &&
+						selectedItem?.type === ItemType.USER_SCRIPT &&
+						selectedScriptCommand
+					) {
+						const completedQuery = `${selectedScriptCommand} `;
+						root.ui.setQuery(completedQuery);
+						break;
+					}
+
 					switch (root.ui.focusedWidget) {
 						//   case Widget.SEARCH:
 						//     if (!!root.calendar.filteredEvents.length) {

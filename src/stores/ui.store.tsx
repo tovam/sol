@@ -195,7 +195,7 @@ export type SettingsSection =
 	| "DAILYMOTION";
 
 const minisearch = new MiniSearch({
-	fields: ["name", "localizedName", "alias", "type"],
+	fields: ["name", "localizedName", "alias", "command", "type"],
 	storeFields: [
 		"name",
 		"localizedName",
@@ -208,6 +208,7 @@ const minisearch = new MiniSearch({
 		"preventClose",
 		"type",
 		"alias",
+		"command",
 		"subName",
 		"callback",
 		"metaCallback",
@@ -1527,6 +1528,10 @@ export const createUIStore = (root: IRootStore) => {
 		},
 		setQuery: (query: string) => {
 			store.query = query.replace("\n", " ");
+			store.fileSearchSelection = {
+				start: store.query.length,
+				end: store.query.length,
+			};
 			store.selectedIndex = 0;
 			store.temporaryResult = null;
 			const isFileSearchActive =

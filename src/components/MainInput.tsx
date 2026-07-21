@@ -77,6 +77,7 @@ export const MainInput = observer<Props>(
 					multiline={false}
 					enableFocusRing={false}
 					value={store.ui.query}
+					selection={store.ui.fileSearchSelection}
 					onChangeText={(query) => {
 						selectionRef.current = store.ui.setQueryFromInput(
 							query,
