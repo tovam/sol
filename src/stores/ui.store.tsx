@@ -9,7 +9,6 @@ import {
 	normalizeDailymotionStreams,
 	resolveDailymotionCommand,
 } from "lib/dailymotion";
-import { fetchPublicIPAddress } from "lib/publicIp";
 import {
 	analyzeFileSearchEdit,
 	fileNameMatchesQuery,
@@ -17,8 +16,10 @@ import {
 	normalizeFileSearchText,
 	type TextSelection,
 } from "lib/fileSearch";
+import { fetchPublicIPAddress } from "lib/publicIp";
 import {
 	type GlassAppearance,
+	type SearchWindowAnimation,
 	type SearchWindowPosition,
 	solNative,
 } from "lib/SolNative";
@@ -242,6 +243,19 @@ export const DEFAULT_SEARCH_WINDOW_POSITION: SearchWindowPosition = {
 	y: 20,
 };
 
+export const DEFAULT_SEARCH_WINDOW_ANIMATION: SearchWindowAnimation = {
+	openingWidthExtra: 50,
+	openingHeightExtraPercent: 1.8,
+	openingDurationMs: 100,
+	openingBounce: 0.2,
+	openingInitialOpacity: 0.62,
+	closingWidthExtraPercent: 1.8,
+	closingHeightExtraPercent: 1.2,
+	closingDurationMs: 85,
+	resultsExpandDurationMs: 240,
+	resultsCollapseDurationMs: 180,
+};
+
 const normalizeSearchWindowPosition = (
 	value: unknown,
 ): SearchWindowPosition => {
@@ -266,6 +280,64 @@ const normalizeSearchWindowPosition = (
 	return {
 		x: normalizeAxis(source.x, DEFAULT_SEARCH_WINDOW_POSITION.x),
 		y: normalizeAxis(source.y, DEFAULT_SEARCH_WINDOW_POSITION.y),
+	};
+};
+
+const normalizeSearchWindowAnimation = (
+	value: unknown,
+): SearchWindowAnimation => {
+	const source =
+		value != null && typeof value === "object"
+			? (value as Record<string, unknown>)
+			: {};
+	const normalizeNumber = (
+		key: keyof SearchWindowAnimation,
+		minimum: number,
+		maximum: number,
+	) => {
+		const rawValue = source[key];
+		const parsedValue =
+			typeof rawValue === "number" ||
+			(typeof rawValue === "string" && rawValue.trim() !== "")
+				? Number(rawValue)
+				: DEFAULT_SEARCH_WINDOW_ANIMATION[key];
+		const finiteValue = Number.isFinite(parsedValue)
+			? parsedValue
+			: DEFAULT_SEARCH_WINDOW_ANIMATION[key];
+		return Math.min(Math.max(finiteValue, minimum), maximum);
+	};
+
+	return {
+		openingWidthExtra: normalizeNumber("openingWidthExtra", 0, 200),
+		openingHeightExtraPercent: normalizeNumber(
+			"openingHeightExtraPercent",
+			0,
+			20,
+		),
+		openingDurationMs: normalizeNumber("openingDurationMs", 0, 1000),
+		openingBounce: normalizeNumber("openingBounce", -1, 1),
+		openingInitialOpacity: normalizeNumber("openingInitialOpacity", 0, 1),
+		closingWidthExtraPercent: normalizeNumber(
+			"closingWidthExtraPercent",
+			0,
+			20,
+		),
+		closingHeightExtraPercent: normalizeNumber(
+			"closingHeightExtraPercent",
+			0,
+			20,
+		),
+		closingDurationMs: normalizeNumber("closingDurationMs", 0, 1000),
+		resultsExpandDurationMs: normalizeNumber(
+			"resultsExpandDurationMs",
+			0,
+			1000,
+		),
+		resultsCollapseDurationMs: normalizeNumber(
+			"resultsCollapseDurationMs",
+			0,
+			1000,
+		),
 	};
 };
 
@@ -541,6 +613,9 @@ export const createUIStore = (root: IRootStore) => {
 					store.searchWindowPosition = normalizeSearchWindowPosition(
 						src.searchWindowPosition,
 					);
+					store.searchWindowAnimation = normalizeSearchWindowAnimation(
+						src.searchWindowAnimation,
+					);
 					store.glassAppearance = normalizeGlassAppearance(src.glassAppearance);
 					store.calendarEnabled = src.calendarEnabled ?? true;
 					store.showAllDayEvents = src.showAllDayEvents ?? true;
@@ -584,6 +659,7 @@ export const createUIStore = (root: IRootStore) => {
 				solNative.setSearchWindowPosition(
 					toJS(store.searchWindowPosition),
 				);
+				solNative.setSearchWindowAnimation(toJS(store.searchWindowAnimation));
 				solNative.setGlassAppearance(toJS(store.glassAppearance));
 				solNative.setMediaKeyForwardingEnabled(store.mediaKeyForwardingEnabled);
 				solNative.setHyperKeyEnabled(store.hyperKeyEnabled);
@@ -631,6 +707,9 @@ export const createUIStore = (root: IRootStore) => {
 				store.searchWindowPosition = normalizeSearchWindowPosition(
 					jsonConfig.searchWindowPosition,
 				);
+				store.searchWindowAnimation = normalizeSearchWindowAnimation(
+					jsonConfig.searchWindowAnimation,
+				);
 				store.glassAppearance = normalizeGlassAppearance(
 					jsonConfig.glassAppearance,
 				);
@@ -675,6 +754,7 @@ export const createUIStore = (root: IRootStore) => {
 			solNative.setGlobalShortcut(store.globalShortcut);
 			solNative.setShowWindowOn(store.showWindowOn);
 			solNative.setSearchWindowPosition(toJS(store.searchWindowPosition));
+			solNative.setSearchWindowAnimation(toJS(store.searchWindowAnimation));
 			solNative.setGlassAppearance(toJS(store.glassAppearance));
 			solNative.setMediaKeyForwardingEnabled(store.mediaKeyForwardingEnabled);
 			solNative.setHyperKeyEnabled(store.hyperKeyEnabled);
@@ -709,6 +789,9 @@ export const createUIStore = (root: IRootStore) => {
 		searchWindowPosition: {
 			...DEFAULT_SEARCH_WINDOW_POSITION,
 		} as SearchWindowPosition,
+		searchWindowAnimation: {
+			...DEFAULT_SEARCH_WINDOW_ANIMATION,
+		} as SearchWindowAnimation,
 		glassAppearance: { ...DEFAULT_GLASS_APPEARANCE } as GlassAppearance,
 		query: "",
 		selectedIndex: 0,
@@ -1270,6 +1353,18 @@ export const createUIStore = (root: IRootStore) => {
 		resetSearchWindowPosition: () => {
 			store.searchWindowPosition = { ...DEFAULT_SEARCH_WINDOW_POSITION };
 			solNative.setSearchWindowPosition(toJS(store.searchWindowPosition));
+		},
+		setSearchWindowAnimation: (patch: Partial<SearchWindowAnimation>) => {
+			const nextAnimation = normalizeSearchWindowAnimation({
+				...toJS(store.searchWindowAnimation),
+				...patch,
+			});
+			store.searchWindowAnimation = nextAnimation;
+			solNative.setSearchWindowAnimation(toJS(nextAnimation));
+		},
+		resetSearchWindowAnimation: () => {
+			store.searchWindowAnimation = { ...DEFAULT_SEARCH_WINDOW_ANIMATION };
+			solNative.setSearchWindowAnimation(toJS(store.searchWindowAnimation));
 		},
 		setGlassAppearance: (patch: Partial<GlassAppearance>) => {
 			const nextAppearance = normalizeGlassAppearance({

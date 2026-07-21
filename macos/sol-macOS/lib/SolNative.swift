@@ -489,6 +489,44 @@ class SolNative: RCTEventEmitter {
     }
   }
 
+  @objc func setSearchWindowAnimation(_ settings: NSDictionary) {
+    let openingWidthExtra =
+      (settings["openingWidthExtra"] as? NSNumber)?.doubleValue ?? 50
+    let openingHeightExtraPercent =
+      (settings["openingHeightExtraPercent"] as? NSNumber)?.doubleValue ?? 1.8
+    let openingDurationMs =
+      (settings["openingDurationMs"] as? NSNumber)?.doubleValue ?? 100
+    let openingBounce =
+      (settings["openingBounce"] as? NSNumber)?.doubleValue ?? 0.2
+    let openingInitialOpacity =
+      (settings["openingInitialOpacity"] as? NSNumber)?.doubleValue ?? 0.62
+    let closingWidthExtraPercent =
+      (settings["closingWidthExtraPercent"] as? NSNumber)?.doubleValue ?? 1.8
+    let closingHeightExtraPercent =
+      (settings["closingHeightExtraPercent"] as? NSNumber)?.doubleValue ?? 1.2
+    let closingDurationMs =
+      (settings["closingDurationMs"] as? NSNumber)?.doubleValue ?? 85
+    let resultsExpandDurationMs =
+      (settings["resultsExpandDurationMs"] as? NSNumber)?.doubleValue ?? 240
+    let resultsCollapseDurationMs =
+      (settings["resultsCollapseDurationMs"] as? NSNumber)?.doubleValue ?? 180
+
+    DispatchQueue.main.async {
+      PanelManager.shared.setSearchWindowAnimation(
+        openingWidthExtra: openingWidthExtra,
+        openingHeightExtraPercent: openingHeightExtraPercent,
+        openingDurationMs: openingDurationMs,
+        openingBounce: openingBounce,
+        openingInitialOpacity: openingInitialOpacity,
+        closingWidthExtraPercent: closingWidthExtraPercent,
+        closingHeightExtraPercent: closingHeightExtraPercent,
+        closingDurationMs: closingDurationMs,
+        resultsExpandDurationMs: resultsExpandDurationMs,
+        resultsCollapseDurationMs: resultsCollapseDurationMs
+      )
+    }
+  }
+
   @objc func toggleDND() {
     DoNotDisturb.toggle()
   }

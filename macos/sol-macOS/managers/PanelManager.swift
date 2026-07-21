@@ -1,5 +1,6 @@
 import AppKit
 import QuartzCore
+import SwiftUI
 
 enum PreferredScreen {
   case frontmost
@@ -17,6 +18,7 @@ private enum FrameAnimationCurve {
   case easeIn
   case easeOut
   case easeInOut
+  case spring(duration: TimeInterval, bounce: Double)
 
   func value(at progress: CGFloat) -> CGFloat {
     let t = min(max(progress, 0), 1)
@@ -32,8 +34,28 @@ private enum FrameAnimationCurve {
       }
       let inverse = -2 * t + 2
       return 1 - inverse * inverse * inverse / 2
+    case let .spring(duration, bounce):
+      let spring = SwiftUI.Spring(duration: duration, bounce: bounce)
+      let value: Double = spring.value(
+        target: 1,
+        time: Double(t) * duration
+      )
+      return CGFloat(value)
     }
   }
+}
+
+private struct SearchWindowAnimationConfiguration {
+  var openingWidthExtra: CGFloat = 50
+  var openingHeightExtraPercent: CGFloat = 1.8
+  var openingDuration: TimeInterval = 0.1
+  var openingBounce: Double = 0.2
+  var openingInitialOpacity: CGFloat = 0.62
+  var closingWidthExtraPercent: CGFloat = 1.8
+  var closingHeightExtraPercent: CGFloat = 1.2
+  var closingDuration: TimeInterval = 0.085
+  var resultsExpandDuration: TimeInterval = 0.24
+  var resultsCollapseDuration: TimeInterval = 0.18
 }
 
 private final class ClosingAnimationPanel: NSPanel {
@@ -85,6 +107,7 @@ private final class ClosingAnimationPanel: NSPanel {
   private var frameAnimationGeneration = 0
   private var frameAnimationTarget: NSRect?
   private var closingAnimationWindow: ClosingAnimationPanel?
+  private var searchWindowAnimation = SearchWindowAnimationConfiguration()
 
   @objc static public let shared = PanelManager()
 
@@ -137,6 +160,32 @@ private final class ClosingAnimationPanel: NSPanel {
     }
     stopFrameAnimation()
     mainWindow.setFrame(frame, display: mainWindow.isVisible)
+  }
+
+  func setSearchWindowAnimation(
+    openingWidthExtra: Double,
+    openingHeightExtraPercent: Double,
+    openingDurationMs: Double,
+    openingBounce: Double,
+    openingInitialOpacity: Double,
+    closingWidthExtraPercent: Double,
+    closingHeightExtraPercent: Double,
+    closingDurationMs: Double,
+    resultsExpandDurationMs: Double,
+    resultsCollapseDurationMs: Double
+  ) {
+    searchWindowAnimation = SearchWindowAnimationConfiguration(
+      openingWidthExtra: CGFloat(min(max(openingWidthExtra, 0), 200)),
+      openingHeightExtraPercent: CGFloat(min(max(openingHeightExtraPercent, 0), 20)),
+      openingDuration: min(max(openingDurationMs, 0), 1000) / 1000,
+      openingBounce: min(max(openingBounce, -1), 1),
+      openingInitialOpacity: CGFloat(min(max(openingInitialOpacity, 0), 1)),
+      closingWidthExtraPercent: CGFloat(min(max(closingWidthExtraPercent, 0), 20)),
+      closingHeightExtraPercent: CGFloat(min(max(closingHeightExtraPercent, 0), 20)),
+      closingDuration: min(max(closingDurationMs, 0), 1000) / 1000,
+      resultsExpandDuration: min(max(resultsExpandDurationMs, 0), 1000) / 1000,
+      resultsCollapseDuration: min(max(resultsCollapseDurationMs, 0), 1000) / 1000
+    )
   }
 
   private func positionedOrigin(for windowSize: NSSize, on screen: NSScreen) -> NSPoint {
@@ -213,6 +262,7 @@ private final class ClosingAnimationPanel: NSPanel {
     let shouldAnimate = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
       && finalFrame.width > 1
       && finalFrame.height > 1
+      && searchWindowAnimation.openingDuration > 0
 
     presentationPhase = .opening
     if wasClosing, let reopeningFrame, let reopeningAlpha {
@@ -220,7 +270,7 @@ private final class ClosingAnimationPanel: NSPanel {
       mainWindow.alphaValue = reopeningAlpha
     } else {
       mainWindow.setFrame(openingFrame(around: finalFrame), display: false)
-      mainWindow.alphaValue = shouldAnimate ? 0.62 : 1
+      mainWindow.alphaValue = shouldAnimate ? searchWindowAnimation.openingInitialOpacity : 1
     }
     mainWindow.setIsVisible(true)
     mainWindow.makeKeyAndOrderFront(self)
@@ -243,8 +293,11 @@ private final class ClosingAnimationPanel: NSPanel {
       self.animateFrame(
         to: finalFrame,
         alpha: 1,
-        duration: 0.2,
-        curve: .easeOut
+        duration: self.searchWindowAnimation.openingDuration,
+        curve: .spring(
+          duration: self.searchWindowAnimation.openingDuration,
+          bounce: self.searchWindowAnimation.openingBounce
+        )
       ) { [weak self] in
         guard let self, self.presentationPhase == .opening else { return }
         self.presentationPhase = .visible
@@ -267,6 +320,7 @@ private final class ClosingAnimationPanel: NSPanel {
     let shouldAnimate = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
       && mainWindow.frame.width > 1
       && mainWindow.frame.height > 1
+      && searchWindowAnimation.closingDuration > 0
     guard shouldAnimate else {
       finishHiding()
       return
@@ -294,7 +348,7 @@ private final class ClosingAnimationPanel: NSPanel {
     animateFrame(
       to: closingFrame(around: closingBaseFrame),
       alpha: 0,
-      duration: 0.085,
+      duration: searchWindowAnimation.closingDuration,
       curve: .easeIn,
       window: animationWindow
     ) { [weak self] in
@@ -319,17 +373,22 @@ private final class ClosingAnimationPanel: NSPanel {
   }
 
   private func openingFrame(around frame: NSRect) -> NSRect {
-    let height = frame.height * 1.018
+    let width = frame.width + searchWindowAnimation.openingWidthExtra
+    let height = frame.height * (1 + searchWindowAnimation.openingHeightExtraPercent / 100)
     return NSRect(
-      x: frame.midX - (frame.width + 50) / 2,
+      x: frame.midX - width / 2,
       y: frame.midY - height / 2,
-      width: frame.width + 50,
+      width: width,
       height: height
     )
   }
 
   private func closingFrame(around frame: NSRect) -> NSRect {
-    return scaledFrame(frame, widthScale: 1.018, heightScale: 1.012)
+    return scaledFrame(
+      frame,
+      widthScale: 1 + searchWindowAnimation.closingWidthExtraPercent / 100,
+      heightScale: 1 + searchWindowAnimation.closingHeightExtraPercent / 100
+    )
   }
 
   private func scaledFrame(
@@ -359,6 +418,17 @@ private final class ClosingAnimationPanel: NSPanel {
   ) {
     stopFrameAnimation()
     let animatedWindow = window ?? mainWindow
+
+    guard duration > 0 else {
+      animatedWindow.setFrame(targetFrame, display: true)
+      animatedWindow.alphaValue = targetAlpha
+      if animatedWindow === mainWindow {
+        mainWindow.layoutInstalledRootView()
+      }
+      completion()
+      return
+    }
+
     let startFrame = animatedWindow.frame
     let startAlpha = animatedWindow.alphaValue
     let startTime = CACurrentMediaTime()
@@ -376,8 +446,9 @@ private final class ClosingAnimationPanel: NSPanel {
       let rawProgress = CGFloat(min(max(elapsed / duration, 0), 1))
       let progress = curve.value(at: rawProgress)
       let frame = self.interpolatedFrame(from: startFrame, to: targetFrame, progress: progress)
+      let alphaProgress = min(max(progress, 0), 1)
       animatedWindow.setFrame(frame, display: true)
-      animatedWindow.alphaValue = startAlpha + (targetAlpha - startAlpha) * progress
+      animatedWindow.alphaValue = startAlpha + (targetAlpha - startAlpha) * alphaProgress
       if animatedWindow === self.mainWindow {
         self.mainWindow.layoutInstalledRootView()
       }
@@ -499,10 +570,21 @@ private final class ClosingAnimationPanel: NSPanel {
     }
 
     let isExpanding = frame.height > currentFrame.height
+    let duration = isExpanding
+      ? searchWindowAnimation.resultsExpandDuration
+      : searchWindowAnimation.resultsCollapseDuration
+
+    guard duration > 0 else {
+      stopFrameAnimation()
+      mainWindow.setFrame(frame, display: mainWindow.isVisible)
+      mainWindow.layoutInstalledRootView()
+      return
+    }
+
     animateFrame(
       to: frame,
       alpha: mainWindow.alphaValue,
-      duration: isExpanding ? 0.24 : 0.18,
+      duration: duration,
       curve: .easeInOut
     ) {}
   }

@@ -10,6 +10,7 @@ export const PORTABLE_KEYS = [
 	"globalShortcut",
 	"showWindowOn",
 	"searchWindowPosition",
+	"searchWindowAnimation",
 	"glassAppearance",
 	"calendarEnabled",
 	"showAllDayEvents",

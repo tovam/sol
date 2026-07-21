@@ -3,7 +3,7 @@ import clsx from "clsx";
 import { Dropdown } from "components/Dropdown";
 import { Input } from "components/Input";
 import { MySwitch } from "components/MySwitch";
-import { solNative } from "lib/SolNative";
+import { type SearchWindowAnimation, solNative } from "lib/SolNative";
 import { observer } from "mobx-react-lite";
 import { useEffect, useState } from "react";
 import { Image, ScrollView, Text, TouchableOpacity, View } from "react-native";
@@ -279,9 +279,257 @@ const GlassAppearanceSettings = observer(() => {
 			</View>
 
 			<Text className="text-xxs text-neutral-500 dark:text-neutral-400">
-				Saved as glassAppearance in ~/.config/sol/config.json. Requires macOS
-				26 for native Liquid Glass; older versions use a visual-effect
-				fallback.
+				Saved as glassAppearance in ~/.config/sol/config.json. Requires macOS 26
+				for native Liquid Glass; older versions use a visual-effect fallback.
+			</Text>
+		</View>
+	);
+});
+
+type SearchWindowAnimationDraft = Record<keyof SearchWindowAnimation, string>;
+
+const createSearchWindowAnimationDraft = (
+	animation: SearchWindowAnimation,
+): SearchWindowAnimationDraft => ({
+	openingWidthExtra: String(animation.openingWidthExtra),
+	openingHeightExtraPercent: String(animation.openingHeightExtraPercent),
+	openingDurationMs: String(animation.openingDurationMs),
+	openingBounce: String(Math.round(animation.openingBounce * 100)),
+	openingInitialOpacity: String(
+		Math.round(animation.openingInitialOpacity * 100),
+	),
+	closingWidthExtraPercent: String(animation.closingWidthExtraPercent),
+	closingHeightExtraPercent: String(animation.closingHeightExtraPercent),
+	closingDurationMs: String(animation.closingDurationMs),
+	resultsExpandDurationMs: String(animation.resultsExpandDurationMs),
+	resultsCollapseDurationMs: String(animation.resultsCollapseDurationMs),
+});
+
+const AnimationNumberRow = ({
+	title,
+	description,
+	value,
+	onChangeText,
+	unit,
+}: {
+	title: string;
+	description: string;
+	value: string;
+	onChangeText: (value: string) => void;
+	unit: string;
+}) => (
+	<View className="flex-row items-center gap-2">
+		<View className="flex-1">
+			<Text className="text-sm text">{title}</Text>
+			<Text className="text-xxs text-neutral-500 dark:text-neutral-400">
+				{description}
+			</Text>
+		</View>
+		<Input
+			bordered
+			className="w-20"
+			inputClassName="text-right"
+			value={value}
+			onChangeText={onChangeText}
+		/>
+		<Text className="text-xs darker-text w-7">{unit}</Text>
+	</View>
+);
+
+const SearchWindowAnimationSettings = observer(() => {
+	const store = useStore();
+	const animation = store.ui.searchWindowAnimation;
+	const [draft, setDraft] = useState<SearchWindowAnimationDraft>(() =>
+		createSearchWindowAnimationDraft(animation),
+	);
+
+	useEffect(() => {
+		setDraft(createSearchWindowAnimationDraft(animation));
+	}, [animation]);
+
+	const updateDraft = (key: keyof SearchWindowAnimation, value: string) => {
+		setDraft((current) => ({ ...current, [key]: value }));
+	};
+	const draftNumber = (key: keyof SearchWindowAnimation) =>
+		Number(draft[key].replace(",", "."));
+	const ranges: Array<[keyof SearchWindowAnimation, number, number]> = [
+		["openingWidthExtra", 0, 200],
+		["openingHeightExtraPercent", 0, 20],
+		["openingDurationMs", 0, 1000],
+		["openingBounce", -100, 100],
+		["openingInitialOpacity", 0, 100],
+		["closingWidthExtraPercent", 0, 20],
+		["closingHeightExtraPercent", 0, 20],
+		["closingDurationMs", 0, 1000],
+		["resultsExpandDurationMs", 0, 1000],
+		["resultsCollapseDurationMs", 0, 1000],
+	];
+	const valuesAreValid = ranges.every(([key, minimum, maximum]) => {
+		const value = draftNumber(key);
+		return (
+			draft[key].trim() !== "" &&
+			Number.isFinite(value) &&
+			value >= minimum &&
+			value <= maximum
+		);
+	});
+
+	const apply = () => {
+		if (!valuesAreValid) return;
+		store.ui.setSearchWindowAnimation({
+			openingWidthExtra: draftNumber("openingWidthExtra"),
+			openingHeightExtraPercent: draftNumber("openingHeightExtraPercent"),
+			openingDurationMs: draftNumber("openingDurationMs"),
+			openingBounce: draftNumber("openingBounce") / 100,
+			openingInitialOpacity: draftNumber("openingInitialOpacity") / 100,
+			closingWidthExtraPercent: draftNumber("closingWidthExtraPercent"),
+			closingHeightExtraPercent: draftNumber("closingHeightExtraPercent"),
+			closingDurationMs: draftNumber("closingDurationMs"),
+			resultsExpandDurationMs: draftNumber("resultsExpandDurationMs"),
+			resultsCollapseDurationMs: draftNumber("resultsCollapseDurationMs"),
+		});
+	};
+
+	return (
+		<View className="p-3 subBg gap-3 rounded-lg border border-lightBorder dark:border-darkBorder">
+			<View>
+				<Text className="text-sm text">Search Window Animation</Text>
+				<Text className="text-xxs text-neutral-500 dark:text-neutral-400 mt-1">
+					Opening uses Apple&apos;s duration-and-bounce spring model. Every
+					window animation value can be tuned here.
+				</Text>
+			</View>
+
+			<View className="border-t border-lightBorder dark:border-darkBorder" />
+
+			<View>
+				<Text className="text-sm text">Opening</Text>
+				<Text className="text-xxs text-neutral-500 dark:text-neutral-400 mt-1">
+					The window starts larger, contracts slightly past its final size, then
+					settles back.
+				</Text>
+			</View>
+			<AnimationNumberRow
+				title="Width overshoot"
+				description="0–200 pt added to the initial window width"
+				value={draft.openingWidthExtra}
+				onChangeText={(value) => updateDraft("openingWidthExtra", value)}
+				unit="pt"
+			/>
+			<AnimationNumberRow
+				title="Height overshoot"
+				description="0–20% added to the initial window height"
+				value={draft.openingHeightExtraPercent}
+				onChangeText={(value) =>
+					updateDraft("openingHeightExtraPercent", value)
+				}
+				unit="%"
+			/>
+			<AnimationNumberRow
+				title="Duration"
+				description="0–1000 ms; 100 ms is the default, 0 disables it"
+				value={draft.openingDurationMs}
+				onChangeText={(value) => updateDraft("openingDurationMs", value)}
+				unit="ms"
+			/>
+			<AnimationNumberRow
+				title="Bounce"
+				description="−100–100%; 20% gives a restrained visible rebound"
+				value={draft.openingBounce}
+				onChangeText={(value) => updateDraft("openingBounce", value)}
+				unit="%"
+			/>
+			<AnimationNumberRow
+				title="Initial opacity"
+				description="0–100%; controls the opening fade"
+				value={draft.openingInitialOpacity}
+				onChangeText={(value) => updateDraft("openingInitialOpacity", value)}
+				unit="%"
+			/>
+
+			<View className="border-t border-lightBorder dark:border-darkBorder" />
+
+			<View>
+				<Text className="text-sm text">Results panel</Text>
+				<Text className="text-xxs text-neutral-500 dark:text-neutral-400 mt-1">
+					Controls how quickly the lower results area unfolds and folds.
+				</Text>
+			</View>
+			<AnimationNumberRow
+				title="Expand duration"
+				description="0–1000 ms; 0 makes expansion immediate"
+				value={draft.resultsExpandDurationMs}
+				onChangeText={(value) => updateDraft("resultsExpandDurationMs", value)}
+				unit="ms"
+			/>
+			<AnimationNumberRow
+				title="Collapse duration"
+				description="0–1000 ms; 0 makes collapse immediate"
+				value={draft.resultsCollapseDurationMs}
+				onChangeText={(value) =>
+					updateDraft("resultsCollapseDurationMs", value)
+				}
+				unit="ms"
+			/>
+
+			<View className="border-t border-lightBorder dark:border-darkBorder" />
+
+			<View>
+				<Text className="text-sm text">Closing</Text>
+				<Text className="text-xxs text-neutral-500 dark:text-neutral-400 mt-1">
+					The window grows slightly while fading out.
+				</Text>
+			</View>
+			<AnimationNumberRow
+				title="Width growth"
+				description="0–20% added while the window disappears"
+				value={draft.closingWidthExtraPercent}
+				onChangeText={(value) => updateDraft("closingWidthExtraPercent", value)}
+				unit="%"
+			/>
+			<AnimationNumberRow
+				title="Height growth"
+				description="0–20% added while the window disappears"
+				value={draft.closingHeightExtraPercent}
+				onChangeText={(value) =>
+					updateDraft("closingHeightExtraPercent", value)
+				}
+				unit="%"
+			/>
+			<AnimationNumberRow
+				title="Duration"
+				description="0–1000 ms; 85 ms keeps closing faster than opening"
+				value={draft.closingDurationMs}
+				onChangeText={(value) => updateDraft("closingDurationMs", value)}
+				unit="ms"
+			/>
+
+			{!valuesAreValid && (
+				<Text className="text-xs text-red-500">
+					Check the ranges shown below each animation setting.
+				</Text>
+			)}
+
+			<View className="flex-row justify-end gap-3">
+				<TouchableOpacity onPress={store.ui.resetSearchWindowAnimation}>
+					<View className="px-4 py-2 rounded-lg border border-color">
+						<Text className="text-sm text">Reset</Text>
+					</View>
+				</TouchableOpacity>
+				<TouchableOpacity disabled={!valuesAreValid} onPress={apply}>
+					<View
+						className={clsx("px-4 py-2 rounded-lg", {
+							"bg-accent-strong": valuesAreValid,
+							"bg-neutral-300 dark:bg-neutral-700": !valuesAreValid,
+						})}
+					>
+						<Text className="text-sm text-white">Apply</Text>
+					</View>
+				</TouchableOpacity>
+			</View>
+
+			<Text className="text-xxs text-neutral-500 dark:text-neutral-400">
+				Saved as searchWindowAnimation in ~/.config/sol/config.json.
 			</Text>
 		</View>
 	);
@@ -421,6 +669,7 @@ export const General = observer(() => {
 				/>
 			</View>
 			<GlassAppearanceSettings />
+			<SearchWindowAnimationSettings />
 			<SearchWindowPositionSettings />
 			<View className="z-20 p-3 subBg gap-3 rounded-lg border border-lightBorder dark:border-darkBorder">
 				<View className="flex-row items-center z-30">
@@ -536,7 +785,7 @@ export const General = observer(() => {
 									store.ui.addSearchFolder(path);
 								}
 								solNative.showWindow();
-							} catch (e) {}
+							} catch {}
 						}}
 					>
 						<Text className="text-blue-500">Add folder</Text>

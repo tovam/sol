@@ -15,6 +15,19 @@ export type SearchWindowPosition = {
 	y: number;
 };
 
+export type SearchWindowAnimation = {
+	openingWidthExtra: number;
+	openingHeightExtraPercent: number;
+	openingDurationMs: number;
+	openingBounce: number;
+	openingInitialOpacity: number;
+	closingWidthExtraPercent: number;
+	closingHeightExtraPercent: number;
+	closingDurationMs: number;
+	resultsExpandDurationMs: number;
+	resultsCollapseDurationMs: number;
+};
+
 export type DailymotionDVRQuality = {
 	height: number;
 	label: string;
@@ -142,6 +155,7 @@ class SolNative extends NativeEventEmitter {
 	setShowWindowOn: (on: "screenWithFrontmost" | "screenWithCursor") => void;
 	setGlassAppearance: (settings: GlassAppearance) => void;
 	setSearchWindowPosition: (position: SearchWindowPosition) => void;
+	setSearchWindowAnimation: (settings: SearchWindowAnimation) => void;
 	useBackgroundOverlay: (v: boolean) => void;
 	toggleDND: () => void;
 	toggleScreenRuler: () => void;
@@ -290,6 +304,7 @@ class SolNative extends NativeEventEmitter {
 		this.setShowWindowOn = module.setShowWindowOn;
 		this.setGlassAppearance = module.setGlassAppearance;
 		this.setSearchWindowPosition = module.setSearchWindowPosition;
+		this.setSearchWindowAnimation = module.setSearchWindowAnimation;
 		this.useBackgroundOverlay = module.useBackgroundOverlay;
 		this.toggleScreenRuler = module.toggleScreenRuler;
 		this.openDailymotionPlayer = module.openDailymotionPlayer;
