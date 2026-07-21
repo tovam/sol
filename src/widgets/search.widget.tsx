@@ -34,6 +34,18 @@ const SEARCH_TABS = [
 	{ value: SearchTab.FILES, label: "Files", placeholder: "Search files" },
 ];
 
+const SEARCH_ITEM_HEIGHT = 56;
+
+function getSearchItemType(item: Item) {
+	return item.type === ItemType.TEMPORARY_RESULT ? "temporary" : "standard";
+}
+
+function getSearchItemFixedSize(item: Item) {
+	return item.type === ItemType.TEMPORARY_RESULT
+		? undefined
+		: SEARCH_ITEM_HEIGHT;
+}
+
 function TemporaryResultView({
 	result,
 	isActive,
@@ -406,10 +418,20 @@ export const SearchWidget: FC = observer(() => {
 	const hasOverflow = listContentHeight > listViewportHeight + 1;
 
 	useEffect(() => {
-		if (focused && items.length && selectedIndex < items.length) {
-			void listRef.current?.scrollIndexIntoView({
+		const list = listRef.current;
+		if (!focused || !list || !items.length || selectedIndex >= items.length) {
+			return;
+		}
+
+		const { start, end } = list.getState();
+		const viewPosition =
+			selectedIndex <= start ? 0 : selectedIndex >= end ? 1 : undefined;
+
+		if (viewPosition !== undefined) {
+			void list.scrollToIndex({
 				index: selectedIndex,
 				animated: false,
+				viewPosition,
 			});
 		}
 	}, [focused, selectedIndex, selectedItemId, items.length]);
@@ -484,6 +506,9 @@ export const SearchWidget: FC = observer(() => {
 								ref={listRef}
 								data={items}
 								keyExtractor={(item) => item.id}
+								getItemType={getSearchItemType}
+								getFixedItemSize={getSearchItemFixedSize}
+								estimatedItemSize={SEARCH_ITEM_HEIGHT}
 								renderItem={ItemRow}
 								showsVerticalScrollIndicator={false}
 								onLayout={(event) => {
