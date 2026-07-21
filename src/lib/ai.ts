@@ -42,7 +42,7 @@ export type AIRequestResult = {
 	usage?: OpenAITokenUsage;
 };
 
-const SETTINGS_KEY = "@sol.ai_one_shot_settings";
+const AI_SECRETS_FILE_PATH = `/Users/${solNative.userName()}/.config/sol/ai-secrets.json`;
 
 export const DEFAULT_AI_SETTINGS: AISettings = {
 	provider: "openai",
@@ -181,7 +181,7 @@ export async function fetchAIModels(
 }
 
 export async function loadAISettings(): Promise<AISettings> {
-	const savedValue = await solNative.securelyRetrieve(SETTINGS_KEY);
+	const savedValue = solNative.readFile(AI_SECRETS_FILE_PATH);
 	if (!savedValue) {
 		return {
 			...DEFAULT_AI_SETTINGS,
@@ -244,17 +244,24 @@ export async function loadAISettings(): Promise<AISettings> {
 	}
 }
 
-export function saveAISettings(settings: AISettings) {
-	return solNative.securelyStore(
-		SETTINGS_KEY,
-		JSON.stringify({
-			version: 2,
-			apiKeys: {
-				openai: settings.openai.apiKey,
-				openwebui: settings.openwebui.apiKey,
+export async function saveAISettings(settings: AISettings) {
+	const didWrite = solNative.writeFile(
+		AI_SECRETS_FILE_PATH,
+		JSON.stringify(
+			{
+				version: 2,
+				apiKeys: {
+					openai: settings.openai.apiKey,
+					openwebui: settings.openwebui.apiKey,
+				},
 			},
-		}),
+			null,
+			2,
+		),
 	);
+	if (!didWrite) {
+		throw new Error("Could not save API keys in Sol's private settings file");
+	}
 }
 
 export async function requestAI(

@@ -179,9 +179,6 @@ class SolNative extends NativeEventEmitter {
 		dns?: string[];
 		hostname?: string;
 	}>;
-	securelyStore: (key: string, value: string) => Promise<void>;
-	securelyRetrieve: (key: string) => Promise<string | null>;
-	securelyRemove: (key: string) => Promise<void>;
 	executeBashScript: (script: string) => Promise<void>;
 	executeBashScriptWithArguments: (
 		script: string,
@@ -325,10 +322,6 @@ class SolNative extends NativeEventEmitter {
 		this.getDailymotionDVRDestinationCapacity =
 			module.getDailymotionDVRDestinationCapacity;
 		this.getNetworkInfo = module.getNetworkInfo;
-
-		this.securelyRetrieve = module.securelyRetrieve;
-		this.securelyStore = module.securelyStore;
-		this.securelyRemove = module.securelyRemove;
 
 		this.showToast = (text: string, variant = "success", timeout = 4) =>
 			module.showToast(text, variant, timeout);

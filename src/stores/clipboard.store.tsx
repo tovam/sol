@@ -4,14 +4,10 @@ import MiniSearch from "minisearch";
 import { makeAutoObservable } from "mobx";
 import type { EmitterSubscription } from "react-native";
 import type { IRootStore } from "store";
-import {
-	readPersistedRuntimeStore,
-	replacePersistedStore,
-} from "./persisted-config";
+import { replacePersistedStore } from "./persisted-config";
 import { Widget } from "./ui.store";
 
 const MAX_ITEMS = 1000;
-const LEGACY_KEYCHAIN_KEY = "@sol.clipboard_history_v2";
 const MANAGED_PASTEBOARD_IMAGES_PATH = `/Users/${solNative.userName()}/.config/sol/images_pasteboard`;
 
 let onTextCopiedListener: EmitterSubscription | undefined;
@@ -217,35 +213,13 @@ export const createClipboardStore = (root: IRootStore) => {
 		store.onFileCopied,
 	);
 
-	const purgePersistentHistory = async () => {
-		const purgeState = readPersistedRuntimeStore<{
-			historyPurged?: boolean;
-		}>("clipboard");
-		const historyWasPurged = purgeState?.historyPurged === true;
-
-		if (
-			!replacePersistedStore("clipboard", {
-				historyPurged: historyWasPurged,
-			})
-		) {
+	const purgePersistentHistory = () => {
+		if (!replacePersistedStore("clipboard", { historyPurged: true })) {
 			console.warn("Could not purge persisted clipboard history");
-			return;
-		}
-		if (historyWasPurged) {
-			return;
-		}
-
-		try {
-			await solNative.securelyRemove(LEGACY_KEYCHAIN_KEY);
-			if (!replacePersistedStore("clipboard", { historyPurged: true })) {
-				console.warn("Could not record clipboard history purge");
-			}
-		} catch (error) {
-			captureException(error);
 		}
 	};
 
-	void purgePersistentHistory();
+	purgePersistentHistory();
 
 	return store;
 };

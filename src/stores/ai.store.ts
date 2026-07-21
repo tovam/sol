@@ -535,7 +535,7 @@ export const createAIStore = () => {
 						store.secretsError =
 							error instanceof Error
 								? error.message
-								: "Could not load API keys from Keychain";
+								: "Could not load API keys from the private settings file";
 					});
 				} finally {
 					if (!disposed) {

@@ -110,13 +110,6 @@ RCT_EXTERN_METHOD(getDailymotionDVRDestinationCapacity : (NSString)path resolver
     RCTPromiseResolveBlock)resolve rejecter : (RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(getNetworkInfo : (RCTPromiseResolveBlock)
                       resolve rejecter : (RCTPromiseRejectBlock)reject)
-RCT_EXTERN_METHOD(securelyStore : (NSString)key payload : (NSString)
-                      payload resolver : (RCTPromiseResolveBlock)
-                          resolve rejecter : (RCTPromiseRejectBlock)reject)
-RCT_EXTERN_METHOD(securelyRetrieve : (NSString)key resolver : (
-    RCTPromiseResolveBlock)resolve rejecter : (RCTPromiseRejectBlock)reject)
-RCT_EXTERN_METHOD(securelyRemove : (NSString)key resolver : (
-    RCTPromiseResolveBlock)resolve rejecter : (RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(showToast : (NSString)text variant : (NSString)
                       variant timeout : (nonnull NSNumber)timeout)
 RCT_EXTERN_METHOD(hideNotch)
