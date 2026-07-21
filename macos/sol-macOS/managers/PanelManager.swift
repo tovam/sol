@@ -319,7 +319,13 @@ private final class ClosingAnimationPanel: NSPanel {
   }
 
   private func openingFrame(around frame: NSRect) -> NSRect {
-    return scaledFrame(frame, widthScale: 1.026, heightScale: 1.018)
+    let height = frame.height * 1.018
+    return NSRect(
+      x: frame.midX - (frame.width + 50) / 2,
+      y: frame.midY - height / 2,
+      width: frame.width + 50,
+      height: height
+    )
   }
 
   private func closingFrame(around frame: NSRect) -> NSRect {
