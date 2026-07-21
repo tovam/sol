@@ -865,18 +865,27 @@ export const createUIStore = (root: IRootStore) => {
 				store.dailymotionStreams,
 			);
 			if (dailymotionCommand.kind !== "none") {
-				const commandErrorItem = (message: string): Item => ({
-					id: "dailymotion_command_error",
-					icon: "!",
-					name: message,
-					subName:
-						"dm <favorite> · dm <favorite> rec HH:mm[:ss] HH:mm[:ss]",
-					type: ItemType.CONFIGURATION,
-					preventClose: true,
-					callback: () => {
-						void solNative.showToast(message, "error");
-					},
-				});
+				const commandErrorItem = (message: string): Item => {
+					const isIncomplete = message.startsWith("Incomplete command.");
+					const toastMessage = isIncomplete
+						? "Expected: dm <favorite> rec <start> <end> — times use HH:mm or HH:mm:ss."
+						: message;
+					return {
+						id: isIncomplete
+							? "dailymotion_command_incomplete"
+							: "dailymotion_command_error",
+						icon: isIncomplete ? "…" : "!",
+						name: isIncomplete ? "Incomplete recording command" : message,
+						subName: isIncomplete
+							? "dm <favorite> rec <start> <end> · HH:mm or HH:mm:ss"
+							: "dm <favorite> · dm <favorite> rec HH:mm[:ss] HH:mm[:ss]",
+						type: ItemType.CONFIGURATION,
+						preventClose: true,
+						callback: () => {
+							void solNative.showToast(toastMessage, "error");
+						},
+					};
+				};
 				const watchItem = (stream: DailymotionStream): Item => ({
 					id: `dailymotion_command_watch_${stream.id}`,
 					icon: "▶",
