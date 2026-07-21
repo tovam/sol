@@ -11,6 +11,13 @@ import {
 } from "lib/dailymotion";
 import { fetchPublicIPAddress } from "lib/publicIp";
 import {
+	analyzeFileSearchEdit,
+	fileNameMatchesQuery,
+	getLikelyDeletionQueries,
+	normalizeFileSearchText,
+	type TextSelection,
+} from "lib/fileSearch";
+import {
 	type GlassAppearance,
 	type SearchWindowPosition,
 	solNative,
@@ -315,7 +322,102 @@ export const createUIStore = (root: IRootStore) => {
 	// Guards against spurious writes during hydrate/reload
 	let isHydrating = false;
 	let fileSearchRequestId = 0;
+	let fileSearchPrefetchTimer: ReturnType<typeof setTimeout> | undefined;
+	let fileSearchCacheEpoch = 0;
+	let displayedFileSearchKey: string | null = null;
+	const fileSearchCache = new Map<
+		string,
+		{ results: Item[]; cachedAt: number }
+	>();
+	const fileSearchInFlight = new Map<string, Promise<Item[]>>();
 	let dailymotionDVRIntentID = 0;
+	const FILE_SEARCH_CACHE_TTL = 15_000;
+	const FILE_SEARCH_CACHE_LIMIT = 8;
+
+	const fileSearchKey = (query: string, sort: FileSort) =>
+		`${sort}\u0000${normalizeFileSearchText(query)}`;
+
+	const readCachedFileSearch = (query: string, sort: FileSort) => {
+		const key = fileSearchKey(query, sort);
+		const entry = fileSearchCache.get(key);
+		if (!entry) return undefined;
+		if (Date.now() - entry.cachedAt > FILE_SEARCH_CACHE_TTL) {
+			fileSearchCache.delete(key);
+			return undefined;
+		}
+
+		// Refresh insertion order so the Map also acts as a small LRU cache.
+		fileSearchCache.delete(key);
+		fileSearchCache.set(key, entry);
+		return entry.results;
+	};
+
+	const cacheFileSearch = (
+		query: string,
+		sort: FileSort,
+		results: Item[],
+	) => {
+		const key = fileSearchKey(query, sort);
+		fileSearchCache.delete(key);
+		fileSearchCache.set(key, { results, cachedAt: Date.now() });
+		while (fileSearchCache.size > FILE_SEARCH_CACHE_LIMIT) {
+			const oldestKey = fileSearchCache.keys().next().value;
+			if (oldestKey === undefined) break;
+			fileSearchCache.delete(oldestKey);
+		}
+	};
+
+	const clearFileSearchCache = () => {
+		fileSearchCacheEpoch += 1;
+		fileSearchCache.clear();
+		fileSearchInFlight.clear();
+	};
+
+	const loadFileSearch = (query: string, sort: FileSort) => {
+		const cached = readCachedFileSearch(query, sort);
+		if (cached) return Promise.resolve(cached);
+
+		const key = fileSearchKey(query, sort);
+		const existingRequest = fileSearchInFlight.get(key);
+		if (existingRequest) return existingRequest;
+
+		const cacheEpoch = fileSearchCacheEpoch;
+		const request = solNative.searchFilesIndexed(query, sort).then((results) => {
+			const mappedResults = results.map((file) => ({
+				id: file.path,
+				type: ItemType.FILE,
+				name: file.name,
+				url: file.path,
+				fileModifiedAt: file.modifiedAt,
+				fileSize: file.size,
+			}));
+			if (cacheEpoch === fileSearchCacheEpoch) {
+				cacheFileSearch(query, sort, mappedResults);
+			}
+			return mappedResults;
+		});
+		fileSearchInFlight.set(key, request);
+		void request.then(
+			() => {
+				if (fileSearchInFlight.get(key) === request) {
+					fileSearchInFlight.delete(key);
+				}
+			},
+			() => {
+				if (fileSearchInFlight.get(key) === request) {
+					fileSearchInFlight.delete(key);
+				}
+			},
+		);
+		return request;
+	};
+
+	const prefetchFileSearch = (query: string, sort: FileSort) => {
+		if (!normalizeFileSearchText(query)) return;
+		void loadFileSearch(query, sort).catch(() => {
+			// Speculation is best-effort; the authoritative search reports failures.
+		});
+	};
 
 	const getSelectionCount = (item: Pick<Item, "id" | "name">) => {
 		const countById = store.frequencies[item.id];
@@ -623,6 +725,7 @@ export const createUIStore = (root: IRootStore) => {
 		isLoading: false,
 		isIndexing: false,
 		indexedFileResults: [] as Item[],
+		fileSearchSelection: { start: 0, end: 0 } as TextSelection,
 		translationResults: [] as string[],
 		frequencies: {} as Record<string, number>,
 		selectionTimestamps: {} as Record<string, number>,
@@ -678,15 +781,28 @@ export const createUIStore = (root: IRootStore) => {
 				runInAction(() => {
 					store.indexedFileResults = [];
 					store.isLoading = false;
+					displayedFileSearchKey = null;
 				});
 				return;
 			}
+
+			const key = fileSearchKey(query, sort);
+			const cached = readCachedFileSearch(query, sort);
+			if (cached) {
+				if (store.query !== query || store.fileSort !== sort) return;
+				runInAction(() => {
+					store.indexedFileResults = cached.slice();
+					store.isLoading = false;
+					displayedFileSearchKey = key;
+				});
+				return;
+			}
+
 			runInAction(() => {
 				store.isLoading = true;
-				store.indexedFileResults = [];
 			});
 			try {
-				const results = await solNative.searchFilesIndexed(query, sort);
+				const results = await loadFileSearch(query, sort);
 				const requestIsCurrent =
 					requestId === fileSearchRequestId &&
 					store.query === query &&
@@ -697,21 +813,16 @@ export const createUIStore = (root: IRootStore) => {
 				if (!requestIsCurrent) return;
 
 				runInAction(() => {
-					store.indexedFileResults = results.map((f) => ({
-						id: f.path,
-						type: ItemType.FILE,
-						name: f.name,
-						url: f.path,
-						fileModifiedAt: f.modifiedAt,
-						fileSize: f.size,
-					}));
+					store.indexedFileResults = results.slice();
 					store.isLoading = false;
+					displayedFileSearchKey = key;
 				});
 			} catch {
 				if (requestId !== fileSearchRequestId) return;
 				runInAction(() => {
 					store.indexedFileResults = [];
 					store.isLoading = false;
+					displayedFileSearchKey = null;
 				});
 			}
 		},
@@ -1010,6 +1121,7 @@ export const createUIStore = (root: IRootStore) => {
 			store.selectedIndex = 0;
 			store.indexedFileResults = [];
 			store.isLoading = false;
+			displayedFileSearchKey = null;
 			if (tab !== SearchTab.FILES && store.query) {
 				store.setQuery(store.query);
 			}
@@ -1021,6 +1133,7 @@ export const createUIStore = (root: IRootStore) => {
 			store.selectedIndex = 0;
 			store.indexedFileResults = [];
 			store.isLoading = false;
+			displayedFileSearchKey = null;
 		},
 		cycleSearchTab: (direction: 1 | -1) => {
 			const currentIndex = SEARCH_TAB_ORDER.indexOf(store.searchTab);
@@ -1151,6 +1264,7 @@ export const createUIStore = (root: IRootStore) => {
 				fileSearchRequestId += 1;
 				store.indexedFileResults = [];
 				store.isLoading = false;
+				displayedFileSearchKey = null;
 			}
 			store.selectedIndex = 0;
 			store.focusedWidget = widget;
@@ -1169,18 +1283,112 @@ export const createUIStore = (root: IRootStore) => {
 		setFocus: (widget: Widget) => {
 			store.focusedWidget = widget;
 		},
+		setFileSearchSelection: (selection: TextSelection) => {
+			const start = Math.min(Math.max(selection.start, 0), store.query.length);
+			const end = Math.min(Math.max(selection.end, start), store.query.length);
+			store.fileSearchSelection = { start, end };
+
+			if (fileSearchPrefetchTimer) {
+				clearTimeout(fileSearchPrefetchTimer);
+				fileSearchPrefetchTimer = undefined;
+			}
+
+			const isFileSearchActive =
+				store.focusedWidget === Widget.FILE_SEARCH ||
+				(store.focusedWidget === Widget.SEARCH &&
+					store.searchTab === SearchTab.FILES);
+			if (!isFileSearchActive || !normalizeFileSearchText(store.query)) return;
+
+			fileSearchPrefetchTimer = setTimeout(() => {
+				fileSearchPrefetchTimer = undefined;
+				const isStillActive =
+					store.focusedWidget === Widget.FILE_SEARCH ||
+					(store.focusedWidget === Widget.SEARCH &&
+						store.searchTab === SearchTab.FILES);
+				if (!isStillActive) return;
+
+				const querySnapshot = store.query;
+				const sortSnapshot = store.fileSort;
+				const selectionSnapshot = { ...store.fileSearchSelection };
+				for (const candidate of getLikelyDeletionQueries(
+					querySnapshot,
+					selectionSnapshot,
+				)) {
+					prefetchFileSearch(candidate, sortSnapshot);
+				}
+			}, 250);
+		},
+		setQueryFromInput: (query: string, selectionBefore: TextSelection) => {
+			const previousQuery = store.query;
+			const previousResults = store.indexedFileResults.slice();
+			const edit = analyzeFileSearchEdit(
+				previousQuery,
+				query.replace("\n", " "),
+				selectionBefore,
+			);
+			const wasFileSearchActive =
+				store.focusedWidget === Widget.FILE_SEARCH ||
+				(store.focusedWidget === Widget.SEARCH &&
+					store.searchTab === SearchTab.FILES);
+
+			store.setQuery(query);
+			store.setFileSearchSelection(edit.nextSelection);
+
+			if (!wasFileSearchActive || !normalizeFileSearchText(store.query)) {
+				return edit.nextSelection;
+			}
+
+			const nextKey = fileSearchKey(store.query, store.fileSort);
+			const alreadyShowsAuthoritativeResults =
+				displayedFileSearchKey === nextKey;
+			if (
+				!alreadyShowsAuthoritativeResults &&
+				edit.kind === "boundary-insertion"
+			) {
+				store.indexedFileResults = previousResults.filter((item) =>
+					fileNameMatchesQuery(item.name, store.query),
+				);
+				displayedFileSearchKey = null;
+			}
+
+			// A predicted deletion may already be running. Join it immediately
+			// instead of waiting for the normal input debounce.
+			if (
+				!alreadyShowsAuthoritativeResults &&
+				fileSearchInFlight.has(nextKey)
+			) {
+				void store.runFileSearch(store.query);
+			}
+
+			return edit.nextSelection;
+		},
 		setQuery: (query: string) => {
 			store.query = query.replace("\n", " ");
 			store.selectedIndex = 0;
 			store.temporaryResult = null;
-			if (
+			const isFileSearchActive =
 				store.focusedWidget === Widget.FILE_SEARCH ||
 				(store.focusedWidget === Widget.SEARCH &&
-					store.searchTab === SearchTab.FILES)
-			) {
+					store.searchTab === SearchTab.FILES);
+			if (isFileSearchActive) {
 				fileSearchRequestId += 1;
-				store.indexedFileResults = [];
-				store.isLoading = false;
+				if (!normalizeFileSearchText(store.query)) {
+					store.indexedFileResults = [];
+					store.isLoading = false;
+					displayedFileSearchKey = null;
+				} else {
+					const cached = readCachedFileSearch(store.query, store.fileSort);
+					if (cached) {
+						store.indexedFileResults = cached.slice();
+						store.isLoading = false;
+						displayedFileSearchKey = fileSearchKey(
+							store.query,
+							store.fileSort,
+						);
+					} else {
+						store.isLoading = true;
+					}
+				}
 			}
 
 			if (store.query === "") {
@@ -1390,11 +1598,16 @@ export const createUIStore = (root: IRootStore) => {
 		},
 		onHide: () => {
 			fileSearchRequestId += 1;
+			if (fileSearchPrefetchTimer) {
+				clearTimeout(fileSearchPrefetchTimer);
+				fileSearchPrefetchTimer = undefined;
+			}
 			store.isVisible = false;
 			store.focusedWidget = Widget.SEARCH;
 			store.searchTab = SearchTab.ALL;
 			store.indexedFileResults = [];
 			store.isLoading = false;
+			displayedFileSearchKey = null;
 			store.editingCustomItem = null;
 			store.dailymotionDVRIntent = null;
 			if (store.temporaryResult == null) {
@@ -1404,6 +1617,10 @@ export const createUIStore = (root: IRootStore) => {
 			store.translationResults = [];
 		},
 		cleanUp: () => {
+			if (fileSearchPrefetchTimer) {
+				clearTimeout(fileSearchPrefetchTimer);
+				fileSearchPrefetchTimer = undefined;
+			}
 			onShowListener?.remove();
 			onHideListener?.remove();
 			onFileSearchListener?.remove();
@@ -1655,21 +1872,28 @@ export const createUIStore = (root: IRootStore) => {
 		},
 
 		addSearchFolder: (folder: string) => {
+			clearFileSearchCache();
+			fileSearchRequestId += 1;
 			store.searchFolders.push(folder);
 			store.isIndexing = true;
 			void solNative.indexPaths([folder]).then(() => {
 				runInAction(() => {
 					store.isIndexing = false;
+					clearFileSearchCache();
 				});
 			});
 		},
 
 		removeSearchFolder: (folder: string) => {
+			clearFileSearchCache();
+			fileSearchRequestId += 1;
 			store.searchFolders = store.searchFolders.filter((f) => f !== folder);
-			void solNative.removeIndexedPath(folder);
+			void solNative.removeIndexedPath(folder).then(clearFileSearchCache);
 		},
 
 		reindexAll: () => {
+			clearFileSearchCache();
+			fileSearchRequestId += 1;
 			solNative.clearIndex();
 			if (store.searchFolders.length === 0) return;
 			runInAction(() => {
@@ -1678,6 +1902,7 @@ export const createUIStore = (root: IRootStore) => {
 			void solNative.indexPaths(toJS(store.searchFolders)).then(() => {
 				runInAction(() => {
 					store.isIndexing = false;
+					clearFileSearchCache();
 				});
 			});
 		},

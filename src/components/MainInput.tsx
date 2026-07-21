@@ -1,6 +1,7 @@
 import { Assets } from "assets";
 import clsx from "clsx";
 import { observer } from "mobx-react-lite";
+import { useRef } from "react";
 import {
 	DevSettings,
 	Image,
@@ -26,6 +27,10 @@ export const MainInput = observer<Props>(
 	({ placeholder = "Search", showBackButton, hideIcon, className, style }) => {
 		const store = useStore();
 		const isDarkMode = store.ui.isDarkMode;
+		const selectionRef = useRef({
+			start: store.ui.query.length,
+			end: store.ui.query.length,
+		});
 		const reloadApp = async () => {
 			DevSettings.reload();
 		};
@@ -72,7 +77,16 @@ export const MainInput = observer<Props>(
 					multiline={false}
 					enableFocusRing={false}
 					value={store.ui.query}
-					onChangeText={store.ui.setQuery}
+					onChangeText={(query) => {
+						selectionRef.current = store.ui.setQueryFromInput(
+							query,
+							selectionRef.current,
+						);
+					}}
+					onSelectionChange={(event) => {
+						selectionRef.current = event.nativeEvent.selection;
+						store.ui.setFileSearchSelection(selectionRef.current);
+					}}
 					className={clsx("text-4xl font-light", {
 						"text-white": isDarkMode,
 						"text-black": !isDarkMode,

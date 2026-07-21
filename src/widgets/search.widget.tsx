@@ -469,6 +469,8 @@ export const SearchWidget: FC = observer(() => {
 										message={
 											activeTab === SearchTab.FILES && !store.ui.query
 												? "Type to search files"
+												: activeTab === SearchTab.FILES && store.ui.isLoading
+													? "Searching…"
 												: "No Results"
 										}
 									/>

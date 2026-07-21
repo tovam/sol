@@ -90,11 +90,11 @@ export const FileSearchWidget: FC<Props> = observer(() => {
 				ListEmptyComponent={
 					<View className="flex-1 justify-center items-center">
 						<Text className="dark:text-neutral-700 text-sm text-neutral-500">
-							No items
+							{store.ui.isLoading ? "Searching…" : "No items"}
 						</Text>
 					</View>
 				}
-				keyExtractor={(_, index) => index.toString()}
+				keyExtractor={(item) => item.id}
 				renderItem={RenderItem}
 			/>
 
