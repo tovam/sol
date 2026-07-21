@@ -25,6 +25,27 @@ export function createBaseItems(store: IRootStore) {
 			},
 		},
 		{
+			id: "toggle_dock_auto_hide",
+			iconImage: Assets.display,
+			name: "Toggle Dock Auto-Hide",
+			alias: "dock show hide macos",
+			type: ItemType.CONFIGURATION,
+			callback: async () => {
+				try {
+					await solNative.executeAppleScript(`tell application "System Events"
+						set currentAutoHide to autohide of dock preferences
+						set autohide of dock preferences to not currentAutoHide
+					end tell`);
+					solNative.showToast("Dock auto-hide toggled", "success");
+				} catch (e) {
+					solNative.showToast(
+						`Could not change Dock visibility: ${e}`,
+						"error",
+					);
+				}
+			},
+		},
+		{
 			id: "sleep",
 			iconImage: Assets.SleepIcon,
 			name: "Sleep",
