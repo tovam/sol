@@ -125,6 +125,7 @@ RCT_EXTERN_METHOD(hasFullDiskAccess : (RCTPromiseResolveBlock)
 RCT_EXTERN_METHOD(getSafariBookmarks : (RCTPromiseResolveBlock)
                       resolve rejecter : (RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(quit)
+RCT_EXTERN_METHOD(restartApplication)
 RCT_EXTERN_METHOD(setStatusBarItemTitle : (NSString)title)
 RCT_EXTERN_METHOD(setMediaKeyForwardingEnabled : (BOOL)v)
 RCT_EXPORT_METHOD(restart) {

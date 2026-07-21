@@ -62,6 +62,26 @@ export function createBaseItems(store: IRootStore) {
 			},
 		},
 		{
+			id: "restart_sol",
+			iconImage: Assets.restart,
+			name: "Restart Sol",
+			type: ItemType.CONFIGURATION,
+			preventClose: true,
+			callback: () => {
+				solNative.restartApplication();
+			},
+		},
+		{
+			id: "close_sol",
+			iconImage: Assets.close,
+			name: "Close Sol",
+			type: ItemType.CONFIGURATION,
+			preventClose: true,
+			callback: () => {
+				solNative.quit();
+			},
+		},
+		{
 			id: "shut_down",
 			iconImage: Assets.power,
 			name: "Shut Down",

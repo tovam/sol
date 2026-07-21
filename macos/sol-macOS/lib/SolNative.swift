@@ -760,6 +760,23 @@ class SolNative: RCTEventEmitter {
     }
   }
 
+  @objc func restartApplication() {
+    DispatchQueue.main.async {
+      let configuration = NSWorkspace.OpenConfiguration()
+      configuration.createsNewApplicationInstance = true
+      NSWorkspace.shared.openApplication(
+        at: Bundle.main.bundleURL,
+        configuration: configuration
+      ) { _, error in
+        if let error {
+          NSLog("Could not restart Sol: \(error.localizedDescription)")
+          return
+        }
+        NSApplication.shared.terminate(self)
+      }
+    }
+  }
+
   @objc func setStatusBarItemTitle(_ title: String) {
     StatusBarItemManager.shared.setStatusBarTitle(title)
   }
