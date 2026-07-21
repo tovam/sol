@@ -336,7 +336,7 @@ const normalizeSearchWindowAnimation = (
 			20,
 		),
 		openingDurationMs: normalizeNumber("openingDurationMs", 0, 1000),
-		openingBounce: normalizeNumber("openingBounce", -1, 1),
+		openingBounce: normalizeNumber("openingBounce", 0, 1),
 		openingInitialOpacity: normalizeNumber("openingInitialOpacity", 0, 1),
 		closingWidthExtraPercent: normalizeNumber(
 			"closingWidthExtraPercent",

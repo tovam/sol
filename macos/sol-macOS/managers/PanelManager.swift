@@ -1,6 +1,5 @@
 import AppKit
 import QuartzCore
-import SwiftUI
 
 enum PreferredScreen {
   case frontmost
@@ -18,7 +17,7 @@ private enum FrameAnimationCurve {
   case easeIn
   case easeOut
   case easeInOut
-  case spring(duration: TimeInterval, bounce: Double)
+  case singleBounce(amount: CGFloat)
 
   func value(at progress: CGFloat) -> CGFloat {
     let t = min(max(progress, 0), 1)
@@ -34,13 +33,26 @@ private enum FrameAnimationCurve {
       }
       let inverse = -2 * t + 2
       return 1 - inverse * inverse * inverse / 2
-    case let .spring(duration, bounce):
-      let spring = SwiftUI.Spring(duration: duration, bounce: bounce)
-      let value: Double = spring.value(
-        target: 1,
-        time: Double(t) * duration
-      )
-      return CGFloat(value)
+    case let .singleBounce(amount):
+      let safeAmount = max(0, amount)
+      let smoothStep: (CGFloat) -> CGFloat = { value in
+        value * value * (3 - 2 * value)
+      }
+
+      guard safeAmount > 0 else {
+        return smoothStep(t)
+      }
+
+      // Progress above 1 interpolates past the target frame, making the
+      // window slightly smaller. The second phase returns exactly to 1, so
+      // the sequence is: larger -> smaller -> final, with no completion snap.
+      let bouncePeak: CGFloat = 0.68
+      if t <= bouncePeak {
+        return (1 + safeAmount) * smoothStep(t / bouncePeak)
+      }
+
+      let reboundProgress = (t - bouncePeak) / (1 - bouncePeak)
+      return 1 + safeAmount * (1 - smoothStep(reboundProgress))
     }
   }
 }
@@ -181,7 +193,7 @@ private final class ClosingAnimationPanel: NSPanel {
       openingWidthExtra: CGFloat(min(max(openingWidthExtra, 0), 200)),
       openingHeightExtraPercent: CGFloat(min(max(openingHeightExtraPercent, 0), 20)),
       openingDuration: min(max(openingDurationMs, 0), 1000) / 1000,
-      openingBounce: min(max(openingBounce, -1), 1),
+      openingBounce: min(max(openingBounce, 0), 1),
       openingInitialOpacity: CGFloat(min(max(openingInitialOpacity, 0), 1)),
       closingWidthExtraPercent: CGFloat(min(max(closingWidthExtraPercent, 0), 20)),
       closingHeightExtraPercent: CGFloat(min(max(closingHeightExtraPercent, 0), 20)),
@@ -316,9 +328,8 @@ private final class ClosingAnimationPanel: NSPanel {
         to: finalFrame,
         alpha: 1,
         duration: self.searchWindowAnimation.openingDuration,
-        curve: .spring(
-          duration: self.searchWindowAnimation.openingDuration,
-          bounce: self.searchWindowAnimation.openingBounce
+        curve: .singleBounce(
+          amount: CGFloat(self.searchWindowAnimation.openingBounce)
         )
       ) { [weak self] in
         guard let self, self.presentationPhase == .opening else { return }

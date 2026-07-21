@@ -356,7 +356,7 @@ const SearchWindowAnimationSettings = observer(() => {
 		["openingWidthExtra", 0, 200],
 		["openingHeightExtraPercent", 0, 20],
 		["openingDurationMs", 0, 1000],
-		["openingBounce", -100, 100],
+		["openingBounce", 0, 100],
 		["openingInitialOpacity", 0, 100],
 		["closingWidthExtraPercent", 0, 20],
 		["closingHeightExtraPercent", 0, 20],
@@ -395,8 +395,8 @@ const SearchWindowAnimationSettings = observer(() => {
 			<View>
 				<Text className="text-sm text">Search Window Animation</Text>
 				<Text className="text-xxs text-neutral-500 dark:text-neutral-400 mt-1">
-					Opening uses Apple&apos;s duration-and-bounce spring model. Every
-					window animation value can be tuned here.
+					Opening uses one controlled rebound and always finishes exactly on
+					the final frame. Every window animation value can be tuned here.
 				</Text>
 			</View>
 
@@ -433,8 +433,8 @@ const SearchWindowAnimationSettings = observer(() => {
 				unit="ms"
 			/>
 			<AnimationNumberRow
-				title="Bounce"
-				description="−100–100%; 20% gives a restrained visible rebound"
+				title="Bounce depth"
+				description="0–100% of the initial oversize; 20% gives one restrained rebound"
 				value={draft.openingBounce}
 				onChangeText={(value) => updateDraft("openingBounce", value)}
 				unit="%"
