@@ -155,6 +155,8 @@ type Item = {
 	alias?: string;
 	subName?: string;
 	callback?: () => void;
+	command?: string;
+	commandCallback?: (argument: string) => void;
 	metaCallback?: () => void;
 	isApplescript?: boolean;
 	text?: string;

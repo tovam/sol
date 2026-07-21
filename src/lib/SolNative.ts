@@ -183,6 +183,10 @@ class SolNative extends NativeEventEmitter {
 	securelyRetrieve: (key: string) => Promise<string | null>;
 	securelyRemove: (key: string) => Promise<void>;
 	executeBashScript: (script: string) => Promise<void>;
+	executeBashScriptWithArguments: (
+		script: string,
+		arguments_: string[],
+	) => Promise<void>;
 	executeBashScriptWithOutput: (script: string) => Promise<string>;
 	showToast: (
 		text: string,
@@ -243,6 +247,7 @@ class SolNative extends NativeEventEmitter {
 		this.prepareTimerNotifications = module.prepareTimerNotifications;
 		this.notifyTimerFinished = module.notifyTimerFinished;
 		this.executeBashScript = module.executeBashScript;
+		this.executeBashScriptWithArguments = module.executeBashScriptWithArguments;
 		this.executeBashScriptWithOutput = module.executeBashScriptWithOutput;
 		this.executeAppleScript = module.executeAppleScript;
 		this.openWithFinder = module.openWithFinder;

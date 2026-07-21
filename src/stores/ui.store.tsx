@@ -17,6 +17,7 @@ import {
 	type TextSelection,
 } from "lib/fileSearch";
 import { fetchPublicIPAddress } from "lib/publicIp";
+import { parseScriptCommandInvocation } from "lib/scriptCommands";
 import {
 	type GlassAppearance,
 	type SearchWindowAnimation,
@@ -152,6 +153,23 @@ const normalizeFileSort = (value: unknown): FileSort => {
 
 const resolveAICommandPrompt = (query: string) =>
 	query.match(/^\s*(?:ai|ia)\s+(.+?)\s*$/i)?.[1]?.trim() ?? null;
+
+const resolveUserScriptCommand = (query: string, scripts: Item[]) => {
+	const invocation = parseScriptCommandInvocation(query);
+	if (!invocation) return [];
+
+	return scripts
+		.filter(
+			(script) =>
+				script.command?.toLowerCase() === invocation.command &&
+				script.commandCallback,
+		)
+		.map((script) => ({
+			script,
+			command: script.command as string,
+			argument: invocation.argument,
+		}));
+};
 
 export const SEARCH_TAB_ORDER = [
 	SearchTab.ALL,
@@ -1010,6 +1028,25 @@ export const createUIStore = (root: IRootStore) => {
 				}
 			}
 
+			const scriptCommandMatches = resolveUserScriptCommand(
+				store.query,
+				root.scripts.scripts,
+			);
+			if (scriptCommandMatches.length > 0) {
+				return scriptCommandMatches.map(({ script, command, argument }) => {
+					const argumentPreview =
+						argument.length > 90 ? `${argument.slice(0, 87)}…` : argument;
+					return {
+						...script,
+						name: `Run ${script.name}`,
+							subName: argumentPreview
+							? `${command} · “${argumentPreview}”`
+							: `${command} · no argument`,
+						callback: () => script.commandCallback?.(argument),
+					};
+				});
+			}
+
 			if (minisearch.documentCount === 0) {
 				minisearch.addAll(allItems);
 			} else {
@@ -1063,7 +1100,9 @@ export const createUIStore = (root: IRootStore) => {
 			const hasDailymotionCommand =
 				resolveDailymotionCommand(store.query, store.dailymotionStreams).kind !==
 				"none";
-			if (hasAICommand || hasDailymotionCommand) {
+			const hasUserScriptCommand =
+				resolveUserScriptCommand(store.query, root.scripts.scripts).length > 0;
+			if (hasAICommand || hasDailymotionCommand || hasUserScriptCommand) {
 				return store.items.filter((item) => !store.isItemDisabled(item.id));
 			}
 

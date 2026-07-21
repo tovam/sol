@@ -1,5 +1,6 @@
-import { makeAutoObservable, runInAction } from "mobx";
+import { makeAutoObservable } from "mobx";
 import { solNative } from "lib/SolNative";
+import { parseScriptCommandMetadata } from "lib/scriptCommands";
 import { ItemType } from "./ui.store";
 import type { IRootStore } from "store";
 
@@ -17,14 +18,14 @@ function parseScriptMetadata(content: string, fileName: string) {
 	const iconMatch = content.match(/^#\s*icon:\s*(.+)$/im);
 	if (iconMatch) icon = iconMatch[1].trim();
 
-	return { name, icon };
+	return { name, icon, command: parseScriptCommandMetadata(content) };
 }
 
 export type ScriptsStore = ReturnType<typeof createScriptsStore>;
 
-export const createScriptsStore = (root: IRootStore) => {
+export const createScriptsStore = (_root: IRootStore) => {
 	const scriptsPath = getScriptsPath();
-	const folderWatcher = solNative.createFolderWatcher(scriptsPath, () => {
+	const _folderWatcher = solNative.createFolderWatcher(scriptsPath, () => {
 		store.loadScripts();
 	});
 
@@ -45,23 +46,37 @@ export const createScriptsStore = (root: IRootStore) => {
 				if (!allowedExtensions.some((ext) => file.endsWith(ext))) continue;
 				const content = solNative.readFile(fullPath);
 				if (!content) continue;
-				const { name, icon } = parseScriptMetadata(content, file);
+				const metadata = parseScriptMetadata(content, file);
+				const command = file.endsWith(".sh")
+					? (metadata.command ?? undefined)
+					: undefined;
+				const execute = async (argument?: string) => {
+					try {
+						if (file.endsWith(".applescript")) {
+							await solNative.executeAppleScript(content);
+						} else if (argument === undefined) {
+							await solNative.executeBashScript(content);
+						} else {
+							await solNative.executeBashScriptWithArguments(content, [
+								argument,
+							]);
+						}
+					} catch (e) {
+						solNative.showToast(`Error executing script ${e}`, "error");
+					}
+				};
 				scriptItems.push({
 					id: `script-${file}`,
-					name,
-					icon,
+					name: metadata.name,
+					icon: metadata.icon,
 					type: ItemType.USER_SCRIPT,
-					callback: async () => {
-						try {
-							if (file.endsWith(".applescript")) {
-								await solNative.executeAppleScript(content);
-							} else {
-								await solNative.executeBashScript(content);
+					callback: () => execute(),
+					...(command
+						? {
+								command,
+								commandCallback: (argument: string) => execute(argument),
 							}
-						} catch (e) {
-							solNative.showToast(`Error executing script ${e}`, "error");
-						}
-					},
+						: {}),
 				});
 			}
 			store.scripts = scriptItems;

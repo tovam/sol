@@ -41,6 +41,9 @@ RCT_EXTERN_METHOD(executeAppleScript : (NSString)source resolve : (
     RCTPromiseResolveBlock)resolve reject : (RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(executeBashScript : (NSString)source resolver : (
     RCTPromiseResolveBlock)resolve rejecter : (RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(executeBashScriptWithArguments : (NSString)source arguments : (
+    NSArray *)arguments resolver : (RCTPromiseResolveBlock)resolve rejecter : (
+    RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(executeBashScriptWithOutput : (NSString)source resolver : (
     RCTPromiseResolveBlock)resolve rejecter : (RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(getMediaInfo : (RCTPromiseResolveBlock)

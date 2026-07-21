@@ -35,13 +35,24 @@ export const Scripts: FC = observer(() => {
 						up by Sol.
 					</Text>
 					<Text className="text-xxs text-neutral-500 dark:text-neutral-400 mt-2">
-						Each script must contain two comments:
+						Each script supports these metadata comments:
 					</Text>
 					<Text className="text-xxs text-neutral-500 dark:text-neutral-400 mt-2">
 						# name: Script Name
 					</Text>
 					<Text className="text-xxs text-neutral-500 dark:text-neutral-400 mt-2">
 						# icon: Emoji Icon
+					</Text>
+					<Text className="text-xxs text-neutral-500 dark:text-neutral-400 mt-2">
+						# command: my-command (optional, shell scripts only)
+					</Text>
+					<Text className="text-xxs text-neutral-500 dark:text-neutral-400 mt-2">
+						Type “my-command any text” in Sol. The complete text after the
+						command is passed safely as $1; read it as “$1” in the script.
+					</Text>
+					<Text className="text-xxs text-neutral-500 dark:text-neutral-400 mt-2">
+						Command names use letters, numbers, dots, dashes or underscores; ai,
+						ia and dm are reserved.
 					</Text>
 				</View>
 			</View>
@@ -56,6 +67,7 @@ export const Scripts: FC = observer(() => {
 							<Text className="text-xs mr-2">{script.name}</Text>
 							<View className="flex-1" />
 							<Text className="text-xs text-neutral-500">
+								{script.command ? `${script.command} · ` : ""}
 								{script.id.replace("script-", "")}
 							</Text>
 						</View>
