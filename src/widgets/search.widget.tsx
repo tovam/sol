@@ -148,20 +148,20 @@ function parentDirectory(path: string, username: string) {
 	return compactPath(normalized.slice(0, separatorIndex), username);
 }
 
-function getItemMetadata(item: Item, username: string) {
+function getItemMetadata(item: Item, username: string, activeTab: SearchTab) {
 	const details: string[] = [];
 
 	switch (item.type) {
 		case ItemType.APPLICATION:
-			details.push("Application");
+			if (activeTab !== SearchTab.APPLICATIONS) details.push("Application");
 			if (item.url) details.push(parentDirectory(item.url, username));
 			break;
 		case ItemType.FILE:
-			details.push("File");
+			if (activeTab !== SearchTab.FILES) details.push("File");
 			if (item.url) details.push(parentDirectory(item.url, username));
 			break;
 		case ItemType.CONFIGURATION:
-			details.push("Action");
+			if (activeTab !== SearchTab.ACTIONS) details.push("Action");
 			break;
 		case ItemType.PREFERENCE_PANE:
 			details.push("System setting");
@@ -266,7 +266,7 @@ function ItemIcon({
 const ItemRow = observer(({ item, index }: { item: Item; index: number }) => {
 	const store = useStore();
 	const isActive = index === store.ui.selectedIndex;
-	const metadata = getItemMetadata(item, store.ui.username);
+	const metadata = getItemMetadata(item, store.ui.username, store.ui.searchTab);
 
 	// this is used for things like calculator results
 	if (item.type === ItemType.TEMPORARY_RESULT) {
