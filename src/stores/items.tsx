@@ -42,7 +42,7 @@ export function createBaseItems(store: IRootStore) {
 		{
 			id: "restart",
 			iconImage: Assets.restart,
-			name: "Restart",
+			name: "Restart Computer",
 			preventClose: true,
 			type: ItemType.CONFIGURATION,
 			callback: async () => {
@@ -51,9 +51,12 @@ export function createBaseItems(store: IRootStore) {
 						await solNative.executeAppleScript(
 							'tell application "Finder" to restart',
 						);
-						solNative.showToast("Restarting", "success");
+						solNative.showToast("Restarting computer", "success");
 					} catch (e) {
-						solNative.showToast(`Could not restart: ${e}`, "error");
+						solNative.showToast(
+							`Could not restart computer: ${e}`,
+							"error",
+						);
 					}
 				});
 			},
