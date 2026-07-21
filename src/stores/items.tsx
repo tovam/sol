@@ -579,24 +579,11 @@ export function createBaseItems(store: IRootStore) {
 			preventClose: true,
 		},
 		{
-			id: "ai_one_shot",
-			icon: "✦",
-			name: "Ask AI (one shot)",
-			alias:
-				"ai ia chatgpt openai openwebui question ask intelligence artificielle",
-			type: ItemType.CONFIGURATION,
-			callback: () => {
-				store.ui.setQuery("");
-				store.ui.focusWidget(Widget.AI_ONE_SHOT);
-			},
-			preventClose: true,
-		},
-		{
 			id: "ai_chat",
-			icon: "💬",
-			name: "AI Conversation",
+			icon: "✦",
+			name: "AI",
 			alias:
-				"ai ia chat conversation chatgpt openai openwebui assistant history",
+				"ai ia ask question chat conversation chatgpt openai openwebui assistant intelligence artificielle",
 			type: ItemType.CONFIGURATION,
 			callback: () => {
 				store.ui.setQuery("");

@@ -98,7 +98,7 @@ export const AI = observer(() => {
 					Artificial intelligence
 				</Text>
 				<Text className="text-sm darker-text mt-1">
-					One configuration is shared by Ask AI and AI Conversation.
+					Provider, model and credentials used by AI conversations.
 				</Text>
 			</View>
 

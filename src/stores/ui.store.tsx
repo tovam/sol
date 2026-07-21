@@ -96,7 +96,6 @@ export enum Widget {
 	PASSWORD_GENERATOR = "PASSWORD_GENERATOR",
 	QR_CODE = "QR_CODE",
 	YTDLP = "YTDLP",
-	AI_ONE_SHOT = "AI_ONE_SHOT",
 	AI_CHAT = "AI_CHAT",
 	AI_MODEL_PICKER = "AI_MODEL_PICKER",
 	AI_HISTORY = "AI_HISTORY",
@@ -1271,8 +1270,7 @@ export const createUIStore = (root: IRootStore) => {
 		},
 		openAIHistory: () => {
 			store.aiHistoryReturnWidget =
-				store.focusedWidget === Widget.AI_CHAT ||
-				store.focusedWidget === Widget.AI_ONE_SHOT
+				store.focusedWidget === Widget.AI_CHAT
 					? store.focusedWidget
 					: Widget.SEARCH;
 			store.focusWidget(Widget.AI_HISTORY);
