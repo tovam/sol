@@ -4,6 +4,10 @@ import WebKit
 private let dailymotionBridgeName = "solDailymotion"
 private let dailymotionMinimumDVRWindow = 10.0
 private let dailymotionMaximumTimelineClockDrift = 10 * 60.0
+private let dailymotionDVRResumeBuffer = 10.0
+private let dailymotionDVRResumePersistenceInterval = 5.0
+private let dailymotionDVRResumeSeekTimeout = 5.0
+private let dailymotionDVRResumePositionTolerance = 15.0
 private let dailymotionSilentVolume = 0.001
 private let dailymotionVolumeConfirmationTimeout = 1.0
 private let dailymotionMediaUnmuteRetryDelay = 0.75
@@ -174,6 +178,51 @@ private struct DailymotionVideoMetadata {
   let mode: DailymotionContentMode
   let isOnAir: Bool?
   let title: String?
+}
+
+private struct DailymotionDVRResumeRecord: Codable {
+  let watchedContentTimestamp: TimeInterval
+  let savedAtTimestamp: TimeInterval
+}
+
+private enum DailymotionDVRResumeStore {
+  private static let defaultsKey = "DailymotionDVRResumeRecords.v1"
+
+  static func record(for videoID: String) -> DailymotionDVRResumeRecord? {
+    records()[videoID]
+  }
+
+  static func save(_ record: DailymotionDVRResumeRecord, for videoID: String) {
+    var storedRecords = records()
+    storedRecords[videoID] = record
+    guard let data = try? JSONEncoder().encode(storedRecords) else { return }
+    UserDefaults.standard.set(data, forKey: defaultsKey)
+  }
+
+  static func remove(videoID: String) {
+    var storedRecords = records()
+    guard storedRecords.removeValue(forKey: videoID) != nil else { return }
+    guard let data = try? JSONEncoder().encode(storedRecords) else { return }
+    UserDefaults.standard.set(data, forKey: defaultsKey)
+  }
+
+  private static func records() -> [String: DailymotionDVRResumeRecord] {
+    guard
+      let data = UserDefaults.standard.data(forKey: defaultsKey),
+      let decoded = try? JSONDecoder().decode(
+        [String: DailymotionDVRResumeRecord].self,
+        from: data
+      )
+    else {
+      return [:]
+    }
+    return decoded.filter { _, record in
+      record.watchedContentTimestamp.isFinite
+        && record.watchedContentTimestamp > 0
+        && record.savedAtTimestamp.isFinite
+        && record.savedAtTimestamp > 0
+    }
+  }
 }
 
 private struct DailymotionBridgeState {
@@ -1367,6 +1416,12 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
   private var lastLiveDVREdgeDelay: Double?
   private var pendingAutomaticRate: Double?
   private var pendingAutomaticRateRequestedAt = Date.distantPast
+  private var pendingDVRResumeRecord: DailymotionDVRResumeRecord?
+  private var dvrResumeSeekInFlight = false
+  private var dvrResumeSeekAttempts = 0
+  private var dvrResumeTargetPosition: Double?
+  private var dvrResumeTargetRequestedAt = Date.distantPast
+  private var lastDVRResumePersistedAt = Date.distantPast
   private var videoAspectRatio = CGFloat(16.0 / 9.0)
   private var hasResolvedVideoAspectRatio = false
   private var resolvedVideoAspectFrameToken: String?
@@ -1393,6 +1448,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
   }
 
   func windowWillClose(_ notification: Notification) {
+    persistCurrentDVRPositionIfPossible(force: true)
     teardownWebView()
     source = nil
     panel = nil
@@ -1731,9 +1787,18 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     _ source: DailymotionPlayerSource,
     in panel: FloatingVideoPanel
   ) {
+    persistCurrentDVRPositionIfPossible(force: true)
     teardownWebView()
 
     self.source = source
+    pendingDVRResumeRecord = DailymotionDVRResumeStore.record(
+      for: source.videoID
+    )
+    dvrResumeSeekInFlight = false
+    dvrResumeSeekAttempts = 0
+    dvrResumeTargetPosition = nil
+    dvrResumeTargetRequestedAt = .distantPast
+    lastDVRResumePersistedAt = .distantPast
     sessionID = UUID().uuidString
     mediaFrame = nil
     mediaFrameToken = nil
@@ -1894,6 +1959,12 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     trackedMediaUnmuteFrameToken = nil
     mediaUnmuteAttemptCount = 0
     resetLiveDVRRateTracking()
+    pendingDVRResumeRecord = nil
+    dvrResumeSeekInFlight = false
+    dvrResumeSeekAttempts = 0
+    dvrResumeTargetPosition = nil
+    dvrResumeTargetRequestedAt = .distantPast
+    lastDVRResumePersistedAt = .distantPast
   }
 
   private func notifyStateChange() {
@@ -2007,6 +2078,10 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     if state.contentMode == .vod {
       liveMetadataTimer?.invalidate()
       liveMetadataTimer = nil
+      if let videoID = source?.videoID {
+        DailymotionDVRResumeStore.remove(videoID: videoID)
+      }
+      pendingDVRResumeRecord = nil
     } else {
       startMetadataTimerIfNeeded()
     }
@@ -2019,6 +2094,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
       state.adDuration = nil
     }
     notifyStateChange()
+    updateDVRResumeTracking()
 
     if
       state.contentMode == .live,
@@ -2068,6 +2144,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
       sdkFallbackWorkItem = nil
     }
     notifyStateChange()
+    updateDVRResumeTracking()
   }
 
   private func handleMediaState(
@@ -2166,6 +2243,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
       enqueueMediaUnmuteRetryIfNeeded()
       updateLiveDVRRateCapFromFreshMediaState()
       notifyStateChange()
+      updateDVRResumeTracking()
       return
     }
 
@@ -2185,6 +2263,202 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     state.error = body["error"] as? String
     updateLiveDVRRateCapFromFreshMediaState()
     notifyStateChange()
+    updateDVRResumeTracking()
+  }
+
+  private struct DailymotionDVRCoordinates {
+    let position: Double
+    let rangeStart: Double
+    let rangeEnd: Double
+    let observedAt: Date
+    let timelineStartDate: Date?
+  }
+
+  private func currentDVRCoordinates(
+    now: Date
+  ) -> DailymotionDVRCoordinates? {
+    guard
+      state.ready,
+      state.contentMode == .live,
+      state.isOnAir != false,
+      !state.isAdPlaying,
+      state.hasReliableAdState,
+      let position = state.mediaCurrentTime,
+      let rangeStart = state.seekableStart,
+      let rangeEnd = state.seekableEnd,
+      let observedAt = state.seekableObservedAt,
+      position.isFinite,
+      rangeStart.isFinite,
+      rangeEnd.isFinite,
+      rangeEnd - rangeStart >= dailymotionMinimumDVRWindow,
+      now.timeIntervalSince(observedAt) <= 2
+    else {
+      return nil
+    }
+
+    return DailymotionDVRCoordinates(
+      position: position,
+      rangeStart: rangeStart,
+      rangeEnd: rangeEnd,
+      observedAt: observedAt,
+      timelineStartDate: state.mediaTimelineStartDate
+    )
+  }
+
+  private func contentDate(
+    for position: Double,
+    coordinates: DailymotionDVRCoordinates
+  ) -> Date {
+    if let timelineStartDate = coordinates.timelineStartDate {
+      return timelineStartDate.addingTimeInterval(position)
+    }
+    return coordinates.observedAt.addingTimeInterval(
+      position - coordinates.rangeEnd
+    )
+  }
+
+  private func position(
+    for contentDate: Date,
+    coordinates: DailymotionDVRCoordinates
+  ) -> Double {
+    if let timelineStartDate = coordinates.timelineStartDate {
+      return contentDate.timeIntervalSince(timelineStartDate)
+    }
+    return coordinates.rangeEnd
+      + contentDate.timeIntervalSince(coordinates.observedAt)
+  }
+
+  private func updateDVRResumeTracking() {
+    let now = Date()
+    guard let coordinates = currentDVRCoordinates(now: now) else { return }
+
+    if let targetPosition = dvrResumeTargetPosition {
+      let reachedTarget = abs(coordinates.position - targetPosition)
+        <= dailymotionDVRResumePositionTolerance
+      let timedOut = now.timeIntervalSince(dvrResumeTargetRequestedAt)
+        >= dailymotionDVRResumeSeekTimeout
+      guard reachedTarget || timedOut else { return }
+      dvrResumeTargetPosition = nil
+      dvrResumeTargetRequestedAt = .distantPast
+    }
+
+    if let resumeRecord = pendingDVRResumeRecord {
+      attemptDVRResume(resumeRecord, coordinates: coordinates)
+      return
+    }
+
+    persistCurrentDVRPositionIfPossible(
+      force: false,
+      coordinates: coordinates,
+      now: now
+    )
+  }
+
+  private func attemptDVRResume(
+    _ resumeRecord: DailymotionDVRResumeRecord,
+    coordinates: DailymotionDVRCoordinates
+  ) {
+    guard !dvrResumeSeekInFlight else { return }
+
+    let watchedDate = Date(
+      timeIntervalSince1970: resumeRecord.watchedContentTimestamp
+    )
+    let availableStartDate = contentDate(
+      for: coordinates.rangeStart,
+      coordinates: coordinates
+    )
+    let availableEndDate = contentDate(
+      for: coordinates.rangeEnd,
+      coordinates: coordinates
+    )
+    let availabilityTolerance = 5.0
+    guard
+      watchedDate >= availableStartDate.addingTimeInterval(
+        -availabilityTolerance
+      ),
+      watchedDate <= availableEndDate.addingTimeInterval(
+        availabilityTolerance
+      )
+    else {
+      pendingDVRResumeRecord = nil
+      if let videoID = source?.videoID {
+        DailymotionDVRResumeStore.remove(videoID: videoID)
+      }
+      return
+    }
+
+    let bufferedDate = watchedDate.addingTimeInterval(
+      -dailymotionDVRResumeBuffer
+    )
+    let unclampedTarget = position(
+      for: bufferedDate,
+      coordinates: coordinates
+    )
+    let target = min(
+      max(unclampedTarget, coordinates.rangeStart),
+      max(coordinates.rangeStart, coordinates.rangeEnd - 0.25)
+    )
+    guard target.isFinite else {
+      pendingDVRResumeRecord = nil
+      return
+    }
+
+    dvrResumeSeekInFlight = true
+    dvrResumeSeekAttempts += 1
+    resetLiveDVRRateTracking()
+    let expectedSessionID = sessionID
+    sendCommand("seek", value: target) { [weak self] succeeded in
+      guard let self, self.sessionID == expectedSessionID else { return }
+      self.dvrResumeSeekInFlight = false
+      if succeeded {
+        self.pendingDVRResumeRecord = nil
+        self.dvrResumeTargetPosition = target
+        self.dvrResumeTargetRequestedAt = Date()
+      } else if self.dvrResumeSeekAttempts >= 3 {
+        self.pendingDVRResumeRecord = nil
+      }
+    }
+  }
+
+  private func persistCurrentDVRPositionIfPossible(force: Bool) {
+    let now = Date()
+    guard let coordinates = currentDVRCoordinates(now: now) else { return }
+    persistCurrentDVRPositionIfPossible(
+      force: force,
+      coordinates: coordinates,
+      now: now
+    )
+  }
+
+  private func persistCurrentDVRPositionIfPossible(
+    force: Bool,
+    coordinates: DailymotionDVRCoordinates,
+    now: Date
+  ) {
+    guard
+      pendingDVRResumeRecord == nil,
+      !dvrResumeSeekInFlight,
+      dvrResumeTargetPosition == nil,
+      let videoID = source?.videoID,
+      force
+        || now.timeIntervalSince(lastDVRResumePersistedAt)
+          >= dailymotionDVRResumePersistenceInterval
+    else {
+      return
+    }
+
+    let watchedDate = contentDate(
+      for: coordinates.position,
+      coordinates: coordinates
+    )
+    DailymotionDVRResumeStore.save(
+      DailymotionDVRResumeRecord(
+        watchedContentTimestamp: watchedDate.timeIntervalSince1970,
+        savedAtTimestamp: now.timeIntervalSince1970
+      ),
+      for: videoID
+    )
+    lastDVRResumePersistedAt = now
   }
 
   private func updateLiveDVRRateCapFromFreshMediaState() {
