@@ -149,6 +149,9 @@ const normalizeFileSort = (value: unknown): FileSort => {
 		: FileSort.NAME_ASC;
 };
 
+const resolveAICommandPrompt = (query: string) =>
+	query.match(/^\s*(?:ai|ia)\s+(.+?)\s*$/i)?.[1]?.trim() ?? null;
+
 export const SEARCH_TAB_ORDER = [
 	SearchTab.ALL,
 	SearchTab.APPLICATIONS,
@@ -839,6 +842,24 @@ export const createUIStore = (root: IRootStore) => {
 				return [...allItems].sort(compareRankedItems);
 			}
 
+			const aiCommandPrompt = resolveAICommandPrompt(store.query);
+			if (aiCommandPrompt) {
+				return [
+					{
+						id: "ai_command",
+						icon: "✦",
+						name: `Ask AI: “${aiCommandPrompt}”`,
+						subName: "Choose a provider and model",
+						type: ItemType.CONFIGURATION,
+						preventClose: true,
+						callback: () => {
+							store.setQuery(aiCommandPrompt);
+							store.focusWidget(Widget.AI_MODEL_PICKER);
+						},
+					},
+				];
+			}
+
 			const dailymotionCommand = resolveDailymotionCommand(
 				store.query,
 				store.dailymotionStreams,
@@ -946,10 +967,11 @@ export const createUIStore = (root: IRootStore) => {
 			return finalResults;
 		},
 		get searchItems(): Item[] {
+			const hasAICommand = resolveAICommandPrompt(store.query) !== null;
 			const hasDailymotionCommand =
 				resolveDailymotionCommand(store.query, store.dailymotionStreams).kind !==
 				"none";
-			if (hasDailymotionCommand) {
+			if (hasAICommand || hasDailymotionCommand) {
 				return store.items.filter((item) => !store.isItemDisabled(item.id));
 			}
 
