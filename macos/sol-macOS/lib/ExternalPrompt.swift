@@ -1,6 +1,5 @@
 import AppKit
 import Foundation
-import QuartzCore
 
 let externalPromptWindowIdentifier = NSUserInterfaceItemIdentifier("com.ospfranco.sol.external-prompt")
 
@@ -576,123 +575,6 @@ private enum ExternalPromptVisibleRow {
   case custom(String)
 }
 
-private final class ExternalPromptPanel: NSPanel {
-  override var canBecomeKey: Bool { true }
-  override var canBecomeMain: Bool { true }
-}
-
-private final class ExternalPromptBackgroundView: NSView {
-  static let cardWidth: CGFloat = 620
-  static let shadowInset: CGFloat = 18
-  static let cornerRadius: CGFloat = 26
-
-  let promptContentView = NSView(frame: .zero)
-  private let cardClipView = NSView(frame: .zero)
-  private let shadowLayer = CALayer()
-  private var materialView: NSView!
-  private var materialInset: CGFloat = 0
-
-  override init(frame frameRect: NSRect) {
-    super.init(frame: frameRect)
-
-    wantsLayer = true
-    layer?.backgroundColor = NSColor.clear.cgColor
-    layer?.masksToBounds = false
-
-    shadowLayer.shadowColor = NSColor.black.cgColor
-    shadowLayer.shadowOpacity = 0.3
-    shadowLayer.shadowRadius = 14
-    shadowLayer.shadowOffset = CGSize(width: 0, height: -3)
-    shadowLayer.masksToBounds = false
-    layer?.addSublayer(shadowLayer)
-
-    cardClipView.wantsLayer = true
-    cardClipView.layer?.backgroundColor = NSColor.clear.cgColor
-    cardClipView.layer?.cornerRadius = Self.cornerRadius
-    cardClipView.layer?.cornerCurve = .circular
-    cardClipView.layer?.masksToBounds = true
-
-    promptContentView.wantsLayer = true
-    promptContentView.layer?.backgroundColor = NSColor.clear.cgColor
-
-    if #available(macOS 26.0, *) {
-      let glassView = NSGlassEffectView(frame: .zero)
-      glassView.style = .clear
-      glassView.tintColor = nil
-      glassView.cornerRadius = Self.cornerRadius
-      glassView.contentView = promptContentView
-      materialView = glassView
-      materialInset = 2
-    } else {
-      let effectView = NSVisualEffectView(frame: .zero)
-      effectView.material = .popover
-      effectView.blendingMode = .behindWindow
-      effectView.state = .active
-      effectView.addSubview(promptContentView)
-      materialView = effectView
-    }
-
-    cardClipView.addSubview(materialView)
-    addSubview(cardClipView)
-  }
-
-  @available(*, unavailable)
-  required init?(coder: NSCoder) {
-    fatalError("init(coder:) has not been implemented")
-  }
-
-  override func layout() {
-    super.layout()
-
-    let inset = Self.shadowInset
-    cardClipView.frame = bounds.insetBy(dx: inset, dy: inset)
-    materialView.frame = cardClipView.bounds.insetBy(dx: materialInset, dy: materialInset)
-    promptContentView.frame = materialView.bounds
-
-    let maximumRadius = max(
-      0,
-      min(materialView.bounds.width, materialView.bounds.height) / 2 - 0.5
-    )
-    let resolvedRadius = min(Self.cornerRadius, maximumRadius)
-    let outerRadius = min(
-      resolvedRadius + materialInset,
-      min(cardClipView.bounds.width, cardClipView.bounds.height) / 2
-    )
-    cardClipView.layer?.cornerRadius = outerRadius
-
-    if #available(macOS 26.0, *), let glassView = materialView as? NSGlassEffectView {
-      glassView.cornerRadius = resolvedRadius
-    } else {
-      materialView.layer?.cornerRadius = resolvedRadius
-      materialView.layer?.cornerCurve = .circular
-      materialView.layer?.masksToBounds = true
-    }
-
-    CATransaction.begin()
-    CATransaction.setDisableActions(true)
-    shadowLayer.frame = NSRect(
-      x: cardClipView.frame.minX + materialView.frame.minX,
-      y: cardClipView.frame.minY + materialView.frame.minY,
-      width: materialView.frame.width,
-      height: materialView.frame.height
-    )
-    shadowLayer.shadowPath = CGPath(
-      roundedRect: shadowLayer.bounds,
-      cornerWidth: resolvedRadius,
-      cornerHeight: resolvedRadius,
-      transform: nil
-    )
-    CATransaction.commit()
-  }
-
-  static func panelSize(cardHeight: CGFloat) -> NSSize {
-    NSSize(
-      width: cardWidth + shadowInset * 2,
-      height: cardHeight + shadowInset * 2
-    )
-  }
-}
-
 private final class ExternalPromptTableRowView: NSTableRowView {
   override func drawSelection(in dirtyRect: NSRect) {
     guard selectionHighlightStyle != .none else { return }
@@ -818,8 +700,8 @@ private final class ExternalPromptWindowController: NSObject, NSTableViewDataSou
   private let request: ExternalPromptRequest
   private let submit: ([String: Any]) -> Void
   private let cancel: (String) -> Void
-  private let panel: ExternalPromptPanel
-  private let backgroundView = ExternalPromptBackgroundView(frame: .zero)
+  private let panel: Panel
+  private let contentRootView = NSView(frame: .zero)
   private let rootStack = NSStackView()
   private let tableView = NSTableView()
   private let scrollView = NSScrollView()
@@ -841,13 +723,7 @@ private final class ExternalPromptWindowController: NSObject, NSTableViewDataSou
     self.request = request
     self.submit = submit
     self.cancel = cancel
-    let initialSize = ExternalPromptBackgroundView.panelSize(cardHeight: 300)
-    panel = ExternalPromptPanel(
-      contentRect: NSRect(origin: .zero, size: initialSize),
-      styleMask: [.borderless],
-      backing: .buffered,
-      defer: false
-    )
+    panel = Panel(contentRect: NSRect(x: 0, y: 0, width: 656, height: 336))
     super.init()
     configurePanel()
     configureContent()
@@ -869,7 +745,10 @@ private final class ExternalPromptWindowController: NSObject, NSTableViewDataSou
     }
 
     NSApp.activate(ignoringOtherApps: true)
-    panel.makeKeyAndOrderFront(nil)
+    // API prompts must surface even though Sol is an accessory-style app and
+    // the shared glass panel is non-activating by design.
+    panel.orderFrontRegardless()
+    panel.makeKey()
     if let inputField {
       panel.makeFirstResponder(inputField)
     } else {
@@ -894,26 +773,38 @@ private final class ExternalPromptWindowController: NSObject, NSTableViewDataSou
     panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
     panel.isOpaque = false
     panel.backgroundColor = .clear
-    panel.hasShadow = false
     panel.isReleasedWhenClosed = false
     panel.animationBehavior = .utilityWindow
     panel.delegate = self
+    panel.applyGlassAppearance(
+      style: "clear",
+      cornerRadius: 26,
+      tintHex: nil,
+      tintOpacity: 0,
+      shadowOpacity: 0.3,
+      shadowRadius: 14,
+      shadowOffsetY: 3
+    )
   }
 
   private func configureContent() {
-    panel.contentView = backgroundView
+    contentRootView.wantsLayer = true
+    contentRootView.layer?.backgroundColor = NSColor.clear.cgColor
+    panel.installRootView(contentRootView)
+    panel.setContentSize(panel.windowSize(forContentSize: NSSize(width: 620, height: 300)))
+    panel.layoutInstalledRootView()
 
     rootStack.orientation = .vertical
     rootStack.alignment = .leading
     rootStack.spacing = 10
     rootStack.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 16, right: 20)
     rootStack.translatesAutoresizingMaskIntoConstraints = false
-    backgroundView.promptContentView.addSubview(rootStack)
+    contentRootView.addSubview(rootStack)
     NSLayoutConstraint.activate([
-      rootStack.leadingAnchor.constraint(equalTo: backgroundView.promptContentView.leadingAnchor),
-      rootStack.trailingAnchor.constraint(equalTo: backgroundView.promptContentView.trailingAnchor),
-      rootStack.topAnchor.constraint(equalTo: backgroundView.promptContentView.topAnchor),
-      rootStack.bottomAnchor.constraint(equalTo: backgroundView.promptContentView.bottomAnchor),
+      rootStack.leadingAnchor.constraint(equalTo: contentRootView.leadingAnchor),
+      rootStack.trailingAnchor.constraint(equalTo: contentRootView.trailingAnchor),
+      rootStack.topAnchor.constraint(equalTo: contentRootView.topAnchor),
+      rootStack.bottomAnchor.constraint(equalTo: contentRootView.bottomAnchor),
     ])
 
     let sourceLabel = NSTextField(labelWithString: sourceText())
@@ -1028,11 +919,14 @@ private final class ExternalPromptWindowController: NSObject, NSTableViewDataSou
   }
 
   private func resizePanelToFit() {
-    backgroundView.layoutSubtreeIfNeeded()
-    backgroundView.promptContentView.layoutSubtreeIfNeeded()
+    panel.layoutInstalledRootView()
+    contentRootView.layoutSubtreeIfNeeded()
     let cardHeight = max(184, rootStack.fittingSize.height)
-    panel.setContentSize(ExternalPromptBackgroundView.panelSize(cardHeight: cardHeight))
-    backgroundView.layoutSubtreeIfNeeded()
+    panel.setContentSize(
+      panel.windowSize(forContentSize: NSSize(width: 620, height: cardHeight))
+    )
+    panel.layoutInstalledRootView()
+    contentRootView.layoutSubtreeIfNeeded()
   }
 
   private func refreshRows() {
