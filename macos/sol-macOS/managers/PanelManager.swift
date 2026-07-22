@@ -70,6 +70,28 @@ private struct SearchWindowAnimationConfiguration {
   var resultsCollapseDuration: TimeInterval = 0.18
 }
 
+private struct GlassAppearanceConfiguration {
+  var style = "clear"
+  var cornerRadius = 24.0
+  var tintHex: String?
+  var tintOpacity = 0.0
+  var shadowOpacity = 0.32
+  var shadowRadius = 12.0
+  var shadowOffsetY = 3.0
+
+  func apply(to panel: Panel) {
+    panel.applyGlassAppearance(
+      style: style,
+      cornerRadius: cornerRadius,
+      tintHex: tintHex,
+      tintOpacity: tintOpacity,
+      shadowOpacity: shadowOpacity,
+      shadowRadius: shadowRadius,
+      shadowOffsetY: shadowOffsetY
+    )
+  }
+}
+
 private final class ClosingAnimationPanel: NSPanel {
   init(frame: NSRect, image: NSImage, sourceWindow: NSWindow) {
     super.init(
@@ -120,6 +142,7 @@ private final class ClosingAnimationPanel: NSPanel {
   private var frameAnimationTarget: NSRect?
   private var closingAnimationWindow: ClosingAnimationPanel?
   private var searchWindowAnimation = SearchWindowAnimationConfiguration()
+  private var glassAppearance = GlassAppearanceConfiguration()
   private var isInitialPresentationReady = false
   private var hasPendingShowRequest = false
   private var pendingShowTarget: String?
@@ -141,7 +164,7 @@ private final class ClosingAnimationPanel: NSPanel {
     shadowRadius: Double,
     shadowOffsetY: Double
   ) {
-    mainWindow.applyGlassAppearance(
+    glassAppearance = GlassAppearanceConfiguration(
       style: style,
       cornerRadius: cornerRadius,
       tintHex: tintHex,
@@ -150,7 +173,12 @@ private final class ClosingAnimationPanel: NSPanel {
       shadowRadius: shadowRadius,
       shadowOffsetY: shadowOffsetY
     )
+    glassAppearance.apply(to: mainWindow)
     resizeForCurrentContentSize()
+  }
+
+  func applyCurrentGlassAppearance(to panel: Panel) {
+    glassAppearance.apply(to: panel)
   }
 
   func setSearchWindowPosition(x: Double, y: Double) {

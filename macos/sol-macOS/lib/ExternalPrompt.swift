@@ -776,15 +776,7 @@ private final class ExternalPromptWindowController: NSObject, NSTableViewDataSou
     panel.isReleasedWhenClosed = false
     panel.animationBehavior = .utilityWindow
     panel.delegate = self
-    panel.applyGlassAppearance(
-      style: "clear",
-      cornerRadius: 26,
-      tintHex: nil,
-      tintOpacity: 0,
-      shadowOpacity: 0.3,
-      shadowRadius: 14,
-      shadowOffsetY: 3
-    )
+    PanelManager.shared.applyCurrentGlassAppearance(to: panel)
   }
 
   private func configureContent() {
