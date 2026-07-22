@@ -107,15 +107,17 @@ print
 
 # Supplying the Authorization header through a file descriptor keeps the token
 # out of curl's command-line arguments while the long-lived request is pending.
-curl \
-	--config <(print -r -- "header = \"Authorization: Bearer ${sol_token}\"") \
-	--fail-with-body \
-	--silent \
-	--show-error \
-	--request POST \
-	--header "Content-Type: application/json" \
-	--data-binary @- \
-	"$prompt_url" <<JSON
+prompt_response=""
+if ! prompt_response="$(
+	curl \
+		--config <(print -r -- "header = \"Authorization: Bearer ${sol_token}\"") \
+		--fail-with-body \
+		--silent \
+		--show-error \
+		--request POST \
+		--header "Content-Type: application/json" \
+		--data-binary @- \
+		"$prompt_url" <<JSON
 {
   "source": {
     "name": "Shell test",
@@ -169,5 +171,13 @@ curl \
   "timeoutMs": 120000
 }
 JSON
+)"; then
+	print -u2
+	print -u2 "La requête a échoué. Réponse reçue :"
+	[[ -n "$prompt_response" ]] && print -u2 -r -- "$prompt_response"
+	exit 1
+fi
 
 print
+print "Réponse JSON reçue par le script :"
+print -r -- "$prompt_response"
