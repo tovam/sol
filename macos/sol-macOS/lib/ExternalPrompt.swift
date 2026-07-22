@@ -962,19 +962,33 @@ private final class ExternalPromptWindowController: NSObject, NSTableViewDataSou
   }
 
   private func updateValidation() {
-    if let input = request.input {
+    if request.multiple {
+      validationLabel.stringValue = "Entrée sélectionne · Cmd+Entrée envoie"
+    } else if request.kind == .input, let input = request.input {
       let count = inputField?.stringValue.count ?? 0
       if count < input.minLength {
         validationLabel.stringValue = "\(input.minLength - count) caractère(s) encore requis"
       } else if count > input.maxLength {
         validationLabel.stringValue = "\(count - input.maxLength) caractère(s) en trop"
-      } else if request.multiple {
-        validationLabel.stringValue = "Entrée sélectionne · Cmd+Entrée envoie"
       } else {
         validationLabel.stringValue = "Entrée envoie · Échap annule"
       }
-    } else if request.multiple {
-      validationLabel.stringValue = "Entrée sélectionne · Cmd+Entrée envoie"
+    } else if request.kind == .choiceOrInput,
+      let input = request.input,
+      let selectedRow = selectedVisibleRow()
+    {
+      if case let .custom(text) = selectedRow {
+        if text.count < input.minLength {
+          validationLabel.stringValue =
+            "\(input.minLength - text.count) caractère(s) encore requis"
+        } else if text.count > input.maxLength {
+          validationLabel.stringValue = "\(text.count - input.maxLength) caractère(s) en trop"
+        } else {
+          validationLabel.stringValue = "Entrée envoie la réponse libre · Échap annule"
+        }
+      } else {
+        validationLabel.stringValue = "Entrée choisit · Écrivez pour filtrer ou répondre"
+      }
     } else {
       validationLabel.stringValue = "Entrée choisit · Échap annule"
     }
@@ -985,16 +999,21 @@ private final class ExternalPromptWindowController: NSObject, NSTableViewDataSou
     if request.multiple {
       return !checkedIDs.isEmpty
     }
-    if let input = request.input {
+    if request.kind == .input, let input = request.input {
       let count = inputField?.stringValue.count ?? 0
-      if count < input.minLength || count > input.maxLength {
-        return false
-      }
-      if request.kind == .input {
-        return true
-      }
+      return count >= input.minLength && count <= input.maxLength
     }
-    return tableView.selectedRow >= 0 && tableView.selectedRow < visibleRows.count
+    guard let selectedRow = selectedVisibleRow() else { return false }
+    if case let .custom(text) = selectedRow, let input = request.input {
+      return text.count >= input.minLength && text.count <= input.maxLength
+    }
+    return true
+  }
+
+  private func selectedVisibleRow() -> ExternalPromptVisibleRow? {
+    let row = tableView.selectedRow
+    guard row >= 0, row < visibleRows.count else { return nil }
+    return visibleRows[row]
   }
 
   private func handleKey(_ event: NSEvent) -> Bool {
