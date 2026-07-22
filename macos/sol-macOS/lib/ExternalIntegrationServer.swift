@@ -222,16 +222,16 @@ enum SolAPIConfigurationLoader {
 
       let indentation = line.prefix { $0 == " " }.count
       let trimmed = line.trimmingCharacters(in: .whitespaces)
-      guard let separator = trimmed.firstIndex(of: ":") else {
-        throw SolAPIConfigurationError.invalid(
-          "~/.sol.yml:\(lineNumber + 1): expected key: value."
-        )
-      }
-      let key = String(trimmed[..<separator]).trimmingCharacters(in: .whitespaces)
-      let rawValue = String(trimmed[trimmed.index(after: separator)...])
-        .trimmingCharacters(in: .whitespaces)
 
       if indentation == 0 {
+        guard let separator = trimmed.firstIndex(of: ":") else {
+          throw SolAPIConfigurationError.invalid(
+            "~/.sol.yml:\(lineNumber + 1): expected key: value."
+          )
+        }
+        let key = String(trimmed[..<separator]).trimmingCharacters(in: .whitespaces)
+        let rawValue = String(trimmed[trimmed.index(after: separator)...])
+          .trimmingCharacters(in: .whitespaces)
         inAPISection = key == "api" && rawValue.isEmpty
         if key == "version" {
           guard version == nil else {
@@ -245,6 +245,14 @@ enum SolAPIConfigurationLoader {
       }
 
       guard inAPISection else { continue }
+      guard let separator = trimmed.firstIndex(of: ":") else {
+        throw SolAPIConfigurationError.invalid(
+          "~/.sol.yml:\(lineNumber + 1): expected api key: value."
+        )
+      }
+      let key = String(trimmed[..<separator]).trimmingCharacters(in: .whitespaces)
+      let rawValue = String(trimmed[trimmed.index(after: separator)...])
+        .trimmingCharacters(in: .whitespaces)
       guard indentation >= 2, !rawValue.isEmpty else {
         throw SolAPIConfigurationError.invalid(
           "~/.sol.yml:\(lineNumber + 1): invalid api value."
