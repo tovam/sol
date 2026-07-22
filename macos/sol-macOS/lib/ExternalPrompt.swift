@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import QuartzCore
 
 let externalPromptWindowIdentifier = NSUserInterfaceItemIdentifier("com.ospfranco.sol.external-prompt")
 
@@ -580,11 +581,123 @@ private final class ExternalPromptPanel: NSPanel {
   override var canBecomeMain: Bool { true }
 }
 
+private final class ExternalPromptBackgroundView: NSView {
+  static let cardWidth: CGFloat = 620
+  static let shadowInset: CGFloat = 18
+  static let cornerRadius: CGFloat = 26
+
+  let promptContentView = NSView(frame: .zero)
+  private let cardClipView = NSView(frame: .zero)
+  private let shadowLayer = CALayer()
+  private var materialView: NSView!
+  private var materialInset: CGFloat = 0
+
+  override init(frame frameRect: NSRect) {
+    super.init(frame: frameRect)
+
+    wantsLayer = true
+    layer?.backgroundColor = NSColor.clear.cgColor
+    layer?.masksToBounds = false
+
+    shadowLayer.shadowColor = NSColor.black.cgColor
+    shadowLayer.shadowOpacity = 0.3
+    shadowLayer.shadowRadius = 14
+    shadowLayer.shadowOffset = CGSize(width: 0, height: -3)
+    shadowLayer.masksToBounds = false
+    layer?.addSublayer(shadowLayer)
+
+    cardClipView.wantsLayer = true
+    cardClipView.layer?.backgroundColor = NSColor.clear.cgColor
+    cardClipView.layer?.cornerRadius = Self.cornerRadius
+    cardClipView.layer?.cornerCurve = .circular
+    cardClipView.layer?.masksToBounds = true
+
+    promptContentView.wantsLayer = true
+    promptContentView.layer?.backgroundColor = NSColor.clear.cgColor
+
+    if #available(macOS 26.0, *) {
+      let glassView = NSGlassEffectView(frame: .zero)
+      glassView.style = .clear
+      glassView.tintColor = nil
+      glassView.cornerRadius = Self.cornerRadius
+      glassView.contentView = promptContentView
+      materialView = glassView
+      materialInset = 2
+    } else {
+      let effectView = NSVisualEffectView(frame: .zero)
+      effectView.material = .popover
+      effectView.blendingMode = .behindWindow
+      effectView.state = .active
+      effectView.addSubview(promptContentView)
+      materialView = effectView
+    }
+
+    cardClipView.addSubview(materialView)
+    addSubview(cardClipView)
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) has not been implemented")
+  }
+
+  override func layout() {
+    super.layout()
+
+    let inset = Self.shadowInset
+    cardClipView.frame = bounds.insetBy(dx: inset, dy: inset)
+    materialView.frame = cardClipView.bounds.insetBy(dx: materialInset, dy: materialInset)
+    promptContentView.frame = materialView.bounds
+
+    let maximumRadius = max(
+      0,
+      min(materialView.bounds.width, materialView.bounds.height) / 2 - 0.5
+    )
+    let resolvedRadius = min(Self.cornerRadius, maximumRadius)
+    let outerRadius = min(
+      resolvedRadius + materialInset,
+      min(cardClipView.bounds.width, cardClipView.bounds.height) / 2
+    )
+    cardClipView.layer?.cornerRadius = outerRadius
+
+    if #available(macOS 26.0, *), let glassView = materialView as? NSGlassEffectView {
+      glassView.cornerRadius = resolvedRadius
+    } else {
+      materialView.layer?.cornerRadius = resolvedRadius
+      materialView.layer?.cornerCurve = .circular
+      materialView.layer?.masksToBounds = true
+    }
+
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    shadowLayer.frame = NSRect(
+      x: cardClipView.frame.minX + materialView.frame.minX,
+      y: cardClipView.frame.minY + materialView.frame.minY,
+      width: materialView.frame.width,
+      height: materialView.frame.height
+    )
+    shadowLayer.shadowPath = CGPath(
+      roundedRect: shadowLayer.bounds,
+      cornerWidth: resolvedRadius,
+      cornerHeight: resolvedRadius,
+      transform: nil
+    )
+    CATransaction.commit()
+  }
+
+  static func panelSize(cardHeight: CGFloat) -> NSSize {
+    NSSize(
+      width: cardWidth + shadowInset * 2,
+      height: cardHeight + shadowInset * 2
+    )
+  }
+}
+
 private final class ExternalPromptTableRowView: NSTableRowView {
   override func drawSelection(in dirtyRect: NSRect) {
     guard selectionHighlightStyle != .none else { return }
-    NSColor.controlAccentColor.withAlphaComponent(0.88).setFill()
-    NSBezierPath(roundedRect: bounds.insetBy(dx: 3, dy: 3), xRadius: 11, yRadius: 11).fill()
+    NSColor.controlAccentColor.withAlphaComponent(0.16).setFill()
+    NSBezierPath(roundedRect: bounds.insetBy(dx: 3, dy: 3), xRadius: 10, yRadius: 10).fill()
   }
 }
 
@@ -602,9 +715,9 @@ private final class ExternalPromptCellView: NSTableCellView {
     iconImageView.imageScaling = .scaleProportionallyUpOrDown
     emojiLabel.translatesAutoresizingMaskIntoConstraints = false
     emojiLabel.alignment = .center
-    emojiLabel.font = .systemFont(ofSize: 19)
+    emojiLabel.font = .systemFont(ofSize: 18)
     titleLabel.translatesAutoresizingMaskIntoConstraints = false
-    titleLabel.font = .systemFont(ofSize: 15, weight: .medium)
+    titleLabel.font = .systemFont(ofSize: 14.5, weight: .medium)
     titleLabel.lineBreakMode = .byTruncatingTail
     detailLabel.translatesAutoresizingMaskIntoConstraints = false
     detailLabel.font = .systemFont(ofSize: 12)
@@ -622,20 +735,20 @@ private final class ExternalPromptCellView: NSTableCellView {
     addSubview(checkLabel)
 
     NSLayoutConstraint.activate([
-      iconImageView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
+      iconImageView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 11),
       iconImageView.centerYAnchor.constraint(equalTo: centerYAnchor),
-      iconImageView.widthAnchor.constraint(equalToConstant: 24),
-      iconImageView.heightAnchor.constraint(equalToConstant: 24),
-      emojiLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+      iconImageView.widthAnchor.constraint(equalToConstant: 22),
+      iconImageView.heightAnchor.constraint(equalToConstant: 22),
+      emojiLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
       emojiLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
       emojiLabel.widthAnchor.constraint(equalToConstant: 28),
-      titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 48),
+      titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 44),
       titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
       detailLabel.leadingAnchor.constraint(greaterThanOrEqualTo: titleLabel.trailingAnchor, constant: 14),
       detailLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
-      detailLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 245),
+      detailLabel.widthAnchor.constraint(lessThanOrEqualToConstant: 220),
       checkLabel.leadingAnchor.constraint(equalTo: detailLabel.trailingAnchor, constant: 10),
-      checkLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+      checkLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
       checkLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
       checkLabel.widthAnchor.constraint(equalToConstant: 22),
     ])
@@ -671,9 +784,9 @@ private final class ExternalPromptCellView: NSTableCellView {
     detailLabel.isHidden = detail == nil
     checkLabel.stringValue = multiple ? (checked ? "✓" : "○") : ""
     checkLabel.isHidden = !multiple
-    titleLabel.textColor = highlighted ? .white : .labelColor
-    detailLabel.textColor = highlighted ? NSColor.white.withAlphaComponent(0.78) : .secondaryLabelColor
-    checkLabel.textColor = highlighted ? .white : .controlAccentColor
+    titleLabel.textColor = .labelColor
+    detailLabel.textColor = .secondaryLabelColor
+    checkLabel.textColor = .controlAccentColor
 
     iconImageView.image = nil
     iconImageView.isHidden = true
@@ -683,7 +796,7 @@ private final class ExternalPromptCellView: NSTableCellView {
     case let .symbol(name):
       iconImageView.image = NSImage(systemSymbolName: name, accessibilityDescription: nil)
         ?? NSImage(systemSymbolName: "sparkle.magnifyingglass", accessibilityDescription: nil)
-      iconImageView.contentTintColor = highlighted ? .white : .secondaryLabelColor
+      iconImageView.contentTintColor = highlighted ? .controlAccentColor : .secondaryLabelColor
       iconImageView.isHidden = false
     case let .emoji(value):
       emojiLabel.stringValue = value
@@ -693,7 +806,7 @@ private final class ExternalPromptCellView: NSTableCellView {
         systemSymbolName: "sparkle.magnifyingglass",
         accessibilityDescription: nil
       )
-      iconImageView.contentTintColor = highlighted ? .white : .secondaryLabelColor
+      iconImageView.contentTintColor = highlighted ? .controlAccentColor : .secondaryLabelColor
       iconImageView.isHidden = false
     }
   }
@@ -706,6 +819,8 @@ private final class ExternalPromptWindowController: NSObject, NSTableViewDataSou
   private let submit: ([String: Any]) -> Void
   private let cancel: (String) -> Void
   private let panel: ExternalPromptPanel
+  private let backgroundView = ExternalPromptBackgroundView(frame: .zero)
+  private let rootStack = NSStackView()
   private let tableView = NSTableView()
   private let scrollView = NSScrollView()
   private let submitButton = NSButton()
@@ -726,8 +841,9 @@ private final class ExternalPromptWindowController: NSObject, NSTableViewDataSou
     self.request = request
     self.submit = submit
     self.cancel = cancel
+    let initialSize = ExternalPromptBackgroundView.panelSize(cardHeight: 300)
     panel = ExternalPromptPanel(
-      contentRect: NSRect(x: 0, y: 0, width: 660, height: 300),
+      contentRect: NSRect(origin: .zero, size: initialSize),
       styleMask: [.borderless],
       backing: .buffered,
       defer: false
@@ -778,35 +894,26 @@ private final class ExternalPromptWindowController: NSObject, NSTableViewDataSou
     panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
     panel.isOpaque = false
     panel.backgroundColor = .clear
-    panel.hasShadow = true
+    panel.hasShadow = false
     panel.isReleasedWhenClosed = false
     panel.animationBehavior = .utilityWindow
     panel.delegate = self
   }
 
   private func configureContent() {
-    let effectView = NSVisualEffectView()
-    effectView.material = .popover
-    effectView.blendingMode = .behindWindow
-    effectView.state = .active
-    effectView.wantsLayer = true
-    effectView.layer?.cornerRadius = 24
-    effectView.layer?.cornerCurve = .circular
-    effectView.layer?.masksToBounds = true
-    panel.contentView = effectView
+    panel.contentView = backgroundView
 
-    let rootStack = NSStackView()
     rootStack.orientation = .vertical
     rootStack.alignment = .leading
-    rootStack.spacing = 12
-    rootStack.edgeInsets = NSEdgeInsets(top: 22, left: 22, bottom: 18, right: 22)
+    rootStack.spacing = 10
+    rootStack.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 16, right: 20)
     rootStack.translatesAutoresizingMaskIntoConstraints = false
-    effectView.addSubview(rootStack)
+    backgroundView.promptContentView.addSubview(rootStack)
     NSLayoutConstraint.activate([
-      rootStack.leadingAnchor.constraint(equalTo: effectView.leadingAnchor),
-      rootStack.trailingAnchor.constraint(equalTo: effectView.trailingAnchor),
-      rootStack.topAnchor.constraint(equalTo: effectView.topAnchor),
-      rootStack.bottomAnchor.constraint(equalTo: effectView.bottomAnchor),
+      rootStack.leadingAnchor.constraint(equalTo: backgroundView.promptContentView.leadingAnchor),
+      rootStack.trailingAnchor.constraint(equalTo: backgroundView.promptContentView.trailingAnchor),
+      rootStack.topAnchor.constraint(equalTo: backgroundView.promptContentView.topAnchor),
+      rootStack.bottomAnchor.constraint(equalTo: backgroundView.promptContentView.bottomAnchor),
     ])
 
     let sourceLabel = NSTextField(labelWithString: sourceText())
@@ -814,13 +921,13 @@ private final class ExternalPromptWindowController: NSObject, NSTableViewDataSou
     sourceLabel.textColor = .tertiaryLabelColor
     sourceLabel.lineBreakMode = .byTruncatingTail
     rootStack.addArrangedSubview(sourceLabel)
-    sourceLabel.widthAnchor.constraint(equalTo: rootStack.widthAnchor, constant: -44).isActive = true
+    sourceLabel.widthAnchor.constraint(equalTo: rootStack.widthAnchor, constant: -40).isActive = true
 
     let titleLabel = NSTextField(wrappingLabelWithString: request.title)
-    titleLabel.font = .systemFont(ofSize: 23, weight: .semibold)
+    titleLabel.font = .systemFont(ofSize: 21, weight: .semibold)
     titleLabel.maximumNumberOfLines = 2
     rootStack.addArrangedSubview(titleLabel)
-    titleLabel.widthAnchor.constraint(equalTo: rootStack.widthAnchor, constant: -44).isActive = true
+    titleLabel.widthAnchor.constraint(equalTo: rootStack.widthAnchor, constant: -40).isActive = true
 
     if let message = request.message, !message.isEmpty {
       let messageLabel = NSTextField(wrappingLabelWithString: message)
@@ -828,7 +935,7 @@ private final class ExternalPromptWindowController: NSObject, NSTableViewDataSou
       messageLabel.textColor = .secondaryLabelColor
       messageLabel.maximumNumberOfLines = 4
       rootStack.addArrangedSubview(messageLabel)
-      messageLabel.widthAnchor.constraint(equalTo: rootStack.widthAnchor, constant: -44).isActive = true
+      messageLabel.widthAnchor.constraint(equalTo: rootStack.widthAnchor, constant: -40).isActive = true
     }
 
     if let input = request.input {
@@ -840,14 +947,15 @@ private final class ExternalPromptWindowController: NSObject, NSTableViewDataSou
         field = NSTextField(string: input.initialValue)
       }
       field.placeholderString = input.placeholder
-      field.font = .systemFont(ofSize: 17)
+      field.font = .systemFont(ofSize: 15)
       field.focusRingType = .none
       field.bezelStyle = .roundedBezel
+      field.controlSize = .large
       field.delegate = self
       field.translatesAutoresizingMaskIntoConstraints = false
       rootStack.addArrangedSubview(field)
-      field.widthAnchor.constraint(equalTo: rootStack.widthAnchor, constant: -44).isActive = true
-      field.heightAnchor.constraint(equalToConstant: 44).isActive = true
+      field.widthAnchor.constraint(equalTo: rootStack.widthAnchor, constant: -40).isActive = true
+      field.heightAnchor.constraint(equalToConstant: 40).isActive = true
       inputField = field
     }
 
@@ -856,7 +964,7 @@ private final class ExternalPromptWindowController: NSObject, NSTableViewDataSou
       column.resizingMask = .autoresizingMask
       tableView.addTableColumn(column)
       tableView.headerView = nil
-      tableView.rowHeight = 54
+      tableView.rowHeight = 50
       tableView.intercellSpacing = NSSize(width: 0, height: 0)
       tableView.backgroundColor = .clear
       tableView.selectionHighlightStyle = .regular
@@ -875,8 +983,8 @@ private final class ExternalPromptWindowController: NSObject, NSTableViewDataSou
       scrollView.borderType = .noBorder
       scrollView.translatesAutoresizingMaskIntoConstraints = false
       rootStack.addArrangedSubview(scrollView)
-      scrollView.widthAnchor.constraint(equalTo: rootStack.widthAnchor, constant: -44).isActive = true
-      let height = scrollView.heightAnchor.constraint(equalToConstant: 54)
+      scrollView.widthAnchor.constraint(equalTo: rootStack.widthAnchor, constant: -40).isActive = true
+      let height = scrollView.heightAnchor.constraint(equalToConstant: 50)
       height.isActive = true
       tableHeightConstraint = height
     }
@@ -887,7 +995,7 @@ private final class ExternalPromptWindowController: NSObject, NSTableViewDataSou
     footer.spacing = 10
     footer.translatesAutoresizingMaskIntoConstraints = false
     rootStack.addArrangedSubview(footer)
-    footer.widthAnchor.constraint(equalTo: rootStack.widthAnchor, constant: -44).isActive = true
+    footer.widthAnchor.constraint(equalTo: rootStack.widthAnchor, constant: -40).isActive = true
 
     validationLabel.font = .systemFont(ofSize: 11)
     validationLabel.textColor = .secondaryLabelColor
@@ -903,22 +1011,28 @@ private final class ExternalPromptWindowController: NSObject, NSTableViewDataSou
 
     submitButton.title = request.multiple ? "Envoyer" : (request.kind == .choice ? "Choisir" : "Envoyer")
     submitButton.bezelStyle = .rounded
-    submitButton.controlSize = .large
+    submitButton.controlSize = .regular
     submitButton.target = self
     submitButton.action = #selector(submitButtonPressed)
     footer.addArrangedSubview(submitButton)
 
     updateValidation()
-    effectView.layoutSubtreeIfNeeded()
-    let fitting = rootStack.fittingSize
-    panel.setContentSize(NSSize(width: 660, height: max(190, fitting.height)))
+    resizePanelToFit()
   }
 
   private func sourceText() -> String {
     if let pid = request.sourcePID {
-      return "DEMANDÉ PAR \(request.sourceName.uppercased()) · PID \(pid) · IDENTITÉ DÉCLARÉE"
+      return "Demande de \(request.sourceName) · identité déclarée · PID \(pid)"
     }
-    return "DEMANDÉ PAR \(request.sourceName.uppercased()) · IDENTITÉ DÉCLARÉE"
+    return "Demande de \(request.sourceName) · identité déclarée"
+  }
+
+  private func resizePanelToFit() {
+    backgroundView.layoutSubtreeIfNeeded()
+    backgroundView.promptContentView.layoutSubtreeIfNeeded()
+    let cardHeight = max(184, rootStack.fittingSize.height)
+    panel.setContentSize(ExternalPromptBackgroundView.panelSize(cardHeight: cardHeight))
+    backgroundView.layoutSubtreeIfNeeded()
   }
 
   private func refreshRows() {
@@ -953,11 +1067,8 @@ private final class ExternalPromptWindowController: NSObject, NSTableViewDataSou
       tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
       tableView.scrollRowToVisible(0)
     }
-    tableHeightConstraint?.constant = CGFloat(min(max(visibleRows.count, 1), 6)) * 54
-    panel.contentView?.layoutSubtreeIfNeeded()
-    if let stack = panel.contentView?.subviews.first as? NSStackView {
-      panel.setContentSize(NSSize(width: 660, height: max(190, stack.fittingSize.height)))
-    }
+    tableHeightConstraint?.constant = CGFloat(min(max(visibleRows.count, 1), 6)) * 50
+    resizePanelToFit()
     updateValidation()
   }
 
