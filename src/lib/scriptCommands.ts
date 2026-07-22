@@ -93,9 +93,9 @@ export const parseCommandArguments = (
 						error: "No escaped character after the final backslash.",
 					};
 				}
-				if (next === '"' || next === "\\" || next === "$" || next === "`") {
+				if (next === '"' || next === "\\") {
 					token += next;
-				} else if (next !== "\n") {
+				} else {
 					token += `\\${next}`;
 				}
 				index += 1;
@@ -131,7 +131,7 @@ export const parseCommandArguments = (
 					error: "No escaped character after the final backslash.",
 				};
 			}
-			if (next !== "\n") token += next;
+			token += next;
 			index += 1;
 			continue;
 		}
