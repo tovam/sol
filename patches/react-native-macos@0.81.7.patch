@@ -133,6 +133,15 @@ index b1a968f7cd1d0c05e7d412da3a60f598365717dd..2cce4c0e9a42576401979473cd45a7b0
  }
  
  #endif // macOS]
+@@ -365,3 +367,8 @@
+ #if TARGET_OS_OSX // [macOS
++  NSParagraphStyle *paragraphStyle = self.defaultTextAttributes[NSParagraphStyleAttributeName];
++  if (paragraphStyle) {
++    self.alignment = paragraphStyle.alignment;
++  }
++
+   [self setAttributedText:[[NSAttributedString alloc] initWithString:[self text]
+                                                           attributes:[self defaultTextAttributes]]];
 diff --git a/React/Base/macOS/RCTUIKit.m b/React/Base/macOS/RCTUIKit.m
 index a37a1c106a04752c1baeb6dd2170402ce5f34f71..b9a50af7ef1c95a4ffb50d5ddf0676abfe16fc67 100644
 --- a/React/Base/macOS/RCTUIKit.m
