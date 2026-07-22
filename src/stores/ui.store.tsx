@@ -125,6 +125,7 @@ export enum ItemType {
 	CONFIGURATION = "CONFIGURATION",
 	CUSTOM = "CUSTOM",
 	USER_SCRIPT = "USER_SCRIPT",
+	EXTERNAL_COMMAND = "EXTERNAL_COMMAND",
 	TEMPORARY_RESULT = "TEMPORARY_RESULT",
 	BOOKMARK = "BOOKMARK",
 	PREFERENCE_PANE = "PREFERENCE_PANE",
@@ -159,22 +160,22 @@ const normalizeFileSort = (value: unknown): FileSort => {
 const resolveAICommandPrompt = (query: string) =>
 	query.match(/^\s*(?:ai|ia)\s+(.+?)\s*$/i)?.[1]?.trim() ?? null;
 
-const resolveUserScriptCommand = (query: string, scripts: Item[]) => {
+const resolveLauncherCommand = (query: string, items: Item[]) => {
 	const invocation = parseScriptCommandInvocation(query);
 	if (!invocation) return [];
 
-	return scripts
+	return items
 		.filter(
-			(script) =>
-				script.command?.toLowerCase() === invocation.command &&
-				script.commandCallback,
+			(item) =>
+				item.command?.toLowerCase() === invocation.command &&
+				item.commandCallback,
 		)
-		.map((script) => {
-			const argumentMode = script.commandArgumentMode ?? "raw";
+		.map((item) => {
+			const argumentMode = item.commandArgumentMode ?? "raw";
 			const parsed = parseCommandArguments(invocation.rawArgument, argumentMode);
 			return {
-				script,
-				command: script.command as string,
+				item,
+				command: item.command as string,
 				argumentMode,
 				rawArgument: invocation.rawArgument,
 				parsed,
@@ -219,6 +220,7 @@ const minisearch = new MiniSearch({
 		"icon",
 		"iconName",
 		"iconImage",
+		"iconTint",
 		"IconComponent",
 		"color",
 		"url",
@@ -226,6 +228,8 @@ const minisearch = new MiniSearch({
 		"type",
 		"alias",
 		"command",
+		"commandDetail",
+		"commandSource",
 		"subName",
 		"callback",
 		"metaCallback",
@@ -958,6 +962,7 @@ export const createUIStore = (root: IRootStore) => {
 				...baseItems,
 				...store.customItems,
 				...root.scripts.scripts,
+				...root.externalCommands.items,
 				...(store.showInAppBrowserBookMarks ? store.bookmarks : []),
 			];
 
@@ -1064,17 +1069,17 @@ export const createUIStore = (root: IRootStore) => {
 				}
 			}
 
-			const scriptCommandMatches = resolveUserScriptCommand(
-				store.query,
-				root.scripts.scripts,
-			);
-			if (scriptCommandMatches.length > 0) {
-				return scriptCommandMatches.map(
-					({ script, command, argumentMode, rawArgument, parsed }) => {
+			const launcherCommandMatches = [
+				...resolveLauncherCommand(store.query, root.scripts.scripts),
+				...resolveLauncherCommand(store.query, root.externalCommands.items),
+			];
+			if (launcherCommandMatches.length > 0) {
+				return launcherCommandMatches.map(
+					({ item, command, argumentMode, rawArgument, parsed }) => {
 						if (!parsed.ok) {
 							return {
-								...script,
-								name: `Invalid arguments for ${script.name}`,
+								...item,
+								name: `Invalid arguments for ${item.name}`,
 								subName: `${command} · ${parsed.error}`,
 								preventClose: true,
 								callback: () => {
@@ -1097,10 +1102,18 @@ export const createUIStore = (root: IRootStore) => {
 											parsed.arguments.length > 3 ? " · …" : ""
 										}`;
 						return {
-							...script,
-							name: `Run ${script.name}`,
-							subName: `${command} · ${argumentDescription}`,
-							callback: () => script.commandCallback?.(parsed.arguments),
+							...item,
+							name: `Run ${item.name}`,
+							subName: [
+								command,
+								argumentDescription,
+								item.commandDetail,
+								item.commandSource,
+							]
+								.filter(Boolean)
+								.join(" · "),
+							callback: () =>
+								item.commandCallback?.(parsed.arguments, rawArgument),
 						};
 					},
 				);
@@ -1165,12 +1178,15 @@ export const createUIStore = (root: IRootStore) => {
 				resolveDailymotionCommand(store.query, store.dailymotionStreams).kind !==
 				"none";
 			const hasUserScriptCommand =
-				resolveUserScriptCommand(store.query, root.scripts.scripts).length > 0;
+				resolveLauncherCommand(store.query, root.scripts.scripts).length > 0;
+			const hasExternalCommand =
+				resolveLauncherCommand(store.query, root.externalCommands.items).length > 0;
 			if (
 				hasAICommand ||
 				hasDirectDailymotionCommand ||
 				hasDailymotionCommand ||
-				hasUserScriptCommand
+				hasUserScriptCommand ||
+				hasExternalCommand
 			) {
 				return store.items.filter((item) => !store.isItemDisabled(item.id));
 			}
@@ -1191,6 +1207,7 @@ export const createUIStore = (root: IRootStore) => {
 						ItemType.CONFIGURATION,
 						ItemType.CUSTOM,
 						ItemType.USER_SCRIPT,
+						ItemType.EXTERNAL_COMMAND,
 						ItemType.PREFERENCE_PANE,
 						ItemType.TEMPORARY_RESULT,
 					].includes(item.type),
@@ -1379,6 +1396,9 @@ export const createUIStore = (root: IRootStore) => {
 				(currentIndex + direction + SEARCH_TAB_ORDER.length) %
 				SEARCH_TAB_ORDER.length;
 			store.setSearchTab(SEARCH_TAB_ORDER[nextIndex]);
+		},
+		invalidateSearchIndex: () => {
+			minisearch.removeAll();
 		},
 		setNote: (note: string) => {
 			store.note = note;
@@ -2200,6 +2220,7 @@ export const createUIStore = (root: IRootStore) => {
 				...baseItems,
 				...store.customItems,
 				...root.scripts.scripts,
+				...root.externalCommands.items,
 				...(store.showInAppBrowserBookMarks ? store.bookmarks : []),
 			].find((i) => i.id === id);
 

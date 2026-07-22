@@ -7,6 +7,10 @@ import {
 } from "stores/clipboard.store";
 import { createEmojiStore, type EmojiStore } from "stores/emoji.store";
 import {
+	createExternalCommandsStore,
+	type ExternalCommandsStore,
+} from "stores/externalCommands.store";
+import {
 	createKeystrokeStore,
 	type KeystrokeStore,
 } from "stores/keystroke.store";
@@ -27,6 +31,7 @@ export interface IRootStore {
 	processes: ProcessesStore;
 	emoji: EmojiStore;
 	scripts: ScriptsStore;
+	externalCommands: ExternalCommandsStore;
 	timer: TimerStore;
 	cleanUp: () => void;
 }
@@ -41,6 +46,7 @@ const createRootStore = (): IRootStore => {
 	store.calendar = createCalendarStore(store);
 	store.processes = createProcessesStore(store);
 	store.scripts = createScriptsStore(store);
+	store.externalCommands = createExternalCommandsStore(store);
 	store.emoji = createEmojiStore(store);
 	store.timer = createTimerStore();
 	(store as IRootStore).cleanUp = () => {
@@ -50,6 +56,7 @@ const createRootStore = (): IRootStore => {
 		store.keystroke.cleanUp();
 		store.clipboard.cleanUp();
 		store.scripts.cleanUp();
+		store.externalCommands.cleanUp();
 		store.timer.cleanUp();
 	};
 

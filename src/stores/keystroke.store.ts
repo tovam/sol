@@ -110,16 +110,25 @@ export const createKeystrokeStore = (root: IRootStore) => {
 									(script) => script.id === selectedItem.id,
 								)
 							: undefined;
-					const selectedScriptCommand =
-						selectedScript?.command ?? selectedItem?.command;
+					const selectedExternalCommand =
+						selectedItem?.type === ItemType.EXTERNAL_COMMAND
+							? root.externalCommands.items.find(
+									(item) => item.id === selectedItem.id,
+								)
+							: undefined;
+					const selectedCommand =
+						selectedScript?.command ??
+						selectedExternalCommand?.command ??
+						selectedItem?.command;
 					if (
 						root.ui.focusedWidget === Widget.SEARCH &&
 						!meta &&
 						!shift &&
-						selectedItem?.type === ItemType.USER_SCRIPT &&
-						selectedScriptCommand
+						(selectedItem?.type === ItemType.USER_SCRIPT ||
+							selectedItem?.type === ItemType.EXTERNAL_COMMAND) &&
+						selectedCommand
 					) {
-						const completedQuery = `${selectedScriptCommand} `;
+						const completedQuery = `${selectedCommand} `;
 						root.ui.setQuery(completedQuery);
 						break;
 					}

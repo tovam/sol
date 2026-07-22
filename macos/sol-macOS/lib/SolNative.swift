@@ -59,7 +59,39 @@ class SolNative: RCTEventEmitter {
       "hotkey",
       "applicationsChanged",
       "dailymotionDVRRecordingChanged",
+      "externalCommandProvidersChanged",
     ]
+  }
+
+  @objc func getExternalCommandProviders(
+    _ resolve: @escaping RCTPromiseResolveBlock,
+    rejecter _: RCTPromiseRejectBlock
+  ) {
+    ExternalCommandProviderRegistry.shared.bridgeSnapshot { providers in
+      resolve(providers)
+    }
+  }
+
+  @objc func setExternalCommandReservedNames(_ names: [String]) {
+    ExternalCommandProviderRegistry.shared.setReservedCommandNames(names)
+  }
+
+  @objc func invokeExternalCommand(
+    _ providerID: String,
+    commandName: String,
+    raw: String,
+    arguments: [String],
+    resolver resolve: @escaping RCTPromiseResolveBlock,
+    rejecter _: RCTPromiseRejectBlock
+  ) {
+    ExternalCommandProviderRegistry.shared.invoke(
+      providerID: providerID,
+      commandName: commandName,
+      raw: raw,
+      arguments: arguments
+    ) { accepted in
+      resolve(accepted)
+    }
   }
 
   @objc func getApps(

@@ -79,6 +79,30 @@ export type DailymotionDVRRecordingOptions = {
 	outputPath: string;
 };
 
+export type ExternalCommandIcon =
+	| { type: "sf-symbol"; name: string }
+	| { type: "emoji"; value: string };
+
+export type ExternalCommandDefinition = {
+	name: string;
+	label: string;
+	detail?: string;
+	icon?: ExternalCommandIcon;
+	endpoint: string;
+	argumentMode: "raw" | "shlex";
+	symbolImageDataURL?: string;
+};
+
+export type ExternalCommandProvider = {
+	providerId: string;
+	provider: {
+		name: string;
+		pid: number;
+	};
+	state: "active" | "suspended";
+	commands: ExternalCommandDefinition[];
+};
+
 class SolNative extends NativeEventEmitter {
 	openFile: (path: string) => void;
 	openWithFinder: (path: string) => void;
@@ -88,6 +112,14 @@ class SolNative extends NativeEventEmitter {
 	getApps: () => Promise<
 		Array<{ name: string; url: string; isRunning: boolean }>
 	>;
+	getExternalCommandProviders: () => Promise<ExternalCommandProvider[]>;
+	setExternalCommandReservedNames: (names: string[]) => void;
+	invokeExternalCommand: (
+		providerId: string,
+		commandName: string,
+		raw: string,
+		arguments_: string[],
+	) => Promise<boolean>;
 	toggleDarkMode: () => void;
 	prepareTimerNotifications: () => void;
 	notifyTimerFinished: () => void;
@@ -242,6 +274,10 @@ class SolNative extends NativeEventEmitter {
 		this.getEvents = global.__SolProxy.getEvents;
 		this.getCalendars = global.__SolProxy.getCalendars;
 		this.getApps = module.getApps;
+		this.getExternalCommandProviders = module.getExternalCommandProviders;
+		this.setExternalCommandReservedNames =
+			module.setExternalCommandReservedNames;
+		this.invokeExternalCommand = module.invokeExternalCommand;
 		this.openFile = module.openFile;
 		this.toggleDarkMode = module.toggleDarkMode;
 		this.prepareTimerNotifications = module.prepareTimerNotifications;

@@ -184,6 +184,9 @@ function getItemMetadata(item: Item, username: string, activeTab: SearchTab) {
 		case ItemType.USER_SCRIPT:
 			details.push("Script");
 			break;
+		case ItemType.EXTERNAL_COMMAND:
+			if (activeTab !== SearchTab.ACTIONS) details.push("External command");
+			break;
 		case ItemType.BOOKMARK:
 			details.push("Browser bookmark");
 			if (item.bookmarkFolder) details.push(item.bookmarkFolder);
@@ -240,12 +243,19 @@ function ItemIcon({
 			</View>
 		);
 	} else if (item.iconImage) {
+		const imageTint = item.iconTint
+			? isActive
+				? "#ffffff"
+				: isDarkMode
+					? "#ffffffb8"
+					: "#000000b8"
+			: adaptiveTint;
 		icon = (
 			<Image
 				source={item.iconImage}
 				className="w-6 h-6"
 				resizeMode="contain"
-				style={adaptiveTint ? { tintColor: adaptiveTint } : undefined}
+				style={imageTint ? { tintColor: imageTint } : undefined}
 			/>
 		);
 	} else if (

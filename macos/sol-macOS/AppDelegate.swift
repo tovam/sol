@@ -76,11 +76,14 @@ class AppDelegate: RCTAppDelegate, UNUserNotificationCenterDelegate {
 
     UNUserNotificationCenter.current().delegate = self
 
+    ExternalCommandProviderRegistry.shared.start()
+
     let rootView = self.rootViewFactory().view(withModuleName: "sol")
 
     PanelManager.shared.setRootView(rootView)
 
     ExternalIntegrationServer.shared.register(ExternalPromptCoordinator.shared)
+    ExternalIntegrationServer.shared.register(ExternalCommandProviderRegistry.shared)
     ExternalIntegrationServer.shared.start()
 
     setupPasteboardListener()
@@ -92,6 +95,7 @@ class AppDelegate: RCTAppDelegate, UNUserNotificationCenterDelegate {
 
   override func applicationWillTerminate(_ notification: Notification) {
     ExternalPromptCoordinator.shared.cancelAll()
+    ExternalCommandProviderRegistry.shared.stop()
     ExternalIntegrationServer.shared.stop()
     DailymotionDVRRecordingManager.shared.shutdown()
     super.applicationWillTerminate(notification)

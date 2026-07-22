@@ -144,6 +144,7 @@ type Item = {
 	id: string;
 	icon?: string;
 	iconImage?: any;
+	iconTint?: boolean;
 	faviconFallback?: any;
 	IconComponent?: FC<any>;
 	color?: string;
@@ -157,7 +158,9 @@ type Item = {
 	callback?: () => void;
 	command?: string;
 	commandArgumentMode?: import("lib/scriptCommands").CommandArgumentMode;
-	commandCallback?: (arguments_: string[]) => void;
+	commandCallback?: (arguments_: string[], rawArgument: string) => void;
+	commandDetail?: string;
+	commandSource?: string;
 	metaCallback?: () => void;
 	isApplescript?: boolean;
 	text?: string;

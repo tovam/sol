@@ -87,7 +87,10 @@ export const createScriptsStore = (_root: IRootStore) => {
 						? {
 								command,
 								commandArgumentMode: metadata.argumentMode,
-								commandCallback: (arguments_: string[]) => execute(arguments_),
+								commandCallback: (
+									arguments_: string[],
+									_rawArgument: string,
+								) => execute(arguments_),
 							}
 						: {}),
 				});
