@@ -30,6 +30,13 @@ final class HotKeyManager {
     mainHotKey.keyUpHandler = PanelManager.shared.toggle
 
     NSEvent.addLocalMonitorForEvents(matching: .keyDown) {
+      // The one-shot HTTP prompt is a separate native interface with its own
+      // keyboard contract. Let its local monitor receive every key instead of
+      // translating arrows, Enter, Tab, or Escape into React Native events.
+      if $0.window?.identifier == externalPromptWindowIdentifier {
+        return $0
+      }
+
       // 36 enter
       // 123 arrow left
       // 124 arrow right

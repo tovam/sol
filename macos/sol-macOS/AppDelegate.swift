@@ -80,6 +80,9 @@ class AppDelegate: RCTAppDelegate, UNUserNotificationCenterDelegate {
 
     PanelManager.shared.setRootView(rootView)
 
+    ExternalIntegrationServer.shared.register(ExternalPromptCoordinator.shared)
+    ExternalIntegrationServer.shared.start()
+
     setupPasteboardListener()
 
     mediaKeyForwarder = MediaKeyForwarder()
@@ -88,6 +91,8 @@ class AppDelegate: RCTAppDelegate, UNUserNotificationCenterDelegate {
   }
 
   override func applicationWillTerminate(_ notification: Notification) {
+    ExternalPromptCoordinator.shared.cancelAll()
+    ExternalIntegrationServer.shared.stop()
     DailymotionDVRRecordingManager.shared.shutdown()
     super.applicationWillTerminate(notification)
   }
