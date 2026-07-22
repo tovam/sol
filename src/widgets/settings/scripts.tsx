@@ -47,8 +47,12 @@ export const Scripts: FC = observer(() => {
 						# command: my-command (optional, shell scripts only)
 					</Text>
 					<Text className="text-xxs text-neutral-500 dark:text-neutral-400 mt-2">
-						Type “my-command any text” in Sol. The complete text after the
-						command is passed safely as $1; read it as “$1” in the script.
+						# arguments: raw | shlex (optional; raw by default)
+					</Text>
+					<Text className="text-xxs text-neutral-500 dark:text-neutral-400 mt-2">
+						Raw passes the complete suffix safely as $1. Shlex understands
+						quotes and passes separate values as $1, $2, etc. A command with no
+						text receives no argument.
 					</Text>
 					<Text className="text-xxs text-neutral-500 dark:text-neutral-400 mt-2">
 						Command names use letters, numbers, dots, dashes or underscores; ai,
