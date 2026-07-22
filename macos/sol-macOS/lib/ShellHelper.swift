@@ -8,7 +8,7 @@ private enum ShellOutputCompletion {
 }
 
 private struct ShellOutputAccumulator {
-  private static let toastKey = "*sol*toast"
+  private static let toastKey = "_sol_toast"
 
   private(set) var fullOutput = ""
   private var holdsPossibleJSON = true
@@ -27,9 +27,13 @@ private struct ShellOutputAccumulator {
     return nil
   }
 
-  func completion() -> ShellOutputCompletion {
+  func completion(commandName: String?) -> ShellOutputCompletion {
     if let toastMessage = Self.toastMessage(from: fullOutput) {
-      return .replace(toastMessage)
+      let normalizedName = commandName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+      let message = normalizedName.isEmpty
+        ? toastMessage
+        : "\(normalizedName) : \(toastMessage)"
+      return .replace(message)
     }
     if holdsPossibleJSON, !fullOutput.isEmpty {
       return .append(fullOutput)
@@ -72,7 +76,11 @@ private struct ShellOutputAccumulator {
 }
 
 struct ShellHelper {
-  static func shWithFloatingPanel(_ command: String, arguments: [String] = []) {
+  static func shWithFloatingPanel(
+    _ command: String,
+    arguments: [String] = [],
+    commandName: String? = nil
+  ) {
     let task = Process()
     let pipe = Pipe()
     let outputQueue = DispatchQueue(label: "com.ospfranco.sol.shell-output")
@@ -127,7 +135,7 @@ struct ShellHelper {
         let visibleRemainder = remainingOutput.isEmpty
           ? nil
           : output.consume(remainingOutput)
-        let completion = output.completion()
+        let completion = output.completion(commandName: commandName)
 
         DispatchQueue.main.async {
           if let visibleRemainder {

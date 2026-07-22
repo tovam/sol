@@ -65,10 +65,12 @@ export const createScriptsStore = (_root: IRootStore) => {
 					try {
 						if (file.endsWith(".applescript")) {
 							await solNative.executeAppleScript(content);
-						} else if (arguments_.length === 0) {
-							await solNative.executeBashScript(content);
 						} else {
-							await solNative.executeBashScriptWithArguments(content, arguments_);
+							await solNative.executeUserScript(
+								content,
+								metadata.name,
+								arguments_,
+							);
 						}
 					} catch (e) {
 						solNative.showToast(`Error executing script ${e}`, "error");

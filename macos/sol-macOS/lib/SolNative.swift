@@ -216,6 +216,21 @@ class SolNative: RCTEventEmitter {
     resolver(nil)
   }
 
+  @objc func executeUserScript(
+    _ source: String,
+    name: String,
+    arguments: [String],
+    resolver: RCTPromiseResolveBlock,
+    rejecter _: RCTPromiseRejectBlock
+  ) {
+    ShellHelper.shWithFloatingPanel(
+      source,
+      arguments: arguments,
+      commandName: name
+    )
+    resolver(nil)
+  }
+
   @objc func executeBashScriptWithOutput(
     _ source: String,
     resolver resolve: @escaping RCTPromiseResolveBlock,

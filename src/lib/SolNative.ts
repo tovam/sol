@@ -217,6 +217,11 @@ class SolNative extends NativeEventEmitter {
 		script: string,
 		arguments_: string[],
 	) => Promise<void>;
+	executeUserScript: (
+		script: string,
+		name: string,
+		arguments_: string[],
+	) => Promise<void>;
 	executeBashScriptWithOutput: (script: string) => Promise<string>;
 	showToast: (
 		text: string,
@@ -284,6 +289,7 @@ class SolNative extends NativeEventEmitter {
 		this.notifyTimerFinished = module.notifyTimerFinished;
 		this.executeBashScript = module.executeBashScript;
 		this.executeBashScriptWithArguments = module.executeBashScriptWithArguments;
+		this.executeUserScript = module.executeUserScript;
 		this.executeBashScriptWithOutput = module.executeBashScriptWithOutput;
 		this.executeAppleScript = module.executeAppleScript;
 		this.openWithFinder = module.openWithFinder;
