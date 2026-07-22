@@ -1,6 +1,9 @@
 import { makeAutoObservable } from "mobx";
 import { solNative } from "lib/SolNative";
-import { parseScriptCommandMetadata } from "lib/scriptCommands";
+import {
+	parseScriptArgumentModeMetadata,
+	parseScriptCommandMetadata,
+} from "lib/scriptCommands";
 import type { EmitterSubscription } from "react-native";
 import { ItemType } from "./ui.store";
 import type { IRootStore } from "store";
@@ -24,7 +27,12 @@ function parseScriptMetadata(content: string, fileName: string) {
 	const iconMatch = content.match(/^#\s*icon:\s*(.+)$/im);
 	if (iconMatch) icon = iconMatch[1].trim();
 
-	return { name, icon, command: parseScriptCommandMetadata(content) };
+	return {
+		name,
+		icon,
+		command: parseScriptCommandMetadata(content),
+		argumentMode: parseScriptArgumentModeMetadata(content),
+	};
 }
 
 export type ScriptsStore = ReturnType<typeof createScriptsStore>;
@@ -53,16 +61,14 @@ export const createScriptsStore = (_root: IRootStore) => {
 				const command = file.endsWith(".sh")
 					? (metadata.command ?? undefined)
 					: undefined;
-				const execute = async (argument?: string) => {
+				const execute = async (arguments_: string[] = []) => {
 					try {
 						if (file.endsWith(".applescript")) {
 							await solNative.executeAppleScript(content);
-						} else if (argument === undefined) {
+						} else if (arguments_.length === 0) {
 							await solNative.executeBashScript(content);
 						} else {
-							await solNative.executeBashScriptWithArguments(content, [
-								argument,
-							]);
+							await solNative.executeBashScriptWithArguments(content, arguments_);
 						}
 					} catch (e) {
 						solNative.showToast(`Error executing script ${e}`, "error");
@@ -72,12 +78,16 @@ export const createScriptsStore = (_root: IRootStore) => {
 					id: `script-${file}`,
 					name: metadata.name,
 					icon: metadata.icon,
+					...(metadata.argumentMode == null
+						? { subName: "Invalid # arguments header · expected raw or shlex" }
+						: {}),
 					type: ItemType.USER_SCRIPT,
 					callback: () => execute(),
-					...(command
+					...(command && metadata.argumentMode
 						? {
 								command,
-								commandCallback: (argument: string) => execute(argument),
+								commandArgumentMode: metadata.argumentMode,
+								commandCallback: (arguments_: string[]) => execute(arguments_),
 							}
 						: {}),
 				});

@@ -156,7 +156,8 @@ type Item = {
 	subName?: string;
 	callback?: () => void;
 	command?: string;
-	commandCallback?: (argument: string) => void;
+	commandArgumentMode?: import("lib/scriptCommands").CommandArgumentMode;
+	commandCallback?: (arguments_: string[]) => void;
 	metaCallback?: () => void;
 	isApplescript?: boolean;
 	text?: string;

@@ -19,7 +19,10 @@ import {
 	type TextSelection,
 } from "lib/fileSearch";
 import { fetchPublicIPAddress } from "lib/publicIp";
-import { parseScriptCommandInvocation } from "lib/scriptCommands";
+import {
+	parseCommandArguments,
+	parseScriptCommandInvocation,
+} from "lib/scriptCommands";
 import {
 	type GlassAppearance,
 	type SearchWindowAnimation,
@@ -166,11 +169,23 @@ const resolveUserScriptCommand = (query: string, scripts: Item[]) => {
 				script.command?.toLowerCase() === invocation.command &&
 				script.commandCallback,
 		)
-		.map((script) => ({
-			script,
-			command: script.command as string,
-			argument: invocation.argument,
-		}));
+		.map((script) => {
+			const argumentMode = script.commandArgumentMode ?? "raw";
+			const parsed = parseCommandArguments(invocation.rawArgument, argumentMode);
+			return {
+				script,
+				command: script.command as string,
+				argumentMode,
+				rawArgument: invocation.rawArgument,
+				parsed,
+			};
+		});
+};
+
+const compactArgument = (argument: string) => {
+	const escaped = argument.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+	const compact = escaped.length > 42 ? `${escaped.slice(0, 39)}…` : escaped;
+	return `“${compact}”`;
 };
 
 export const SEARCH_TAB_ORDER = [
@@ -1054,18 +1069,41 @@ export const createUIStore = (root: IRootStore) => {
 				root.scripts.scripts,
 			);
 			if (scriptCommandMatches.length > 0) {
-				return scriptCommandMatches.map(({ script, command, argument }) => {
-					const argumentPreview =
-						argument.length > 90 ? `${argument.slice(0, 87)}…` : argument;
-					return {
-						...script,
-						name: `Run ${script.name}`,
-							subName: argumentPreview
-							? `${command} · “${argumentPreview}”`
-							: `${command} · no argument`,
-						callback: () => script.commandCallback?.(argument),
-					};
-				});
+				return scriptCommandMatches.map(
+					({ script, command, argumentMode, rawArgument, parsed }) => {
+						if (!parsed.ok) {
+							return {
+								...script,
+								name: `Invalid arguments for ${script.name}`,
+								subName: `${command} · ${parsed.error}`,
+								preventClose: true,
+								callback: () => {
+									void solNative.showToast(parsed.error, "error");
+								},
+							};
+						}
+
+						const argumentDescription =
+							parsed.arguments.length === 0
+								? "no argument"
+								: argumentMode === "raw"
+									? `raw argument · ${compactArgument(rawArgument)}`
+									: `${parsed.arguments.length} argument${
+											parsed.arguments.length === 1 ? "" : "s"
+										} · ${parsed.arguments
+											.slice(0, 3)
+											.map(compactArgument)
+											.join(" · ")}${
+											parsed.arguments.length > 3 ? " · …" : ""
+										}`;
+						return {
+							...script,
+							name: `Run ${script.name}`,
+							subName: `${command} · ${argumentDescription}`,
+							callback: () => script.commandCallback?.(parsed.arguments),
+						};
+					},
+				);
 			}
 
 			if (minisearch.documentCount === 0) {
