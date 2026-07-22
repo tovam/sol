@@ -602,6 +602,7 @@ final class SolHTTPConnection {
   private var didFinish = false
   private var didStartResponse = false
   private var context: SolHTTPRequestContext?
+  private var responseCleanupWorkItem: DispatchWorkItem?
 
   init(
     connection: NWConnection,
@@ -650,11 +651,31 @@ final class SolHTTPConnection {
       """
       var payload = Data(headers.utf8)
       payload.append(response.body)
-      connection.send(content: payload, completion: .contentProcessed { [weak self] _ in
-        self?.queue.async {
-          self?.finish(notifyDisconnect: false)
+      connection.send(
+        content: payload,
+        contentContext: .finalMessage,
+        isComplete: true,
+        completion: .contentProcessed { [weak self] error in
+          guard let self else { return }
+          self.queue.async { [weak self] in
+            guard let self, !self.didFinish else { return }
+            if error != nil {
+              self.finish(notifyDisconnect: false)
+              return
+            }
+
+            // The final message performs a TCP write-close after every byte
+            // has been sent. Normally the client then closes its read side
+            // and receiveNext() finishes the connection. Keep a bounded
+            // fallback for clients that do not close after the HTTP response.
+            let cleanupWorkItem = DispatchWorkItem { [weak self] in
+              self?.finish(notifyDisconnect: false)
+            }
+            self.responseCleanupWorkItem = cleanupWorkItem
+            self.queue.asyncAfter(deadline: .now() + 5, execute: cleanupWorkItem)
+          }
         }
-      })
+      )
     }
   }
 
@@ -785,6 +806,8 @@ final class SolHTTPConnection {
   private func finish(notifyDisconnect: Bool) {
     guard !didFinish else { return }
     didFinish = true
+    responseCleanupWorkItem?.cancel()
+    responseCleanupWorkItem = nil
     if notifyDisconnect, !didStartResponse {
       context?.notifyDisconnected()
     }
