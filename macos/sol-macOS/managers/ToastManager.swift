@@ -8,6 +8,10 @@ class ToastManager {
     shellOuputView?.appendOutput(text)
   }
 
+  func replaceShellOutput(_ text: String) {
+    shellOuputView?.replaceOutput(text)
+  }
+
   func setShellSuccessStyle() {
     shellOuputView?.setSuccessStyle()
   }

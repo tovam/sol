@@ -92,6 +92,11 @@ class ShellOutputView: NSView {
     textView.scrollToEndOfDocument(nil)
   }
 
+  func replaceOutput(_ text: String) {
+    textView.string = text
+    textView.scrollToEndOfDocument(nil)
+  }
+
   override func layout() {
     super.layout()
     self.gradientLayer?.frame = self.bounds
