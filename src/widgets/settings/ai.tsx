@@ -90,25 +90,18 @@ export const AI = observer(() => {
 	return (
 		<ScrollView
 			className="flex-1"
-			contentContainerClassName="p-5 gap-4"
+			contentContainerClassName="p-3 gap-2"
 			showsVerticalScrollIndicator
 		>
-			<View>
-				<Text className="text-xl font-semibold text">
-					Artificial intelligence
-				</Text>
-				<Text className="text-sm darker-text mt-1">
-					Provider, model and credentials used by AI conversations.
-				</Text>
-			</View>
-
 			<AIProviderModelControls
+				compact
+				fluid
 				disabled={busy}
 				onSelectionChange={resetTestState}
 			/>
 			<OpenAICostSummary />
 
-			<View className="rounded-xl border border-color subBg p-4 gap-4">
+			<View className="rounded-lg border border-color subBg p-3 gap-2.5">
 				<View>
 					<Text className="text-xs font-semibold darker-text mb-1">
 						API server
@@ -116,7 +109,7 @@ export const AI = observer(() => {
 					<TextInput
 						enableFocusRing={false}
 						editable={!busy}
-						className="text-sm text px-3 py-2 rounded-lg border border-color"
+						className="text-sm text px-2.5 py-1.5 rounded-md border border-color"
 						value={current.baseURL}
 						onChangeText={(value) => updateCurrent("baseURL", value)}
 						placeholder={
@@ -132,7 +125,7 @@ export const AI = observer(() => {
 					<TextInput
 						enableFocusRing={false}
 						editable={!busy}
-						className="text-sm text px-3 py-2 rounded-lg border border-color"
+						className="text-sm text px-2.5 py-1.5 rounded-md border border-color"
 						value={current.model}
 						onChangeText={(value) => updateCurrent("model", value)}
 						placeholder={
@@ -166,7 +159,7 @@ export const AI = observer(() => {
 								autoCapitalize="none"
 								autoCorrect={false}
 								spellCheck={false}
-								className="flex-1 text-sm text px-3 py-2 rounded-lg border border-color"
+								className="flex-1 text-sm text px-2.5 py-1.5 rounded-md border border-color"
 								value={current.apiKey}
 								onChangeText={(value) => updateCurrent("apiKey", value)}
 								onSubmitEditing={() => setEditingAPIKey(false)}
@@ -174,7 +167,7 @@ export const AI = observer(() => {
 							/>
 							<TouchableOpacity
 								disabled={busy}
-								className="px-3 py-2"
+								className="px-2.5 py-1.5"
 								onPress={() => setEditingAPIKey(false)}
 							>
 								<Text className="text-sm text-accent">Done</Text>
@@ -183,7 +176,7 @@ export const AI = observer(() => {
 					) : (
 						<TouchableOpacity
 							disabled={busy}
-							className="px-3 py-2 rounded-lg border border-color flex-row items-center"
+							className="px-2.5 py-1.5 rounded-md border border-color flex-row items-center"
 							onPress={() => setEditingAPIKey(true)}
 						>
 							<Text className="flex-1 text-sm darker-text">
@@ -201,26 +194,26 @@ export const AI = observer(() => {
 				<Text
 					className={
 						testState === "error"
-							? "text-sm text-red-500"
+							? "text-xs text-red-500"
 							: testState === "success"
-								? "text-sm text-green-600 dark:text-green-400"
-								: "text-sm darker-text"
+								? "text-xs text-green-600 dark:text-green-400"
+								: "text-xs darker-text"
 					}
 				>
 					{message}
 				</Text>
 			)}
 
-			<View className="flex-row gap-3">
+			<View className="flex-row gap-2">
 				<TouchableOpacity
-					className="flex-1 py-3 rounded-xl items-center border border-color subBg"
+					className="flex-1 py-2 rounded-lg items-center border border-color subBg"
 					disabled={saving || testState === "testing"}
 					onPress={() => void save()}
 				>
 					{saving ? <ActivityIndicator /> : <Text className="text">Save</Text>}
 				</TouchableOpacity>
 				<TouchableOpacity
-					className="flex-1 py-3 rounded-xl items-center bg-accent-strong"
+					className="flex-1 py-2 rounded-lg items-center bg-accent-strong"
 					disabled={saving || testState === "testing"}
 					onPress={() => void testConnection()}
 				>

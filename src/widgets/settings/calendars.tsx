@@ -13,9 +13,9 @@ export const Calendars = observer(() => {
 			showsVerticalScrollIndicator={false}
 			automaticallyAdjustContentInsets
 			className="flex-1"
-			contentContainerClassName="p-5 gap-2"
+			contentContainerClassName="p-3 gap-1.5"
 		>
-			<View className="p-3 subBg gap-3 rounded-lg border border-lightBorder dark:border-darkBorder">
+			<View className="p-2.5 subBg gap-2 rounded-lg border border-lightBorder dark:border-darkBorder">
 				<View className="flex-row items-center">
 					<View className="flex-1">
 						<Text className="text-sm text">Show In-App Calendar</Text>
@@ -45,7 +45,7 @@ export const Calendars = observer(() => {
 				</View>
 			</View>
 
-			<View className="p-3 subBg gap-2 rounded-lg border border-lightBorder dark:border-darkBorder">
+			<View className="p-2.5 subBg gap-1.5 rounded-lg border border-lightBorder dark:border-darkBorder">
 				<Text className="text-sm text">Calendar Sources</Text>
 
 				{!hasCalendarAccess && (
@@ -59,7 +59,7 @@ export const Calendars = observer(() => {
 						Selected {store.calendar.selectedCalendarIds.length} of{" "}
 						{store.calendar.calendars.length}
 					</Text>
-					<View className="flex-row items-center gap-3">
+					<View className="flex-row items-center gap-2">
 						<TouchableOpacity
 							onPress={store.calendar.selectAllCalendars}
 							disabled={
@@ -92,7 +92,7 @@ export const Calendars = observer(() => {
 							{idx > 0 && (
 								<View className="border-t border-lightBorder dark:border-darkBorder" />
 							)}
-							<View className="flex-row items-center py-2">
+							<View className="flex-row items-center py-1.5">
 								<Text className="text-sm text flex-1">{calendar.title}</Text>
 								<MySwitch
 									value={isSelected}

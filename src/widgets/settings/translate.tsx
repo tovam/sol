@@ -8,16 +8,16 @@ export const Translate = observer(() => {
 	const store = useStore();
 
 	return (
-		<View className="flex-1 py-5 px-5">
-			<View className="p-3 subBg rounded-lg border border-lightBorder dark:border-darkBorder gap-1">
+		<View className="flex-1 p-3">
+			<View className="p-2.5 subBg rounded-lg border border-lightBorder dark:border-darkBorder gap-0.5">
 				<Text className="text-xxs text">
 					Select up to 3 languages for translation
 				</Text>
-				<View className="flex-row items-center py-2 z-20">
-					<Text className="flex-1">First language</Text>
+				<View className="flex-row items-center py-1.5 z-20">
+					<Text className="flex-1 text-sm">First language</Text>
 
 					<Dropdown
-						className="w-40"
+						className="w-36"
 						value={store.ui.firstTranslationLanguage}
 						onValueChange={(v) =>
 							store.ui.setFirstTranslationLanguage(v as string)
@@ -28,11 +28,11 @@ export const Translate = observer(() => {
 						}))}
 					/>
 				</View>
-				<View className="flex-row items-center py-2 z-10">
-					<Text className="flex-1">Second language</Text>
+				<View className="flex-row items-center py-1.5 z-10">
+					<Text className="flex-1 text-sm">Second language</Text>
 
 					<Dropdown
-						className="w-40"
+						className="w-36"
 						value={store.ui.secondTranslationLanguage}
 						onValueChange={(v) =>
 							store.ui.setSecondTranslationLanguage(v as string)
@@ -43,11 +43,11 @@ export const Translate = observer(() => {
 						}))}
 					/>
 				</View>
-				<View className="flex-row items-center py-2">
-					<Text className="flex-1">Third language</Text>
+				<View className="flex-row items-center py-1.5">
+					<Text className="flex-1 text-sm">Third language</Text>
 
 					<Dropdown
-						className="w-40"
+						className="w-36"
 						value={store.ui.thirdTranslationLanguage ?? ""}
 						onValueChange={(v) =>
 							store.ui.setThirdTranslationLanguage(v as string)

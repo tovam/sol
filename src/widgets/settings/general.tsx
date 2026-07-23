@@ -98,7 +98,7 @@ const GlassAppearanceSettings = observer(() => {
 	};
 
 	return (
-		<View className="z-30 p-3 subBg gap-3 rounded-lg border border-lightBorder dark:border-darkBorder">
+		<View className="z-30 p-2.5 subBg gap-2 rounded-lg border border-lightBorder dark:border-darkBorder">
 			<View>
 				<Text className="text-sm text">Window Glass</Text>
 				<Text className="text-xxs text-neutral-500 dark:text-neutral-400 mt-1">
@@ -137,7 +137,7 @@ const GlassAppearanceSettings = observer(() => {
 				</View>
 				<Input
 					bordered
-					className="w-20"
+					className="w-20 h-7"
 					inputClassName="text-right"
 					value={cornerRadius}
 					onChangeText={setCornerRadius}
@@ -154,7 +154,7 @@ const GlassAppearanceSettings = observer(() => {
 				</View>
 				<Input
 					bordered
-					className="w-32"
+					className="w-32 h-7"
 					inputClassName="text-right"
 					placeholder="#FFFFFF"
 					value={tintColor}
@@ -171,7 +171,7 @@ const GlassAppearanceSettings = observer(() => {
 				</View>
 				<Input
 					bordered
-					className="w-20"
+					className="w-20 h-7"
 					inputClassName="text-right"
 					value={tintOpacity}
 					onChangeText={setTintOpacity}
@@ -198,7 +198,7 @@ const GlassAppearanceSettings = observer(() => {
 				</View>
 				<Input
 					bordered
-					className="w-20"
+					className="w-20 h-7"
 					inputClassName="text-right"
 					value={shadowOpacity}
 					onChangeText={setShadowOpacity}
@@ -215,7 +215,7 @@ const GlassAppearanceSettings = observer(() => {
 				</View>
 				<Input
 					bordered
-					className="w-20"
+					className="w-20 h-7"
 					inputClassName="text-right"
 					value={shadowRadius}
 					onChangeText={setShadowRadius}
@@ -232,7 +232,7 @@ const GlassAppearanceSettings = observer(() => {
 				</View>
 				<Input
 					bordered
-					className="w-20"
+					className="w-20 h-7"
 					inputClassName="text-right"
 					value={shadowOffsetY}
 					onChangeText={setShadowOffsetY}
@@ -246,10 +246,10 @@ const GlassAppearanceSettings = observer(() => {
 				</Text>
 			)}
 
-			<View className="flex-row justify-end gap-3">
+			<View className="flex-row justify-end gap-2">
 				<TouchableOpacity onPress={reset}>
-					<View className="px-4 py-2 rounded-lg border border-color">
-						<Text className="text-sm text">Reset</Text>
+					<View className="px-3 py-1.5 rounded-md border border-color">
+						<Text className="text-xs text">Reset</Text>
 					</View>
 				</TouchableOpacity>
 				<TouchableOpacity
@@ -268,12 +268,12 @@ const GlassAppearanceSettings = observer(() => {
 					}}
 				>
 					<View
-						className={clsx("px-4 py-2 rounded-lg", {
+						className={clsx("px-3 py-1.5 rounded-md", {
 							"bg-accent-strong": valuesAreValid,
 							"bg-neutral-300 dark:bg-neutral-700": !valuesAreValid,
 						})}
 					>
-						<Text className="text-sm text-white">Apply</Text>
+						<Text className="text-xs text-white">Apply</Text>
 					</View>
 				</TouchableOpacity>
 			</View>
@@ -327,7 +327,7 @@ const AnimationNumberRow = ({
 		</View>
 		<Input
 			bordered
-			className="w-20"
+			className="w-20 h-7"
 			inputClassName="text-right"
 			value={value}
 			onChangeText={onChangeText}
@@ -391,7 +391,7 @@ const SearchWindowAnimationSettings = observer(() => {
 	};
 
 	return (
-		<View className="p-3 subBg gap-3 rounded-lg border border-lightBorder dark:border-darkBorder">
+		<View className="p-2.5 subBg gap-2 rounded-lg border border-lightBorder dark:border-darkBorder">
 			<View>
 				<Text className="text-sm text">Search Window Animation</Text>
 				<Text className="text-xxs text-neutral-500 dark:text-neutral-400 mt-1">
@@ -510,20 +510,20 @@ const SearchWindowAnimationSettings = observer(() => {
 				</Text>
 			)}
 
-			<View className="flex-row justify-end gap-3">
+			<View className="flex-row justify-end gap-2">
 				<TouchableOpacity onPress={store.ui.resetSearchWindowAnimation}>
-					<View className="px-4 py-2 rounded-lg border border-color">
-						<Text className="text-sm text">Reset</Text>
+					<View className="px-3 py-1.5 rounded-md border border-color">
+						<Text className="text-xs text">Reset</Text>
 					</View>
 				</TouchableOpacity>
 				<TouchableOpacity disabled={!valuesAreValid} onPress={apply}>
 					<View
-						className={clsx("px-4 py-2 rounded-lg", {
+						className={clsx("px-3 py-1.5 rounded-md", {
 							"bg-accent-strong": valuesAreValid,
 							"bg-neutral-300 dark:bg-neutral-700": !valuesAreValid,
 						})}
 					>
-						<Text className="text-sm text-white">Apply</Text>
+						<Text className="text-xs text-white">Apply</Text>
 					</View>
 				</TouchableOpacity>
 			</View>
@@ -565,7 +565,7 @@ const SearchWindowPositionSettings = observer(() => {
 	};
 
 	return (
-		<View className="p-3 subBg gap-3 rounded-lg border border-lightBorder dark:border-darkBorder">
+		<View className="p-2.5 subBg gap-2 rounded-lg border border-lightBorder dark:border-darkBorder">
 			<View>
 				<Text className="text-sm text">Search Window Position</Text>
 				<Text className="text-xxs text-neutral-500 dark:text-neutral-400 mt-1">
@@ -585,7 +585,7 @@ const SearchWindowPositionSettings = observer(() => {
 				</View>
 				<Input
 					bordered
-					className="w-20"
+					className="w-20 h-7"
 					inputClassName="text-right"
 					value={x}
 					onChangeText={setX}
@@ -602,7 +602,7 @@ const SearchWindowPositionSettings = observer(() => {
 				</View>
 				<Input
 					bordered
-					className="w-20"
+					className="w-20 h-7"
 					inputClassName="text-right"
 					value={y}
 					onChangeText={setY}
@@ -616,10 +616,10 @@ const SearchWindowPositionSettings = observer(() => {
 				</Text>
 			)}
 
-			<View className="flex-row justify-end gap-3">
+			<View className="flex-row justify-end gap-2">
 				<TouchableOpacity onPress={reset}>
-					<View className="px-4 py-2 rounded-lg border border-color">
-						<Text className="text-sm text">Reset</Text>
+					<View className="px-3 py-1.5 rounded-md border border-color">
+						<Text className="text-xs text">Reset</Text>
 					</View>
 				</TouchableOpacity>
 				<TouchableOpacity
@@ -630,12 +630,12 @@ const SearchWindowPositionSettings = observer(() => {
 					}}
 				>
 					<View
-						className={clsx("px-4 py-2 rounded-lg", {
+						className={clsx("px-3 py-1.5 rounded-md", {
 							"bg-accent-strong": valuesAreValid,
 							"bg-neutral-300 dark:bg-neutral-700": !valuesAreValid,
 						})}
 					>
-						<Text className="text-sm text-white">Apply</Text>
+						<Text className="text-xs text-white">Apply</Text>
 					</View>
 				</TouchableOpacity>
 			</View>
@@ -654,9 +654,9 @@ export const General = observer(() => {
 			showsVerticalScrollIndicator={false}
 			automaticallyAdjustContentInsets
 			className="flex-1"
-			contentContainerClassName="p-5 gap-2"
+			contentContainerClassName="p-3 gap-1.5"
 		>
-			<View className="flex-row items-center p-3 subBg rounded-lg border border-lightBorder dark:border-darkBorder">
+			<View className="flex-row items-center p-2.5 subBg rounded-lg border border-lightBorder dark:border-darkBorder">
 				<View className="flex-1">
 					<Text className="text-sm text">Open at Login</Text>
 					<Text className="text-xxs text-neutral-500 dark:text-neutral-400">
@@ -671,11 +671,11 @@ export const General = observer(() => {
 			<GlassAppearanceSettings />
 			<SearchWindowAnimationSettings />
 			<SearchWindowPositionSettings />
-			<View className="z-20 p-3 subBg gap-3 rounded-lg border border-lightBorder dark:border-darkBorder">
+			<View className="z-20 p-2.5 subBg gap-2 rounded-lg border border-lightBorder dark:border-darkBorder">
 				<View className="flex-row items-center z-30">
 					<Text className="flex-1 text-sm">Global Shortcut</Text>
 					<Dropdown
-						className="w-64"
+						className="w-48 h-7"
 						value={store.ui.globalShortcut}
 						onValueChange={(v) => {
 							store.ui.setGlobalShortcut(v as any);
@@ -689,9 +689,9 @@ export const General = observer(() => {
 				</View>
 				<View className="border-t border-lightBorder dark:border-darkBorder" />
 				<View className="flex-row items-center z-20">
-					<Text className="flex-1">Search Engine</Text>
+					<Text className="flex-1 text-sm">Search Engine</Text>
 					<Dropdown
-						className="w-64"
+						className="w-48 h-7"
 						value={store.ui.searchEngine}
 						onValueChange={(v) => {
 							store.ui.setSearchEngine(v as any);
@@ -706,7 +706,7 @@ export const General = observer(() => {
 				</View>
 				{store.ui.searchEngine === "custom" && (
 					<View className="items-end z-10">
-						<View className="w-80 flex-row items-center gap-1">
+						<View className="w-64 flex-row items-center gap-1">
 							{store.ui.searchEngine === "custom" &&
 								(isValidCustomSearchEngineUrl(store.ui.customSearchUrl) ? (
 									<View className="w-2 h-2 rounded-full bg-green-500" />
@@ -715,7 +715,7 @@ export const General = observer(() => {
 								))}
 							<Input
 								bordered
-								className="w-full text-xs rounded border border-lightBorder dark:border-darkBorder px-1"
+								className="w-full h-7 text-xs rounded border border-lightBorder dark:border-darkBorder px-1"
 								inputClassName="w-full"
 								readOnly={store.ui.searchEngine !== "custom"}
 								value={store.ui.customSearchUrl}
@@ -730,8 +730,8 @@ export const General = observer(() => {
 				)}
 			</View>
 
-			<View className="z-10 p-3 gap-1 subBg rounded-lg border border-lightBorder dark:border-darkBorder">
-				<Text className="">File Search Paths</Text>
+			<View className="z-10 p-2.5 gap-1 subBg rounded-lg border border-lightBorder dark:border-darkBorder">
+				<Text className="text-sm">File Search Paths</Text>
 				<Text className="text-xxs text-neutral-500 dark:text-neutral-400">
 					Add folders for the Search Files functionality.
 				</Text>
@@ -740,7 +740,7 @@ export const General = observer(() => {
 						return (
 							<View
 								key={folder}
-								className={clsx("flex-row items-center p-2", {
+								className={clsx("flex-row items-center p-1.5", {
 									"rounded-t-lg": idx === 0,
 									"rounded-b-lg": idx === store.ui.searchFolders.length - 1,
 									"bg-neutral-100 dark:bg-neutral-900": idx % 2 === 0,
@@ -764,13 +764,13 @@ export const General = observer(() => {
 						);
 					})}
 				</View>
-				<View className="justify-end flex-row mt-2 gap-4">
+				<View className="justify-end flex-row mt-1.5 gap-3">
 					<TouchableOpacity
 						onPress={() => {
 							store.ui.reindexAll();
 						}}
 					>
-						<Text className="text-neutral-500">
+						<Text className="text-sm text-neutral-500">
 							{store.ui.isIndexing ? "Indexing..." : "Re-index"}
 						</Text>
 					</TouchableOpacity>
@@ -788,15 +788,15 @@ export const General = observer(() => {
 							} catch {}
 						}}
 					>
-						<Text className="text-blue-500">Add folder</Text>
+						<Text className="text-sm text-blue-500">Add folder</Text>
 					</TouchableOpacity>
 				</View>
 			</View>
-			<View className="p-3 subBg gap-3 rounded-lg border border-lightBorder dark:border-darkBorder">
+			<View className="p-2.5 subBg gap-2 rounded-lg border border-lightBorder dark:border-darkBorder">
 				<View className="flex-row items-center z-20">
-					<Text className="flex-1">Show Window on Screen with</Text>
+					<Text className="flex-1 text-sm">Show Window on Screen with</Text>
 					<Dropdown
-						className="w-64"
+						className="w-48 h-7"
 						value={store.ui.showWindowOn}
 						onValueChange={(v) => {
 							store.ui.setShowWindowOn(v as any);
@@ -812,7 +812,7 @@ export const General = observer(() => {
 				</View>
 				<View className="border-t border-lightBorder dark:border-darkBorder z-0" />
 				<View className="flex-row items-center">
-					<Text className="flex-1">Show In-App Calendar</Text>
+					<Text className="flex-1 text-sm">Show In-App Calendar</Text>
 					<MySwitch
 						value={store.ui.calendarEnabled}
 						onValueChange={store.ui.setCalendarEnabled}
@@ -820,7 +820,7 @@ export const General = observer(() => {
 				</View>
 				<View className="border-t border-lightBorder dark:border-darkBorder" />
 				<View className="flex-row items-center">
-					<Text className="flex-1">Show Browser Bookmarks</Text>
+					<Text className="flex-1 text-sm">Show Browser Bookmarks</Text>
 					<MySwitch
 						value={store.ui.showInAppBrowserBookMarks}
 						onValueChange={store.ui.setShowInAppBrowserBookmarks}
@@ -828,7 +828,7 @@ export const General = observer(() => {
 				</View>
 				<View className="border-t border-lightBorder dark:border-darkBorder" />
 				<View className="flex-row items-center">
-					<Text className="flex-1">Show upcoming event in Menu Bar</Text>
+					<Text className="flex-1 text-sm">Show upcoming event in Menu Bar</Text>
 					<MySwitch
 						value={store.ui.showUpcomingEvent}
 						onValueChange={store.ui.setShowUpcomingEvent}
@@ -836,7 +836,9 @@ export const General = observer(() => {
 				</View>
 				<View className="border-t border-lightBorder dark:border-darkBorder" />
 				<View className="flex-row items-center">
-					<Text className="flex-1">Forward Media Keys to Music Player</Text>
+					<Text className="flex-1 text-sm">
+						Forward Media Keys to Music Player
+					</Text>
 					<MySwitch
 						value={store.ui.mediaKeyForwardingEnabled}
 						onValueChange={() => {
@@ -847,7 +849,7 @@ export const General = observer(() => {
 					/>
 				</View>
 			</View>
-			<View className="flex-row items-center p-3 subBg rounded-lg border border-lightBorder dark:border-darkBorder">
+			<View className="flex-row items-center p-2.5 subBg rounded-lg border border-lightBorder dark:border-darkBorder">
 				<View className="flex-1">
 					<Text className="text-sm text">Reload Config</Text>
 					<Text className="text-xxs text-neutral-500 dark:text-neutral-400">
@@ -855,7 +857,7 @@ export const General = observer(() => {
 					</Text>
 				</View>
 				<TouchableOpacity onPress={() => store.ui.reloadJsonConfig()}>
-					<Text className="text-blue-500">Reload</Text>
+					<Text className="text-sm text-blue-500">Reload</Text>
 				</TouchableOpacity>
 			</View>
 		</ScrollView>

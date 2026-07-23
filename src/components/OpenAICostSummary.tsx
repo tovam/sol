@@ -48,13 +48,13 @@ export const OpenAICostSummary = observer(() => {
 	const isSubtotal = hasUnpricedRequests || hasPartialRequests;
 
 	return (
-		<View className="rounded-lg border border-color subBg p-3 gap-2">
-			<View className="flex-row items-start gap-3">
+		<View className="rounded-lg border border-color subBg p-2.5 gap-1.5">
+			<View className="flex-row items-start gap-2">
 				<View className="flex-1">
-					<Text className="text-xs font-semibold darker-text">
+					<Text className="text-[10px] font-semibold darker-text">
 						OPENAI VIA SOL · LIFETIME ESTIMATE
 					</Text>
-					<Text className="text-2xl font-semibold text mt-0.5">
+					<Text className="text-lg font-semibold text">
 						{isSubtotal ? "≥" : "≈"}
 						{formatOpenAIUSD(lifetime.pricedSubtotalUSD)}
 					</Text>
@@ -115,7 +115,7 @@ export const OpenAICostSummary = observer(() => {
 					charges and account adjustments are excluded.
 				</Text>
 				<TouchableOpacity
-					className="px-2 py-1"
+					className="px-1.5 py-0.5"
 					onPress={() => void Linking.openURL(OPENAI_PRICING_SOURCE_URL)}
 				>
 					<Text className="text-xs text-accent">

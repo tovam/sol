@@ -43,11 +43,11 @@ const RenderItem = observer(({ item, index }: any) => {
 
   return (
     <View
-      className={clsx('flex-row items-center py-1.5 px-3 rounded-sm gap-2', {
+      className={clsx('flex-row items-center py-1 px-2 rounded-sm gap-1.5', {
         'bg-gray-200 dark:subBg': index % 2 === 1,
         'opacity-50': isDisabled,
       })}>
-      <View style={{ marginRight: 8 }}>
+      <View style={{ marginRight: 4 }}>
         <MySwitch
           value={!isDisabled}
           onValueChange={v => {
@@ -60,11 +60,11 @@ const RenderItem = observer(({ item, index }: any) => {
         />
       </View>
       {!!item.url && item.type != ItemType.BOOKMARK && (
-        <FileIcon url={item.url} className={'w-6 h-6'} />
+        <FileIcon url={item.url} className={'w-5 h-5'} />
       )}
       {item.type !== ItemType.CUSTOM && !!item.icon && <Text>{item.icon}</Text>}
       {item.type === ItemType.CUSTOM && !!item.icon && (
-        <View className="w-6 h-6 rounded items-center justify-center bg-white dark:bg-black">
+        <View className="w-5 h-5 rounded items-center justify-center bg-white dark:bg-black">
           {/* @ts-expect-error */}
           {Icons[item.icon] && (
             <Image
@@ -72,8 +72,8 @@ const RenderItem = observer(({ item, index }: any) => {
               source={Icons[item.icon]}
               style={{
                 tintColor: item.color,
-                height: 16,
-                width: 16,
+                height: 14,
+                width: 14,
               }}
             />
           )}
@@ -82,7 +82,7 @@ const RenderItem = observer(({ item, index }: any) => {
       {!!item.iconImage && (
         <Image
           source={item.iconImage}
-          className="w-6 h-6"
+          className="w-5 h-5"
           resizeMode="contain"
         />
       )}
@@ -91,7 +91,7 @@ const RenderItem = observer(({ item, index }: any) => {
         <Favicon
           url={item.url!}
           fallback={item.faviconFallback}
-          className="h-6 w-6"
+          className="h-5 w-5"
         />
       )}
       <Text className="flex-1" numberOfLines={1}>
@@ -165,9 +165,9 @@ export const Items = observer(() => {
   }, [store.ui.items, shortcutSearchFilter, store.ui.shortcuts])
 
   return (
-    <View className="flex-1 h-full p-4">
-      <View className="flex-1 p-2 gap-1 subBg rounded-lg border border-lightBorder dark:border-darkBorder">
-        <View className="flex-row gap-8 p-4">
+    <View className="flex-1 h-full p-3">
+      <View className="flex-1 p-1.5 gap-1 subBg rounded-lg border border-lightBorder dark:border-darkBorder">
+        <View className="flex-row gap-4 px-3 py-2">
           <View className="flex-1">
             <Text className="text">Global Shortcuts</Text>
           </View>
@@ -176,13 +176,13 @@ export const Items = observer(() => {
           </TouchableOpacity>
         </View>
         <View className="border-t border-lightBorder dark:border-darkBorder z-0" />
-        <View className='flex-row p-3 justify-between'>
-          <Text>Enable Hyper Key (Caps Lock into ⌘ + ⌥ + ⌃ + ⇧)</Text>
+        <View className='flex-row px-3 py-2 justify-between'>
+          <Text className="text-sm">Enable Hyper Key (Caps Lock into ⌘ + ⌥ + ⌃ + ⇧)</Text>
           <MySwitch value={store.ui.hyperKeyEnabled}
             onValueChange={store.ui.setHyperKeyEnabled} />
         </View>
         <View className="border-t border-lightBorder dark:border-darkBorder z-0 mb-3" />
-        <View className="flex-row items-center gap-2 ml-2">
+        <View className="flex-row items-center gap-2 mx-2">
           <Input
             bordered
             value={query}
@@ -207,7 +207,7 @@ export const Items = observer(() => {
           </TouchableOpacity>
         </View>
         {shortcutSearchFilter && (
-          <View className="flex-row items-center gap-2 ml-2 mt-2 p-2 bg-accent/10 rounded">
+          <View className="flex-row items-center gap-2 mx-2 mt-1 p-1.5 bg-accent/10 rounded">
             <Text className="text-sm">Filtering by shortcut:</Text>
             <View className="flex-row items-center gap-1">
               {renderToKeys(shortcutSearchFilter)}
@@ -226,7 +226,7 @@ export const Items = observer(() => {
         )}
         <LegendList
           className="flex-1"
-          contentContainerClassName="px-4 pb-4"
+          contentContainerClassName="px-2 pb-2"
           data={filteredItems}
           keyExtractor={item => item.id}
           renderItem={RenderItem}

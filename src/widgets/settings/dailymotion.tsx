@@ -43,23 +43,15 @@ export const DailymotionSettings = observer(() => {
 	return (
 		<ScrollView
 			className="flex-1"
-			contentContainerClassName="p-5 gap-4"
+			contentContainerClassName="p-3 gap-2"
 			showsVerticalScrollIndicator
 		>
-			<View>
-				<Text className="text-xl font-semibold text">Dailymotion streams</Text>
-				<Text className="text-sm darker-text mt-1">
-					Save videos or live streams for one-click access in the floating
-					player.
-				</Text>
-			</View>
-
-			<View className="rounded-xl border border-color subBg p-4 gap-3">
+			<View className="rounded-lg border border-color subBg p-3 gap-2">
 				<View>
 					<Text className="text-xs font-semibold darker-text mb-1">Name</Text>
 					<TextInput
 						enableFocusRing={false}
-						className="text-sm text px-3 py-2 rounded-lg border border-color"
+						className="text-sm text px-2.5 py-1.5 rounded-md border border-color"
 						value={name}
 						onChangeText={setName}
 						placeholder="News, music, live channel…"
@@ -71,7 +63,7 @@ export const DailymotionSettings = observer(() => {
 					</Text>
 					<TextInput
 						enableFocusRing={false}
-						className="text-sm text px-3 py-2 rounded-lg border border-color"
+						className="text-sm text px-2.5 py-1.5 rounded-md border border-color"
 						value={url}
 						onChangeText={setURL}
 						onSubmitEditing={save}
@@ -87,7 +79,7 @@ export const DailymotionSettings = observer(() => {
 							enableFocusRing={false}
 							autoCapitalize="none"
 							autoCorrect={false}
-							className="flex-1 text-sm text px-3 py-2 rounded-lg border border-color"
+							className="flex-1 text-sm text px-2.5 py-1.5 rounded-md border border-color"
 							value={command}
 							onChangeText={setCommand}
 							onSubmitEditing={save}
@@ -95,7 +87,7 @@ export const DailymotionSettings = observer(() => {
 						/>
 						<TouchableOpacity
 							disabled={!suggestedCommand}
-							className="px-3 py-2"
+							className="px-2.5 py-1.5"
 							onPress={() => setCommand(suggestedCommand)}
 						>
 							<Text
@@ -112,9 +104,9 @@ export const DailymotionSettings = observer(() => {
 						{name.trim() || "name"}” still works.
 					</Text>
 				</View>
-				{!!error && <Text className="text-sm text-red-500">{error}</Text>}
+				{!!error && <Text className="text-xs text-red-500">{error}</Text>}
 				<TouchableOpacity
-					className="py-3 rounded-xl bg-accent-strong items-center"
+					className="py-2 rounded-lg bg-accent-strong items-center"
 					onPress={save}
 				>
 					<Text className="text-white font-semibold">
@@ -123,17 +115,17 @@ export const DailymotionSettings = observer(() => {
 				</TouchableOpacity>
 			</View>
 
-			<View className="rounded-xl border border-color subBg p-4 gap-2">
+			<View className="rounded-lg border border-color subBg p-3 gap-1.5">
 				<Text className="text-sm font-semibold mb-1">
 					Saved streams ({store.ui.dailymotionStreams.length})
 				</Text>
 				{store.ui.dailymotionStreams.length === 0 ? (
-					<Text className="text-sm darker-text">No saved stream yet.</Text>
+					<Text className="text-xs darker-text">No saved stream yet.</Text>
 				) : (
 					store.ui.dailymotionStreams.map((stream) => (
 						<View
 							key={stream.id}
-							className="flex-row items-center gap-3 py-2 border-b border-color"
+							className="flex-row items-center gap-2 py-1.5 border-b border-color"
 						>
 							<TouchableOpacity
 								className="flex-1"
@@ -150,7 +142,7 @@ export const DailymotionSettings = observer(() => {
 								</Text>
 							</TouchableOpacity>
 							<TouchableOpacity
-								className="px-3 py-2 rounded-lg bg-neutral-200 dark:bg-neutral-700"
+								className="px-2 py-1.5 rounded-md bg-neutral-200 dark:bg-neutral-700"
 								onPress={() => {
 									setName(stream.name);
 									setURL(stream.url);
@@ -161,7 +153,7 @@ export const DailymotionSettings = observer(() => {
 								<Text className="text-xs">Edit</Text>
 							</TouchableOpacity>
 							<TouchableOpacity
-								className="px-3 py-2 rounded-lg bg-red-500/10"
+								className="px-2 py-1.5 rounded-md bg-red-500/10"
 								onPress={() => store.ui.removeDailymotionStream(stream.id)}
 							>
 								<Text className="text-xs text-red-500">Delete</Text>
