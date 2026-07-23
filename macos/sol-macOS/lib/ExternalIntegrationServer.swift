@@ -641,14 +641,13 @@ final class SolHTTPConnection {
       guard let self, !didFinish, !didStartResponse else { return }
       didStartResponse = true
       let statusText = Self.statusText(response.status)
-      let headers = """
-      HTTP/1.1 \(response.status) \(statusText)\r
-      Content-Type: application/json; charset=utf-8\r
-      Content-Length: \(response.body.count)\r
-      Cache-Control: no-store\r
-      Connection: close\r
-      \r
-      """
+      let headers = [
+        "HTTP/1.1 \(response.status) \(statusText)",
+        "Content-Type: application/json; charset=utf-8",
+        "Content-Length: \(response.body.count)",
+        "Cache-Control: no-store",
+        "Connection: close",
+      ].joined(separator: "\r\n") + "\r\n\r\n"
       var payload = Data(headers.utf8)
       payload.append(response.body)
       connection.send(
