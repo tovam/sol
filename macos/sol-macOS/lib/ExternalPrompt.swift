@@ -575,6 +575,112 @@ private enum ExternalPromptVisibleRow {
   case custom(String)
 }
 
+private enum ExternalPromptInputLayout {
+  static let additionalLeadingPadding: CGFloat = 7
+  static let additionalTrailingPadding: CGFloat = 4
+
+  static func textRect(from rect: NSRect, font: NSFont?) -> NSRect {
+    var result = rect
+    result.origin.x += additionalLeadingPadding
+    result.size.width = max(
+      0,
+      result.width - additionalLeadingPadding - additionalTrailingPadding
+    )
+
+    let resolvedFont = font ?? NSFont.systemFont(ofSize: NSFont.systemFontSize)
+    let lineHeight = min(result.height, ceil(resolvedFont.boundingRectForFont.height) + 2)
+    result.origin.y += floor(max(0, result.height - lineHeight) / 2)
+    result.size.height = lineHeight
+    return result
+  }
+}
+
+private final class ExternalPromptTextFieldCell: NSTextFieldCell {
+  override func drawingRect(forBounds rect: NSRect) -> NSRect {
+    ExternalPromptInputLayout.textRect(
+      from: super.drawingRect(forBounds: rect),
+      font: font
+    )
+  }
+
+  override func edit(
+    withFrame rect: NSRect,
+    in controlView: NSView,
+    editor textObj: NSText,
+    delegate: Any?,
+    event: NSEvent?
+  ) {
+    super.edit(
+      withFrame: drawingRect(forBounds: rect),
+      in: controlView,
+      editor: textObj,
+      delegate: delegate,
+      event: event
+    )
+  }
+
+  override func select(
+    withFrame rect: NSRect,
+    in controlView: NSView,
+    editor textObj: NSText,
+    delegate: Any?,
+    start selStart: Int,
+    length selLength: Int
+  ) {
+    super.select(
+      withFrame: drawingRect(forBounds: rect),
+      in: controlView,
+      editor: textObj,
+      delegate: delegate,
+      start: selStart,
+      length: selLength
+    )
+  }
+}
+
+private final class ExternalPromptSecureTextFieldCell: NSSecureTextFieldCell {
+  override func drawingRect(forBounds rect: NSRect) -> NSRect {
+    ExternalPromptInputLayout.textRect(
+      from: super.drawingRect(forBounds: rect),
+      font: font
+    )
+  }
+
+  override func edit(
+    withFrame rect: NSRect,
+    in controlView: NSView,
+    editor textObj: NSText,
+    delegate: Any?,
+    event: NSEvent?
+  ) {
+    super.edit(
+      withFrame: drawingRect(forBounds: rect),
+      in: controlView,
+      editor: textObj,
+      delegate: delegate,
+      event: event
+    )
+  }
+
+  override func select(
+    withFrame rect: NSRect,
+    in controlView: NSView,
+    editor textObj: NSText,
+    delegate: Any?,
+    start selStart: Int,
+    length selLength: Int
+  ) {
+    super.select(
+      withFrame: drawingRect(forBounds: rect),
+      in: controlView,
+      editor: textObj,
+      delegate: delegate,
+      start: selStart,
+      length: selLength
+    )
+  }
+}
+
 private final class ExternalPromptTableRowView: NSTableRowView {
   override func drawSelection(in dirtyRect: NSRect) {
     guard selectionHighlightStyle != .none else { return }
@@ -824,16 +930,27 @@ private final class ExternalPromptWindowController: NSObject, NSTableViewDataSou
     if let input = request.input {
       let field: NSTextField
       if input.secure {
-        field = NSSecureTextField()
-        field.stringValue = input.initialValue
+        let secureField = NSSecureTextField(frame: .zero)
+        secureField.cell = ExternalPromptSecureTextFieldCell(textCell: input.initialValue)
+        field = secureField
       } else {
-        field = NSTextField(string: input.initialValue)
+        let textField = NSTextField(frame: .zero)
+        textField.cell = ExternalPromptTextFieldCell(textCell: input.initialValue)
+        field = textField
       }
+      field.stringValue = input.initialValue
       field.placeholderString = input.placeholder
       field.font = .systemFont(ofSize: 15)
       field.focusRingType = .none
+      field.isBezeled = true
+      field.isBordered = true
+      field.drawsBackground = true
       field.bezelStyle = .roundedBezel
       field.controlSize = .large
+      field.isEditable = true
+      field.isSelectable = true
+      field.cell?.usesSingleLineMode = true
+      field.cell?.lineBreakMode = .byClipping
       field.delegate = self
       field.translatesAutoresizingMaskIntoConstraints = false
       rootStack.addArrangedSubview(field)
