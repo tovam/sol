@@ -161,6 +161,7 @@ type Item = {
 	commandCallback?: (arguments_: string[], rawArgument: string) => void;
 	commandDetail?: string;
 	commandSource?: string;
+	scriptPath?: string;
 	metaCallback?: () => void;
 	isApplescript?: boolean;
 	text?: string;

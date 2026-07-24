@@ -54,7 +54,11 @@ import {
 } from "react-native";
 import RNRestart from "react-native-restart-newarch";
 import type { IRootStore } from "store";
-import { PORTABLE_KEYS, UI_PERSISTED_KEYS } from "./config";
+import {
+	getDefaultScriptsDirectoryPath,
+	PORTABLE_KEYS,
+	UI_PERSISTED_KEYS,
+} from "./config";
 import { createBaseItems } from "./items";
 import {
 	readPersistedUIState,
@@ -155,6 +159,35 @@ const normalizeFileSort = (value: unknown): FileSort => {
 	return typeof value === "string" && FILE_SORT_VALUES.has(value)
 		? (value as FileSort)
 		: FileSort.NAME_ASC;
+};
+
+const normalizeScriptDirectoryPath = (value: unknown): string | null => {
+	if (typeof value !== "string") return null;
+	const trimmed = value.trim();
+	if (!trimmed) return null;
+
+	try {
+		const decoded = decodeURI(trimmed.replace(/^file:\/\//i, ""));
+		if (!decoded.startsWith("/")) return null;
+		return decoded === "/" ? decoded : decoded.replace(/\/+$/, "");
+	} catch {
+		return null;
+	}
+};
+
+const normalizeScriptDirectories = (value: unknown): string[] => {
+	if (!Array.isArray(value)) return [];
+
+	const defaultDirectory = getDefaultScriptsDirectoryPath();
+	const seen = new Set([defaultDirectory]);
+	const directories: string[] = [];
+	for (const candidate of value) {
+		const directory = normalizeScriptDirectoryPath(candidate);
+		if (!directory || seen.has(directory)) continue;
+		seen.add(directory);
+		directories.push(directory);
+	}
+	return directories;
 };
 
 const resolveAICommandPrompt = (query: string) =>
@@ -666,6 +699,9 @@ export const createUIStore = (root: IRootStore) => {
 					store.showUpcomingEvent = src.showUpcomingEvent ?? true;
 					store.scratchPadColor = src.scratchPadColor ?? ScratchPadColor.SYSTEM;
 					store.searchFolders = src.searchFolders ?? defaultSearchFolders;
+					store.scriptDirectories = normalizeScriptDirectories(
+						src.scriptDirectories,
+					);
 					store.fileSort = normalizeFileSort(src.fileSort);
 					store.searchEngine = src.searchEngine ?? "google";
 					store.customSearchUrl =
@@ -772,6 +808,10 @@ export const createUIStore = (root: IRootStore) => {
 					store.scratchPadColor = jsonConfig.scratchPadColor;
 				if (jsonConfig.searchFolders !== undefined)
 					store.searchFolders = jsonConfig.searchFolders;
+				if (jsonConfig.scriptDirectories !== undefined)
+					store.scriptDirectories = normalizeScriptDirectories(
+						jsonConfig.scriptDirectories,
+					);
 				store.fileSort = normalizeFileSort(jsonConfig.fileSort);
 				if (jsonConfig.searchEngine !== undefined)
 					store.searchEngine = jsonConfig.searchEngine;
@@ -875,6 +915,7 @@ export const createUIStore = (root: IRootStore) => {
 		showUpcomingEvent: true,
 		scratchPadColor: ScratchPadColor.SYSTEM,
 		searchFolders: [] as string[],
+		scriptDirectories: [] as string[],
 		fileSort: FileSort.NAME_ASC as FileSort,
 		shortcuts: defaultShortcuts as Record<string, string>,
 		showInAppBrowserBookMarks: true,
@@ -2188,6 +2229,25 @@ export const createUIStore = (root: IRootStore) => {
 			fileSearchRequestId += 1;
 			store.searchFolders = store.searchFolders.filter((f) => f !== folder);
 			void solNative.removeIndexedPath(folder).then(clearFileSearchCache);
+		},
+
+		addScriptDirectory: (folder: string) => {
+			const directory = normalizeScriptDirectoryPath(folder);
+			if (
+				!directory ||
+				directory === getDefaultScriptsDirectoryPath() ||
+				store.scriptDirectories.includes(directory)
+			) {
+				return false;
+			}
+			store.scriptDirectories = [...store.scriptDirectories, directory];
+			return true;
+		},
+
+		removeScriptDirectory: (folder: string) => {
+			store.scriptDirectories = store.scriptDirectories.filter(
+				(directory) => directory !== folder,
+			);
 		},
 
 		reindexAll: () => {

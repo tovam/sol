@@ -1,27 +1,31 @@
-import { makeAutoObservable } from "mobx";
 import { solNative } from "lib/SolNative";
 import {
 	parseScriptArgumentModeMetadata,
 	parseScriptCommandMetadata,
 } from "lib/scriptCommands";
+import {
+	type IReactionDisposer,
+	makeAutoObservable,
+	reaction,
+	toJS,
+} from "mobx";
 import type { EmitterSubscription } from "react-native";
-import { ItemType } from "./ui.store";
 import type { IRootStore } from "store";
+import { getDefaultScriptsDirectoryPath } from "./config";
+import { ItemType } from "./ui.store";
 
-let folderWatcher:
-	| ReturnType<typeof solNative.createFolderWatcher>
-	| undefined;
+let folderWatchers: Array<
+	ReturnType<typeof solNative.createFolderWatcher>
+> = [];
+let scriptDirectoriesDisposer: IReactionDisposer | undefined;
 let onShowListener: EmitterSubscription | undefined;
 
-const getScriptsPath = () =>
-	`/Users/${solNative.userName()}/.config/sol/scripts`;
+const ALLOWED_SCRIPT_EXTENSIONS = [".sh", ".applescript"];
 
 function parseScriptMetadata(content: string, fileName: string) {
-	// Default values
 	let name = fileName.replace(/\..*$/, "");
 	let icon = "💻";
 
-	// Try to extract metadata from comments
 	const nameMatch = content.match(/^#\s*name:\s*(.+)$/im);
 	if (nameMatch) name = nameMatch[1].trim();
 	const iconMatch = content.match(/^#\s*icon:\s*(.+)$/im);
@@ -37,90 +41,143 @@ function parseScriptMetadata(content: string, fileName: string) {
 
 export type ScriptsStore = ReturnType<typeof createScriptsStore>;
 
-export const createScriptsStore = (_root: IRootStore) => {
-	const scriptsPath = getScriptsPath();
+export const createScriptsStore = (root: IRootStore) => {
+	const defaultScriptsDirectory = getDefaultScriptsDirectoryPath();
+	const getScriptDirectories = () => [
+		defaultScriptsDirectory,
+		...toJS(root.ui.scriptDirectories),
+	];
 
 	const store = makeAutoObservable({
 		scripts: [] as Item[],
 
 		loadScripts() {
-			const files = solNative.ls(scriptsPath);
 			const scriptItems: Item[] = [];
-			const allowedExtensions = [
-				// '.sh', '.py', '.js', '.ts', '.rb', '.pl', '.command', '.applescript', '.scpt', '.zsh', '.bash'
-				".sh",
-				".applescript",
-			];
-			for (const file of files) {
-				const fullPath = `${scriptsPath}/${file}`;
-				// Only consider files with allowed script extensions
-				if (!allowedExtensions.some((ext) => file.endsWith(ext))) continue;
-				const content = solNative.readFile(fullPath);
-				if (!content) continue;
-				const metadata = parseScriptMetadata(content, file);
-				const command = file.endsWith(".sh")
-					? (metadata.command ?? undefined)
-					: undefined;
-				const execute = async (arguments_: string[] = []) => {
-					try {
-						if (file.endsWith(".applescript")) {
-							await solNative.executeAppleScript(content);
-						} else {
-							await solNative.executeUserScript(
-								content,
-								metadata.name,
-								arguments_,
+
+			for (const scriptsDirectory of getScriptDirectories()) {
+				let files: string[];
+				try {
+					files = solNative.ls(scriptsDirectory);
+				} catch (error) {
+					console.error(
+						`Could not read scripts directory ${scriptsDirectory}:`,
+						error,
+					);
+					continue;
+				}
+
+				for (const file of files) {
+					const lowerFileName = file.toLowerCase();
+					if (
+						!ALLOWED_SCRIPT_EXTENSIONS.some((extension) =>
+							lowerFileName.endsWith(extension),
+						)
+					) {
+						continue;
+					}
+
+					const fullPath = `${scriptsDirectory}/${file}`;
+					const content = solNative.readFile(fullPath);
+					if (!content) continue;
+
+					const metadata = parseScriptMetadata(content, file);
+					const isShellScript = lowerFileName.endsWith(".sh");
+					const command = isShellScript
+						? (metadata.command ?? undefined)
+						: undefined;
+					const execute = async (arguments_: string[] = []) => {
+						try {
+							if (lowerFileName.endsWith(".applescript")) {
+								await solNative.executeAppleScript(content);
+							} else {
+								await solNative.executeUserScript(
+									content,
+									metadata.name,
+									arguments_,
+								);
+							}
+						} catch (error) {
+							solNative.showToast(
+								`Error executing script ${String(error)}`,
+								"error",
 							);
 						}
-					} catch (e) {
-						solNative.showToast(`Error executing script ${e}`, "error");
-					}
-				};
-				scriptItems.push({
-					id: `script-${file}`,
-					name: metadata.name,
-					icon: metadata.icon,
-					...(metadata.argumentMode == null
-						? { subName: "Invalid # arguments header · expected raw or shlex" }
-						: {}),
-					type: ItemType.USER_SCRIPT,
-					callback: () => execute(),
-					...(command && metadata.argumentMode
-						? {
-								command,
-								commandArgumentMode: metadata.argumentMode,
-								commandCallback: (
-									arguments_: string[],
-									_rawArgument: string,
-								) => execute(arguments_),
-							}
-						: {}),
-				});
+					};
+					const id =
+						scriptsDirectory === defaultScriptsDirectory
+							? `script-${file}`
+							: `script-${encodeURIComponent(fullPath)}`;
+
+					scriptItems.push({
+						id,
+						name: metadata.name,
+						icon: metadata.icon,
+						scriptPath: fullPath,
+						...(metadata.argumentMode == null
+							? {
+									subName:
+										"Invalid # arguments header · expected raw or shlex",
+								}
+							: {}),
+						type: ItemType.USER_SCRIPT,
+						callback: () => execute(),
+						...(command && metadata.argumentMode
+							? {
+									command,
+									commandArgumentMode: metadata.argumentMode,
+									commandCallback: (
+										arguments_: string[],
+										_rawArgument: string,
+									) => execute(arguments_),
+								}
+							: {}),
+					});
+				}
 			}
+
 			store.scripts = scriptItems;
 		},
 
 		cleanUp() {
 			onShowListener?.remove();
 			onShowListener = undefined;
-			if (folderWatcher) folderWatcher = undefined;
+			scriptDirectoriesDisposer?.();
+			scriptDirectoriesDisposer = undefined;
+			folderWatchers = [];
 		},
 	});
 
-	// Keep the native HostObject alive for as long as the store exists. If it is
-	// only held by a local variable, Hermes can collect it and silently stop the
-	// FSEvents stream.
-	folderWatcher = solNative.createFolderWatcher(scriptsPath, () => {
-		store.loadScripts();
-	});
+	const refreshFolderWatchers = () => {
+		folderWatchers = [];
+		for (const scriptsDirectory of getScriptDirectories()) {
+			if (!solNative.exists(scriptsDirectory)) continue;
+			try {
+				folderWatchers.push(
+					solNative.createFolderWatcher(scriptsDirectory, () => {
+						store.loadScripts();
+					}),
+				);
+			} catch (error) {
+				console.error(
+					`Could not watch scripts directory ${scriptsDirectory}:`,
+					error,
+				);
+			}
+		}
+	};
 
-	// Refreshing when Sol opens also covers changes made while it was asleep or
-	// before the native watcher was ready.
+	scriptDirectoriesDisposer = reaction(
+		() => root.ui.scriptDirectories.slice(),
+		() => {
+			refreshFolderWatchers();
+			store.loadScripts();
+		},
+		{ fireImmediately: true },
+	);
+
 	onShowListener = solNative.addListener("onShow", () => {
 		store.loadScripts();
 	});
-
-	store.loadScripts();
 
 	return store;
 };

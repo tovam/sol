@@ -19,6 +19,7 @@ export const PORTABLE_KEYS = [
 	"showUpcomingEvent",
 	"scratchPadColor",
 	"searchFolders",
+	"scriptDirectories",
 	"fileSort",
 	"searchEngine",
 	"customSearchUrl",
@@ -73,6 +74,10 @@ export function getConfigPath(): string {
 
 export function getRuntimeStatePath(): string {
 	return `${CONFIG_DIRECTORY_PATH}/state.json`;
+}
+
+export function getDefaultScriptsDirectoryPath(): string {
+	return SCRIPTS_DIRECTORY_PATH;
 }
 
 const readJsonFile = (
