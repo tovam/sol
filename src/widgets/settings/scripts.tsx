@@ -60,7 +60,7 @@ export const Scripts: FC = observer(() => {
 						up by Sol.
 					</Text>
 					<Text className="text-xxs text-neutral-500 dark:text-neutral-400 mt-1">
-						Each script supports these metadata comments:
+						Sol metadata:
 					</Text>
 					<Text className="text-xxs text-neutral-500 dark:text-neutral-400 mt-1">
 						# name: Script Name
@@ -82,6 +82,13 @@ export const Scripts: FC = observer(() => {
 					<Text className="text-xxs text-neutral-500 dark:text-neutral-400 mt-1">
 						Command names use letters, numbers, dots, dashes or underscores; ai,
 						ia and dm are reserved.
+					</Text>
+					<Text className="text-xxs text-neutral-500 dark:text-neutral-400 mt-2">
+						Raycast Script Commands are also supported: @raycast.schemaVersion,
+						title, mode, icon, packageName, description, author and authorURL.
+						Relative icon paths are resolved from the script folder. Silent mode
+						runs without an output panel; other modes use Sol&apos;s compact
+						output panel.
 					</Text>
 				</View>
 			</View>
@@ -136,7 +143,15 @@ export const Scripts: FC = observer(() => {
 				) : (
 					store.scripts.scripts.map((script) => (
 						<View key={script.id} className="mb-1 flex-row items-center">
-							<Text className="mr-2">{script.icon}</Text>
+							{script.iconImage ? (
+								<Image
+									source={script.iconImage}
+									className="w-5 h-5 mr-2"
+									resizeMode="contain"
+								/>
+							) : (
+								<Text className="mr-2">{script.icon}</Text>
+							)}
 							<Text className="text-xs mr-2">{script.name}</Text>
 							<View className="flex-1" />
 							<Text

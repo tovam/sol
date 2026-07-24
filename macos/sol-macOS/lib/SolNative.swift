@@ -231,6 +231,27 @@ class SolNative: RCTEventEmitter {
     resolver(nil)
   }
 
+  @objc func executeScriptFile(
+    _ path: String,
+    name: String,
+    arguments: [String],
+    showOutput: Bool,
+    resolver resolve: RCTPromiseResolveBlock,
+    rejecter reject: RCTPromiseRejectBlock
+  ) {
+    do {
+      try ShellHelper.runScriptFile(
+        path,
+        arguments: arguments,
+        commandName: name,
+        showOutput: showOutput
+      )
+      resolve(nil)
+    } catch {
+      reject("ScriptLaunchError", error.localizedDescription, error)
+    }
+  }
+
   @objc func executeBashScriptWithOutput(
     _ source: String,
     resolver resolve: @escaping RCTPromiseResolveBlock,

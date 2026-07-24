@@ -222,6 +222,12 @@ class SolNative extends NativeEventEmitter {
 		name: string,
 		arguments_: string[],
 	) => Promise<void>;
+	executeScriptFile: (
+		path: string,
+		name: string,
+		arguments_: string[],
+		showOutput: boolean,
+	) => Promise<void>;
 	executeBashScriptWithOutput: (script: string) => Promise<string>;
 	showToast: (
 		text: string,
@@ -290,6 +296,7 @@ class SolNative extends NativeEventEmitter {
 		this.executeBashScript = module.executeBashScript;
 		this.executeBashScriptWithArguments = module.executeBashScriptWithArguments;
 		this.executeUserScript = module.executeUserScript;
+		this.executeScriptFile = module.executeScriptFile;
 		this.executeBashScriptWithOutput = module.executeBashScriptWithOutput;
 		this.executeAppleScript = module.executeAppleScript;
 		this.openWithFinder = module.openWithFinder;
