@@ -17,6 +17,7 @@
 		700A99F22C33D6E30049831F /* QRGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 700A99F12C33D6E30049831F /* QRGenerator.swift */; };
 		A11CE0020000000000000001 /* ScreenRuler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11CE0010000000000000001 /* ScreenRuler.swift */; };
 		B6A000020000000000000001 /* BackgroundSounds.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6A000010000000000000001 /* BackgroundSounds.swift */; };
+		B7A000020000000000000001 /* RedScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A000010000000000000001 /* RedScreen.swift */; };
 		D41100020000000000000001 /* DailymotionPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D41100010000000000000001 /* DailymotionPlayer.swift */; };
 		D41200020000000000000001 /* DailymotionDVRRecordingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D41200010000000000000001 /* DailymotionDVRRecordingManager.swift */; };
 		D41200040000000000000001 /* dvr_cut.py in Resources */ = {isa = PBXBuildFile; fileRef = D41200030000000000000001 /* dvr_cut.py */; };
@@ -99,6 +100,7 @@
 		700A99F12C33D6E30049831F /* QRGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRGenerator.swift; sourceTree = "<group>"; };
 		A11CE0010000000000000001 /* ScreenRuler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenRuler.swift; sourceTree = "<group>"; };
 		B6A000010000000000000001 /* BackgroundSounds.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundSounds.swift; sourceTree = "<group>"; };
+		B7A000010000000000000001 /* RedScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RedScreen.swift; sourceTree = "<group>"; };
 		D41100010000000000000001 /* DailymotionPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailymotionPlayer.swift; sourceTree = "<group>"; };
 		D41200010000000000000001 /* DailymotionDVRRecordingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailymotionDVRRecordingManager.swift; sourceTree = "<group>"; };
 		D41200030000000000000001 /* dvr_cut.py */ = {isa = PBXFileReference; lastKnownFileType = text.script.python; path = dvr_cut.py; sourceTree = "<group>"; };
@@ -324,6 +326,7 @@
 				7074A3A328BDCBBD0032ADD7 /* CalendarHelper.h */,
 				70EFF77328D5F732009FE998 /* DoNotDisturb.swift */,
 				B6A000010000000000000001 /* BackgroundSounds.swift */,
+				B7A000010000000000000001 /* RedScreen.swift */,
 				70B9275E2930A4F700F883A0 /* ShellHelper.swift */,
 				70E15D072931FC57007FFE5F /* FS.swift */,
 				70E15D09293290E9007FFE5F /* JSIUtils.mm */,
@@ -679,6 +682,7 @@
 				700A99F22C33D6E30049831F /* QRGenerator.swift in Sources */,
 				A11CE0020000000000000001 /* ScreenRuler.swift in Sources */,
 				B6A000020000000000000001 /* BackgroundSounds.swift in Sources */,
+				B7A000020000000000000001 /* RedScreen.swift in Sources */,
 				D41100020000000000000001 /* DailymotionPlayer.swift in Sources */,
 				D41200020000000000000001 /* DailymotionDVRRecordingManager.swift in Sources */,
 				A91100020000000000000001 /* NetworkInfoProvider.swift in Sources */,

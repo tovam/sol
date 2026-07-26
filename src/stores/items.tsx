@@ -68,6 +68,32 @@ export function createBaseItems(store: IRootStore) {
 			},
 		},
 		{
+			id: "toggle_red_screen",
+			IconComponent: () => (
+				<View className="w-6 h-6 rounded-md bg-[#260606] items-center justify-center">
+					<View className="w-4 h-4 rounded-full bg-[#c6362f]" />
+				</View>
+			),
+			name: "Toggle Red Screen for Night",
+			alias:
+				"night red filter blue light sleep astronomy dark vision écran rouge nuit lumière bleue sommeil",
+			type: ItemType.CONFIGURATION,
+			callback: async () => {
+				try {
+					const enabled = await solNative.toggleRedScreen();
+					void solNative.showToast(
+						`Red Screen ${enabled ? "enabled" : "disabled"}`,
+						"success",
+					);
+				} catch (error) {
+					void solNative.showToast(
+						`Could not toggle Red Screen: ${String(error)}`,
+						"error",
+					);
+				}
+			},
+		},
+		{
 			id: "sleep",
 			iconImage: Assets.SleepIcon,
 			name: "Sleep",

@@ -98,6 +98,7 @@ class AppDelegate: RCTAppDelegate, UNUserNotificationCenterDelegate {
     ExternalCommandProviderRegistry.shared.stop()
     ExternalIntegrationServer.shared.stop()
     DailymotionDVRRecordingManager.shared.shutdown()
+    RedScreenController.shared.restore()
     super.applicationWillTerminate(notification)
   }
 

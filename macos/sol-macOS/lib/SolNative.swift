@@ -605,6 +605,19 @@ class SolNative: RCTEventEmitter {
     }
   }
 
+  @objc func toggleRedScreen(
+    _ resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    DispatchQueue.main.async {
+      do {
+        resolve(try RedScreenController.shared.toggle())
+      } catch {
+        reject("RedScreenError", error.localizedDescription, error)
+      }
+    }
+  }
+
   @objc func toggleScreenRuler() {
     ScreenRulerController.shared.toggle()
   }
