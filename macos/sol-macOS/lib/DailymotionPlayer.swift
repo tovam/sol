@@ -1657,21 +1657,23 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     }
 
     let unsupportedModifiers: NSEvent.ModifierFlags = [
-      .command, .control, .option, .shift,
+      .command, .control, .option,
     ]
     guard event.modifierFlags.intersection(unsupportedModifiers).isEmpty else {
       return false
     }
 
+    let usesFineSeek = event.modifierFlags.contains(.shift)
     switch event.keyCode {
     case 49:
+      guard !usesFineSeek else { return false }
       if !event.isARepeat {
         controlsDidTogglePlayback(controlsView)
       }
     case 123:
-      controls(controlsView, seekBy: -10)
+      controls(controlsView, seekBy: usesFineSeek ? -3 : -10)
     case 124:
-      controls(controlsView, seekBy: 10)
+      controls(controlsView, seekBy: usesFineSeek ? 3 : 10)
     default:
       return false
     }
