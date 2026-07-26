@@ -1371,6 +1371,9 @@ private final class DailymotionControlsView: NSVisualEffectView,
 final class DailymotionPlayerController: NSObject, NSWindowDelegate {
   static let shared = DailymotionPlayerController()
 
+  private static let initialContentWidth = CGFloat(400)
+  private static let initialVideoAspectRatio = CGFloat(16.0 / 9.0)
+
   private enum ResizeDriver {
     case width
     case height
@@ -1422,7 +1425,8 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
   private var dvrResumeTargetPosition: Double?
   private var dvrResumeTargetRequestedAt = Date.distantPast
   private var lastDVRResumePersistedAt = Date.distantPast
-  private var videoAspectRatio = CGFloat(16.0 / 9.0)
+  private var videoAspectRatio =
+    DailymotionPlayerController.initialVideoAspectRatio
   private var hasResolvedVideoAspectRatio = false
   private var resolvedVideoAspectFrameToken: String?
   private var isApplyingAspectFrame = false
@@ -1592,8 +1596,16 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
       return panel
     }
 
+    let initialContentHeight =
+      Self.initialContentWidth / Self.initialVideoAspectRatio
+      + DailymotionControlsView.twoRowHeight
     let panel = FloatingVideoPanel(
-      contentRect: NSRect(x: 0, y: 0, width: 640, height: 404),
+      contentRect: NSRect(
+        x: 0,
+        y: 0,
+        width: Self.initialContentWidth,
+        height: initialContentHeight
+      ),
       styleMask: [.titled, .closable, .miniaturizable, .resizable, .utilityWindow],
       backing: .buffered,
       defer: false
@@ -1814,7 +1826,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     canonicalVolume = state.volume
     canonicalMuted = source.startsMuted
     shouldKeepMediaUnmuted = !source.startsMuted
-    videoAspectRatio = CGFloat(16.0 / 9.0)
+    videoAspectRatio = Self.initialVideoAspectRatio
     hasResolvedVideoAspectRatio = false
     resolvedVideoAspectFrameToken = nil
     isTransitioningFullscreen = false
