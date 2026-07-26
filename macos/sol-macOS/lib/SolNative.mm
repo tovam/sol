@@ -111,6 +111,8 @@ RCT_EXTERN_METHOD(setSearchWindowAnimation : (NSDictionary)settings)
 RCT_EXTERN_METHOD(completeInitialPresentation : (nonnull NSNumber)height)
 RCT_EXTERN_METHOD(useBackgroundOverlay : (BOOL)v)
 RCT_EXTERN_METHOD(toggleDND)
+RCT_EXTERN_METHOD(toggleBackgroundSounds : (RCTPromiseResolveBlock)
+                      resolve rejecter : (RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(toggleScreenRuler)
 RCT_EXTERN_METHOD(openDailymotionPlayer : (NSString)url resolver : (
     RCTPromiseResolveBlock)resolve rejecter : (RCTPromiseRejectBlock)reject)

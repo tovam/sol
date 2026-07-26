@@ -592,6 +592,19 @@ class SolNative: RCTEventEmitter {
     DoNotDisturb.toggle()
   }
 
+  @objc func toggleBackgroundSounds(
+    _ resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    DispatchQueue.global(qos: .userInitiated).async {
+      do {
+        resolve(try BackgroundSoundsController.shared.toggle())
+      } catch {
+        reject("BackgroundSoundsError", error.localizedDescription, error)
+      }
+    }
+  }
+
   @objc func toggleScreenRuler() {
     ScreenRulerController.shared.toggle()
   }

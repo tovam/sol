@@ -191,6 +191,7 @@ class SolNative extends NativeEventEmitter {
 	setSearchWindowAnimation: (settings: SearchWindowAnimation) => void;
 	useBackgroundOverlay: (v: boolean) => void;
 	toggleDND: () => void;
+	toggleBackgroundSounds: () => Promise<boolean>;
 	toggleScreenRuler: () => void;
 	openDailymotionPlayer: (url: string) => Promise<boolean>;
 	inspectDailymotionDVR: (
@@ -345,6 +346,7 @@ class SolNative extends NativeEventEmitter {
 		this.resizeLeftTwoThirds = module.resizeLeftTwoThirds;
 		this.resizeRightTwoThirds = module.resizeRightTwoThirds;
 		this.toggleDND = module.toggleDND;
+		this.toggleBackgroundSounds = module.toggleBackgroundSounds;
 		this.searchFilesIndexed = global.__SolProxy.searchFilesIndexed;
 		this.hasIndexedContent = global.__SolProxy.hasIndexedContent;
 		this.indexPaths = global.__SolProxy.indexPaths;

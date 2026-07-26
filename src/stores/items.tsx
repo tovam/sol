@@ -46,6 +46,28 @@ export function createBaseItems(store: IRootStore) {
 			},
 		},
 		{
+			id: "toggle_background_sounds",
+			iconImage: Assets.sound,
+			name: "Toggle Background Sounds",
+			alias:
+				"ambient sound noise rain ocean stream fire white noise accessibility focus sleep sons arrière-plan bruit pluie océan nuit",
+			type: ItemType.CONFIGURATION,
+			callback: async () => {
+				try {
+					const enabled = await solNative.toggleBackgroundSounds();
+					void solNative.showToast(
+						`Background Sounds ${enabled ? "enabled" : "disabled"}`,
+						"success",
+					);
+				} catch (error) {
+					void solNative.showToast(
+						`Could not toggle Background Sounds: ${String(error)}`,
+						"error",
+					);
+				}
+			},
+		},
+		{
 			id: "sleep",
 			iconImage: Assets.SleepIcon,
 			name: "Sleep",
