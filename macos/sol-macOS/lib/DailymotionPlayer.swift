@@ -1380,6 +1380,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
   }
 
   private var panel: FloatingVideoPanel?
+  private var keyboardMonitor: Any?
   private var webView: WKWebView?
   private var controlsView: DailymotionControlsView?
   private var userContentController: WKUserContentController?
@@ -1453,6 +1454,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
 
   func windowWillClose(_ notification: Notification) {
     persistCurrentDVRPositionIfPossible(force: true)
+    removeKeyboardMonitor()
     teardownWebView()
     source = nil
     panel = nil
@@ -1621,7 +1623,64 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     panel.center()
 
     self.panel = panel
+    installKeyboardMonitor()
     return panel
+  }
+
+  private func installKeyboardMonitor() {
+    guard keyboardMonitor == nil else { return }
+    keyboardMonitor = NSEvent.addLocalMonitorForEvents(
+      matching: .keyDown
+    ) { [weak self] event in
+      guard self?.handlePlayerKeyDown(event) == true else {
+        return event
+      }
+      return nil
+    }
+  }
+
+  private func removeKeyboardMonitor() {
+    guard let keyboardMonitor else { return }
+    NSEvent.removeMonitor(keyboardMonitor)
+    self.keyboardMonitor = nil
+  }
+
+  private func handlePlayerKeyDown(_ event: NSEvent) -> Bool {
+    guard
+      let panel,
+      panel.isKeyWindow,
+      event.window === panel,
+      let controlsView,
+      !isEditingText(in: panel)
+    else {
+      return false
+    }
+
+    let unsupportedModifiers: NSEvent.ModifierFlags = [
+      .command, .control, .option, .shift,
+    ]
+    guard event.modifierFlags.intersection(unsupportedModifiers).isEmpty else {
+      return false
+    }
+
+    switch event.keyCode {
+    case 49:
+      if !event.isARepeat {
+        controlsDidTogglePlayback(controlsView)
+      }
+    case 123:
+      controls(controlsView, seekBy: -10)
+    case 124:
+      controls(controlsView, seekBy: 10)
+    default:
+      return false
+    }
+    return true
+  }
+
+  private func isEditingText(in panel: NSPanel) -> Bool {
+    panel.firstResponder is NSTextView
+      || panel.firstResponder is NSTextField
   }
 
   private func toolbarHeight(forContentWidth width: CGFloat) -> CGFloat {
