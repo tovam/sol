@@ -15,6 +15,38 @@ const chance = new Chance();
 export function createBaseItems(store: IRootStore) {
 	const items: Item[] = [
 		{
+			id: "toggle_migraine_mode",
+			iconImage: Icons.FaceTired,
+			name: "Migraine Mode",
+			alias:
+				"toggle migraine headache aura ophthalmic photophobia dim warm quiet reduce motion transparency silence mal de tête ophtalmique lumière calme",
+			type: ItemType.CONFIGURATION,
+			callback: async () => {
+				try {
+					const result = await solNative.toggleMigraineMode();
+					const message = result.enabled
+						? "Migraine mode on — screen, motion and sound reduced"
+						: "Migraine mode off — previous settings restored";
+					const unavailableLabel =
+						result.warnings.length > 1 ? "settings" : "setting";
+					const warningSuffix =
+						result.warnings.length > 0
+							? ` (${result.warnings.length} ${unavailableLabel} unavailable)`
+							: "";
+					void solNative.showToast(
+						`${message}${warningSuffix}`,
+						result.warnings.length > 0 ? "error" : "success",
+						6,
+					);
+				} catch (error) {
+					void solNative.showToast(
+						`Could not toggle Migraine Mode: ${String(error)}`,
+						"error",
+					);
+				}
+			},
+		},
+		{
 			id: "toggle_appearance",
 			iconImage: Assets.toggle,
 			name: "Toggle system appearance",

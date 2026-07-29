@@ -16,6 +16,9 @@ class SolNative: RCTEventEmitter {
         withName: "applicationsChanged",
         body: [])
     }
+    DispatchQueue.main.async {
+      MigraineModeController.shared.resumeIfNeeded()
+    }
   }
 
   @objc override func constantsToExport() -> [AnyHashable: Any]! {
@@ -602,6 +605,15 @@ class SolNative: RCTEventEmitter {
       } catch {
         reject("BackgroundSoundsError", error.localizedDescription, error)
       }
+    }
+  }
+
+  @objc func toggleMigraineMode(
+    _ resolve: @escaping RCTPromiseResolveBlock,
+    rejecter _: RCTPromiseRejectBlock
+  ) {
+    DispatchQueue.main.async {
+      resolve(MigraineModeController.shared.toggle())
     }
   }
 

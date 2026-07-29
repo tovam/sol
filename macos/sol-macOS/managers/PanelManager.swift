@@ -321,7 +321,8 @@ private final class ClosingAnimationPanel: NSPanel {
     finalFrame.origin = positionedOrigin(for: finalFrame.size, on: screen)
     restingFrame = finalFrame
 
-    let shouldAnimate = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    let shouldAnimate = !MigraineModeController.shared.isEnabled
+      && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
       && finalFrame.width > 1
       && finalFrame.height > 1
       && searchWindowAnimation.openingDuration > 0
@@ -378,7 +379,8 @@ private final class ClosingAnimationPanel: NSPanel {
     pendingPresentationFrame = nil
     HotKeyManager.shared.settingsHotKey.isPaused = true
 
-    let shouldAnimate = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    let shouldAnimate = !MigraineModeController.shared.isEnabled
+      && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
       && mainWindow.frame.width > 1
       && mainWindow.frame.height > 1
       && searchWindowAnimation.closingDuration > 0
@@ -621,6 +623,7 @@ private final class ClosingAnimationPanel: NSPanel {
     let shouldAnimate = presentationPhase == .visible
       && mainWindow.isVisible
       && staysOnSameScreen
+      && !MigraineModeController.shared.isEnabled
       && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
 
     guard shouldAnimate else {

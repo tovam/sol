@@ -192,6 +192,11 @@ class SolNative extends NativeEventEmitter {
 	useBackgroundOverlay: (v: boolean) => void;
 	toggleDND: () => void;
 	toggleBackgroundSounds: () => Promise<boolean>;
+	toggleMigraineMode: () => Promise<{
+		enabled: boolean;
+		applied: string[];
+		warnings: string[];
+	}>;
 	toggleRedScreen: () => Promise<boolean>;
 	toggleScreenRuler: () => void;
 	openDailymotionPlayer: (url: string) => Promise<boolean>;
@@ -348,6 +353,7 @@ class SolNative extends NativeEventEmitter {
 		this.resizeRightTwoThirds = module.resizeRightTwoThirds;
 		this.toggleDND = module.toggleDND;
 		this.toggleBackgroundSounds = module.toggleBackgroundSounds;
+		this.toggleMigraineMode = module.toggleMigraineMode;
 		this.toggleRedScreen = module.toggleRedScreen;
 		this.searchFilesIndexed = global.__SolProxy.searchFilesIndexed;
 		this.hasIndexedContent = global.__SolProxy.hasIndexedContent;

@@ -23,19 +23,28 @@ final class BackgroundSoundsController {
 
   private init() {}
 
-  func toggle() throws -> Bool {
+  var isEnabled: Bool {
     CFPreferencesAppSynchronize(domain)
-    let wasEnabled =
+    return
       (CFPreferencesCopyAppValue(enabledKey, domain) as? NSNumber)?.boolValue
       ?? false
-    let isEnabled = !wasEnabled
+  }
+
+  func toggle() throws -> Bool {
+    try setEnabled(!isEnabled)
+  }
+
+  @discardableResult
+  func setEnabled(_ enabled: Bool) throws -> Bool {
+    let wasEnabled = isEnabled
+    guard enabled != wasEnabled else { return enabled }
 
     CFPreferencesSetAppValue(
       enabledKey,
-      NSNumber(value: isEnabled),
+      NSNumber(value: enabled),
       domain
     )
-    if isEnabled {
+    if enabled {
       CFPreferencesSetAppValue(
         timestampKey,
         NSNumber(value: Date().timeIntervalSince1970),
@@ -49,7 +58,7 @@ final class BackgroundSoundsController {
 
     do {
       try reloadDaemon()
-      return isEnabled
+      return enabled
     } catch {
       CFPreferencesSetAppValue(
         enabledKey,
