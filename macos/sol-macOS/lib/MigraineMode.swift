@@ -150,7 +150,7 @@ final class MigraineModeController {
       warnings.append("Background sounds: \(error.localizedDescription)")
     }
 
-    if snapshot.audio != nil {
+    if let audio = snapshot.audio {
       do {
         try restoreAudio(audio)
         restored.append("sound")
@@ -182,7 +182,7 @@ final class MigraineModeController {
       applied.append("dim warm display")
     }
 
-    if let audio = snapshot.audio {
+    if snapshot.audio != nil {
       do {
         try silenceAudio()
         applied.append("muted sound and alerts")
@@ -523,8 +523,8 @@ final class MigraineModeController {
   }
 
   private func notifyAccessibilityPreferencesChanged() {
-    DistributedNotificationCenter.default().post(
-      name: NSNotification.Name("com.apple.accessibility.api"),
+    DistributedNotificationCenter.default().postNotificationName(
+      NSNotification.Name("com.apple.accessibility.api"),
       object: nil,
       userInfo: nil,
       deliverImmediately: true
