@@ -11,9 +11,6 @@ namespace sol {
 namespace jsi = facebook::jsi;
 namespace react = facebook::react;
 
-extern std::shared_ptr<react::CallInvoker> invoker;
-
-
 static void FolderWatcherCallback(ConstFSEventStreamRef streamRef,
 								  void *clientCallBackInfo,
 								  size_t numEvents,
@@ -30,25 +27,33 @@ static void FolderWatcherCallback(ConstFSEventStreamRef streamRef,
 		} else if ((eventFlags[i] & kFSEventStreamEventFlagItemRemoved) != 0) {
 			changeType = "deleted";
 		}
-		if (watcher->callback && sol::invoker) {
-			auto cb = watcher->callback;
-			auto &rt = watcher->rt;
-			// Capture values for async invocation
-			sol::invoker->invokeAsync([cb, &rt, pathStr, changeType]() mutable {
-				if (cb && cb->isObject()) {
-					auto func = cb->asObject(rt).asFunction(rt);
-					func.call(rt,
-						facebook::jsi::String::createFromUtf8(rt, pathStr),
-						facebook::jsi::String::createFromUtf8(rt, changeType)
-					);
+		auto callback = watcher->callback;
+		auto jsInvoker = watcher->jsInvoker;
+		if (!callback.expired() && jsInvoker) {
+			jsInvoker->invokeAsync([callback, pathStr, changeType]() mutable {
+				auto lockedCallback = callback.lock();
+				if (!lockedCallback) {
+					return;
 				}
+
+				auto &rt = lockedCallback->runtime();
+				lockedCallback->callback().call(
+					rt,
+					facebook::jsi::String::createFromUtf8(rt, pathStr),
+					facebook::jsi::String::createFromUtf8(rt, changeType)
+				);
 			});
 		}
 	}
 }
 
-FolderWatcherJSI::FolderWatcherJSI(jsi::Runtime &rt, std::string path, std::shared_ptr<jsi::Value> cb)
-	: rt(rt), path(path), callback(cb) {
+FolderWatcherJSI::FolderWatcherJSI(
+	std::string path,
+	std::weak_ptr<react::CallbackWrapper> callback,
+	std::shared_ptr<react::CallInvoker> jsInvoker)
+	: path(std::move(path)),
+	  callback(std::move(callback)),
+	  jsInvoker(std::move(jsInvoker)) {
 	cfPath = CFStringCreateWithCString(nullptr, path.c_str(), kCFStringEncodingUTF8);
 	pathsToWatch = CFArrayCreate(nullptr, (const void**)&cfPath, 1, &kCFTypeArrayCallBacks);
 	startStream();
@@ -104,6 +109,16 @@ void FolderWatcherJSI::handleWakeNotification() {
 
 FolderWatcherJSI::~FolderWatcherJSI() {
 	stopStream();
+	auto callbackToRelease = callback;
+	if (!callbackToRelease.expired() && jsInvoker) {
+		jsInvoker->invokeAsync([callbackToRelease]() mutable {
+			auto lockedCallback = callbackToRelease.lock();
+			if (lockedCallback) {
+				lockedCallback->destroy();
+			}
+		});
+	}
+	callback.reset();
 	if (wakeObserver) {
 		[[NSNotificationCenter defaultCenter] removeObserver:wakeObserver];
 		wakeObserver = nil;
@@ -120,4 +135,3 @@ FolderWatcherJSI::~FolderWatcherJSI() {
 
 
 } // namespace sol
-
