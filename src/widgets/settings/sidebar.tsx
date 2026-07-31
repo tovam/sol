@@ -29,6 +29,7 @@ const PRIMARY_ITEMS: NavigationItem[] = [
 ];
 
 const MANAGE_ITEMS: NavigationItem[] = [
+	{ section: "APPLICATIONS", title: "Applications", icon: Icons.Apple },
 	{ section: "ITEMS", title: "Items & shortcuts", icon: Icons.Dashboard },
 	{ section: "SCRIPTS", title: "Scripts", icon: Icons.Terminal },
 ];

@@ -27,7 +27,13 @@ class Application {
 
 @objc public class ApplicationSearcher: NSObject {
   let searchDepth = 4
+  let customSearchDepth = 12
+  let wildcardTraversalDepth = 32
+  let wildcardTraversalLimit = 50_000
   let fileManager = FileManager()
+
+  private let configurationLock = NSLock()
+  private var configuredSearchPaths: [String] = []
 
   let isAliasResourceKey: [URLResourceKey] = [
     .isAliasFileKey
@@ -68,6 +74,26 @@ class Application {
 
   private var watchedDirectories: [String] = []
   private var wakeObserver: NSObjectProtocol?
+
+  @objc public func setSearchPaths(_ paths: [String]) {
+    var seen = Set<String>()
+    let normalizedPaths = paths.compactMap(normalizeSearchPath).filter {
+      seen.insert($0).inserted
+    }
+
+    configurationLock.lock()
+    let changed = normalizedPaths != configuredSearchPaths
+    configuredSearchPaths = normalizedPaths
+    configurationLock.unlock()
+
+    guard changed else { return }
+
+    DispatchQueue.main.async { [weak self] in
+      guard let self = self else { return }
+      self.stopWatchingFolders()
+      self.startWatchingFolders()
+    }
+  }
 
   override init() {
     super.init()
@@ -119,7 +145,7 @@ class Application {
 
     do {
       // Get all the application directories we want to watch
-      let directoriesUrls = try getApplicationDirectories()
+      let directoriesUrls = try getWatchedDirectories()
       for url in directoriesUrls {
         watchedDirectories.append(url.path)
       }
@@ -261,6 +287,65 @@ class Application {
     return directories
   }
 
+  private func currentSearchPaths() -> [String] {
+    configurationLock.lock()
+    let paths = configuredSearchPaths
+    configurationLock.unlock()
+    return paths
+  }
+
+  private func normalizeSearchPath(_ rawPath: String) -> String? {
+    let trimmed = rawPath.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return nil }
+
+    let expanded = (trimmed as NSString).expandingTildeInPath
+    guard expanded.hasPrefix("/") else { return nil }
+
+    var standardized = (expanded as NSString).standardizingPath
+    while standardized.count > 1 && standardized.hasSuffix("/") {
+      standardized.removeLast()
+    }
+    return standardized
+  }
+
+  private func containsWildcard(_ path: String) -> Bool {
+    return path.contains("*") || path.contains("?")
+  }
+
+  private func wildcardSearchRoot(for path: String) -> URL? {
+    guard let wildcardIndex = path.firstIndex(where: { $0 == "*" || $0 == "?" }) else {
+      let url = URL(fileURLWithPath: path)
+      return url.pathExtension.lowercased() == "app"
+        ? url.deletingLastPathComponent()
+        : url
+    }
+
+    var prefix = String(path[..<wildcardIndex])
+    if !prefix.hasSuffix("/") {
+      prefix = (prefix as NSString).deletingLastPathComponent
+    }
+    if prefix.isEmpty {
+      prefix = "/"
+    }
+    return URL(fileURLWithPath: prefix)
+  }
+
+  private func getWatchedDirectories() throws -> [URL] {
+    var urls = try getApplicationDirectories()
+    urls.append(contentsOf: currentSearchPaths().compactMap(wildcardSearchRoot))
+
+    var seen = Set<String>()
+    return urls.filter { url in
+      var isDirectory: ObjCBool = false
+      guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory),
+        isDirectory.boolValue
+      else {
+        return false
+      }
+      return seen.insert(url.standardizedFileURL.path).inserted
+    }
+  }
+
   @objc public func getAllApplications() -> [[String: Any]] {
     var appUrls: [URL] = []
     appUrls.append(contentsOf: fixedUrls)
@@ -277,6 +362,10 @@ class Application {
       breadcrumb.message = "Error getting all applications at localDomainMask"
       SentrySDK.addBreadcrumb(breadcrumb)
       SentrySDK.capture(error: error)
+    }
+
+    for searchPath in currentSearchPaths() {
+      appUrls.append(contentsOf: getApplicationUrls(for: searchPath))
     }
 
     var applications = [String: Application]()
@@ -337,12 +426,160 @@ class Application {
     return applications.values.map { $0.toDictionary() }
   }
 
-  private func getApplicationUrlsAt(_ url: URL, depth: Int = 0) -> [URL] {
+  private func getApplicationUrls(for searchPath: String) -> [URL] {
+    if containsWildcard(searchPath) {
+      return getApplicationUrlsMatching(searchPath)
+    }
+    return getApplicationUrlsAt(
+      URL(fileURLWithPath: searchPath),
+      maximumDepth: customSearchDepth
+    )
+  }
+
+  private func componentMatcher(for wildcard: String) -> NSRegularExpression? {
+    var pattern = "^"
+    for character in wildcard {
+      switch character {
+      case "*":
+        pattern += ".*"
+      case "?":
+        pattern += "."
+      default:
+        pattern += NSRegularExpression.escapedPattern(for: String(character))
+      }
+    }
+    pattern += "$"
+    return try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
+  }
+
+  private func component(_ value: String, matches wildcard: String) -> Bool {
+    guard let matcher = componentMatcher(for: wildcard) else { return false }
+    let range = NSRange(value.startIndex..<value.endIndex, in: value)
+    return matcher.firstMatch(in: value, options: [], range: range) != nil
+  }
+
+  private func directoryContents(at url: URL) -> [URL] {
+    do {
+      return try fileManager.contentsOfDirectory(
+        at: url,
+        includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
+        options: [.skipsHiddenFiles]
+      )
+    } catch {
+      return []
+    }
+  }
+
+  private func isDirectory(_ url: URL) -> Bool {
+    var isDirectory: ObjCBool = false
+    return fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory)
+      && isDirectory.boolValue
+  }
+
+  private func getApplicationUrlsMatching(_ searchPath: String) -> [URL] {
+    guard let root = wildcardSearchRoot(for: searchPath), isDirectory(root) else {
+      return []
+    }
+
+    let rootPath = root.standardizedFileURL.path
+    var suffix = String(searchPath.dropFirst(min(rootPath.count, searchPath.count)))
+    suffix = suffix.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    let components = suffix.isEmpty
+      ? []
+      : (suffix as NSString).pathComponents.filter { $0 != "/" }
+
+    var applicationUrls: [URL] = []
+    var seenApplications = Set<String>()
+    var visitedDirectories = Set<String>()
+    var traversedEntries = 0
+
+    func addMatchedPath(_ url: URL) {
+      if url.pathExtension.lowercased() == "app" {
+        let path = url.standardizedFileURL.path
+        if seenApplications.insert(path).inserted {
+          applicationUrls.append(url)
+        }
+        return
+      }
+
+      guard isDirectory(url) else { return }
+      for appURL in getApplicationUrlsAt(url, maximumDepth: customSearchDepth) {
+        let path = appURL.standardizedFileURL.path
+        if seenApplications.insert(path).inserted {
+          applicationUrls.append(appURL)
+        }
+      }
+    }
+
+    func expand(_ url: URL, componentIndex: Int, depth: Int) {
+      guard traversedEntries < wildcardTraversalLimit,
+        depth <= wildcardTraversalDepth
+      else {
+        return
+      }
+
+      if componentIndex >= components.count {
+        addMatchedPath(url)
+        return
+      }
+
+      let wildcard = components[componentIndex]
+      if wildcard == "**" {
+        // ** can match no directory at all.
+        expand(url, componentIndex: componentIndex + 1, depth: depth)
+
+        guard depth < wildcardTraversalDepth else { return }
+        let resolvedDirectory = url.resolvingSymlinksInPath().standardizedFileURL.path
+        let visitKey = "\(componentIndex):\(resolvedDirectory)"
+        guard visitedDirectories.insert(visitKey).inserted else { return }
+
+        for child in directoryContents(at: url) {
+          traversedEntries += 1
+          if traversedEntries >= wildcardTraversalLimit { return }
+          if child.pathExtension.lowercased() == "app" {
+            if componentIndex == components.count - 1 {
+              addMatchedPath(child)
+            }
+          } else if isDirectory(child) {
+            expand(child, componentIndex: componentIndex, depth: depth + 1)
+          }
+        }
+        return
+      }
+
+      if containsWildcard(wildcard) {
+        for child in directoryContents(at: url) {
+          traversedEntries += 1
+          if traversedEntries >= wildcardTraversalLimit { return }
+          guard component(child.lastPathComponent, matches: wildcard) else {
+            continue
+          }
+          expand(child, componentIndex: componentIndex + 1, depth: depth + 1)
+        }
+        return
+      }
+
+      let child = url.appendingPathComponent(wildcard)
+      traversedEntries += 1
+      guard fileManager.fileExists(atPath: child.path) else { return }
+      expand(child, componentIndex: componentIndex + 1, depth: depth + 1)
+    }
+
+    expand(root, componentIndex: 0, depth: 0)
+    return applicationUrls
+  }
+
+  private func getApplicationUrlsAt(
+    _ url: URL,
+    depth: Int = 0,
+    maximumDepth: Int? = nil
+  ) -> [URL] {
     if !fileManager.fileExists(atPath: url.path) {
       return []
     }
 
-    if depth > searchDepth {
+    let depthLimit = maximumDepth ?? searchDepth
+    if depth > depthLimit {
       return []
     }
 
@@ -392,7 +629,11 @@ class Application {
         )
 
         contents.forEach {
-          let subUrls = getApplicationUrlsAt($0, depth: depth + 1)
+          let subUrls = getApplicationUrlsAt(
+            $0,
+            depth: depth + 1,
+            maximumDepth: depthLimit
+          )
           urls.append(contentsOf: subUrls)
         }
 

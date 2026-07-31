@@ -260,6 +260,7 @@ class SolNative extends NativeEventEmitter {
 	getWifiInfo: typeof global.__SolProxy.getWifiInfo;
 	restart: () => void;
 	openFilePicker: () => Promise<string | null>;
+	setApplicationSearchPaths: (paths: string[]) => void;
 	showWindow: typeof global.__SolProxy.showWindow;
 	showWifiQR: (ssid: string, password: string) => void;
 	generateQRCode: (text: string) => Promise<string>;
@@ -419,6 +420,7 @@ class SolNative extends NativeEventEmitter {
 		this.restart = module.restart;
 
 		this.openFilePicker = module.openFilePicker;
+		this.setApplicationSearchPaths = module.setApplicationSearchPaths;
 		this.showWindow = global.__SolProxy.showWindow;
 
 		this.showWifiQR = module.showWifiQR;

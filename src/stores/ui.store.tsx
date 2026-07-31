@@ -190,6 +190,42 @@ const normalizeScriptDirectories = (value: unknown): string[] => {
 	return directories;
 };
 
+const normalizeApplicationSearchPath = (value: unknown): string | null => {
+	if (typeof value !== "string") return null;
+	const trimmed = value.trim();
+	if (!trimmed) return null;
+
+	try {
+		const decoded = decodeURI(trimmed.replace(/^file:\/\//i, ""));
+		if (
+			decoded !== "~" &&
+			!decoded.startsWith("~/") &&
+			!decoded.startsWith("/")
+		) {
+			return null;
+		}
+		return decoded === "/" ? decoded : decoded.replace(/\/+$/, "");
+	} catch {
+		return null;
+	}
+};
+
+const normalizeApplicationSearchPaths = (value: unknown): string[] => {
+	if (!Array.isArray(value)) return [];
+
+	const seen = new Set<string>();
+	const paths: string[] = [];
+	for (const candidate of value) {
+		const path = normalizeApplicationSearchPath(candidate);
+		if (!path) continue;
+		const identity = path.toLocaleLowerCase();
+		if (seen.has(identity)) continue;
+		seen.add(identity);
+		paths.push(path);
+	}
+	return paths;
+};
+
 const resolveAICommandPrompt = (query: string) =>
 	query.match(/^\s*(?:ai|ia)\s+(.+?)\s*$/i)?.[1]?.trim() ?? null;
 
@@ -238,6 +274,7 @@ export enum ScratchPadColor {
 export type SettingsSection =
 	| "ABOUT"
 	| "GENERAL"
+	| "APPLICATIONS"
 	| "TRANSLATE"
 	| "ITEMS"
 	| "SCRIPTS"
@@ -469,6 +506,7 @@ export const createUIStore = (root: IRootStore) => {
 	// Guards against spurious writes during hydrate/reload
 	let isHydrating = false;
 	let initialPresentationReadySent = false;
+	let applicationSearchRequestId = 0;
 	let fileSearchRequestId = 0;
 	let fileSearchPrefetchTimer: ReturnType<typeof setTimeout> | undefined;
 	let fileSearchCacheEpoch = 0;
@@ -699,6 +737,9 @@ export const createUIStore = (root: IRootStore) => {
 					store.showUpcomingEvent = src.showUpcomingEvent ?? true;
 					store.scratchPadColor = src.scratchPadColor ?? ScratchPadColor.SYSTEM;
 					store.searchFolders = src.searchFolders ?? defaultSearchFolders;
+					store.applicationSearchPaths = normalizeApplicationSearchPaths(
+						src.applicationSearchPaths,
+					);
 					store.scriptDirectories = normalizeScriptDirectories(
 						src.scriptDirectories,
 					);
@@ -741,6 +782,9 @@ export const createUIStore = (root: IRootStore) => {
 				solNative.setMediaKeyForwardingEnabled(store.mediaKeyForwardingEnabled);
 				solNative.setHyperKeyEnabled(store.hyperKeyEnabled);
 				solNative.updateHotkeys(toJS(store.shortcuts));
+				solNative.setApplicationSearchPaths(
+					toJS(store.applicationSearchPaths),
+				);
 
 				store.username = solNative.userName();
 				store.getApps();
@@ -808,6 +852,10 @@ export const createUIStore = (root: IRootStore) => {
 					store.scratchPadColor = jsonConfig.scratchPadColor;
 				if (jsonConfig.searchFolders !== undefined)
 					store.searchFolders = jsonConfig.searchFolders;
+				if (jsonConfig.applicationSearchPaths !== undefined)
+					store.applicationSearchPaths = normalizeApplicationSearchPaths(
+						jsonConfig.applicationSearchPaths,
+					);
 				if (jsonConfig.scriptDirectories !== undefined)
 					store.scriptDirectories = normalizeScriptDirectories(
 						jsonConfig.scriptDirectories,
@@ -843,6 +891,10 @@ export const createUIStore = (root: IRootStore) => {
 			solNative.setMediaKeyForwardingEnabled(store.mediaKeyForwardingEnabled);
 			solNative.setHyperKeyEnabled(store.hyperKeyEnabled);
 			solNative.updateHotkeys(toJS(store.shortcuts));
+			solNative.setApplicationSearchPaths(
+				toJS(store.applicationSearchPaths),
+			);
+			void store.getApps();
 		} finally {
 			isHydrating = false;
 		}
@@ -915,6 +967,7 @@ export const createUIStore = (root: IRootStore) => {
 		showUpcomingEvent: true,
 		scratchPadColor: ScratchPadColor.SYSTEM,
 		searchFolders: [] as string[],
+		applicationSearchPaths: [] as string[],
 		scriptDirectories: [] as string[],
 		fileSort: FileSort.NAME_ASC as FileSort,
 		shortcuts: defaultShortcuts as Record<string, string>,
@@ -1870,7 +1923,9 @@ export const createUIStore = (root: IRootStore) => {
 			// }
 		},
 		getApps: async () => {
+			const requestId = ++applicationSearchRequestId;
 			const apps = await solNative.getApplications();
+			if (requestId !== applicationSearchRequestId) return;
 			store.updateApps(apps);
 		},
 		setApplicationRunning: (path: string, isRunning: boolean) => {
@@ -2229,6 +2284,47 @@ export const createUIStore = (root: IRootStore) => {
 			fileSearchRequestId += 1;
 			store.searchFolders = store.searchFolders.filter((f) => f !== folder);
 			void solNative.removeIndexedPath(folder).then(clearFileSearchCache);
+		},
+
+		addApplicationSearchPath: (value: string) => {
+			const path = normalizeApplicationSearchPath(value);
+			if (!path) return false;
+
+			const standardPaths = new Set([
+				"/applications",
+				"/system/applications",
+				"~/applications",
+				`/users/${solNative.userName().toLocaleLowerCase()}/applications`,
+			]);
+			const identity = path.toLocaleLowerCase();
+			if (
+				standardPaths.has(identity) ||
+				store.applicationSearchPaths.some(
+					(candidate) => candidate.toLocaleLowerCase() === identity,
+				)
+			) {
+				return false;
+			}
+
+			store.applicationSearchPaths = [
+				...store.applicationSearchPaths,
+				path,
+			];
+			solNative.setApplicationSearchPaths(
+				toJS(store.applicationSearchPaths),
+			);
+			void store.getApps();
+			return true;
+		},
+
+		removeApplicationSearchPath: (path: string) => {
+			store.applicationSearchPaths = store.applicationSearchPaths.filter(
+				(candidate) => candidate !== path,
+			);
+			solNative.setApplicationSearchPaths(
+				toJS(store.applicationSearchPaths),
+			);
+			void store.getApps();
 		},
 
 		addScriptDirectory: (folder: string) => {

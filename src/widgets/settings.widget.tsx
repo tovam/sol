@@ -6,6 +6,7 @@ import { useStore } from "store";
 import type { SettingsSection } from "stores/ui.store";
 import { About } from "./settings/about";
 import { AI } from "./settings/ai";
+import { Applications } from "./settings/applications";
 import { Calendars } from "./settings/calendars";
 import { DailymotionSettings } from "./settings/dailymotion";
 import { General } from "./settings/general";
@@ -25,6 +26,10 @@ const sectionDetails: Record<
 	AI: {
 		title: "Artificial intelligence",
 		description: "Providers, models, credentials and usage",
+	},
+	APPLICATIONS: {
+		title: "Applications",
+		description: "Discovery locations and detected applications",
 	},
 	TRANSLATE: {
 		title: "Translation",
@@ -69,6 +74,7 @@ export const SettingsWidget: FC = observer(() => {
 				</View>
 				<View className="flex-1">
 					{selected === "GENERAL" && <General />}
+					{selected === "APPLICATIONS" && <Applications />}
 					{selected === "ITEMS" && <Items />}
 					{selected === "TRANSLATE" && <Translate />}
 					{selected === "SCRIPTS" && <Scripts />}

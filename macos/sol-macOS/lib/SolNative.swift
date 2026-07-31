@@ -896,6 +896,10 @@ class SolNative: RCTEventEmitter {
     }
   }
 
+  @objc func setApplicationSearchPaths(_ paths: [String]) {
+    ApplicationSearcher.shared.setSearchPaths(paths)
+  }
+
   @objc func updateHotkeys(_ hotkeys: NSDictionary) {
     guard let hotkeys = hotkeys as? [String: String] else { return }
     HotKeyManager.shared.updateHotkeys(hotkeyMap: hotkeys)
