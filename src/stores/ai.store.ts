@@ -1,13 +1,17 @@
 import {
 	DEFAULT_AI_SETTINGS,
+	AIStreamCancelledError,
 	fetchAIModels,
 	loadAISettings,
 	requestAI,
+	requestAIStream,
 	saveAISettings,
 	type AIMessage,
 	type AIProvider,
 	type AIProviderSettings,
+	type AIRequestResult,
 	type AISettings,
+	type AIStreamingRequest,
 } from "lib/ai";
 import type { AIModelInfo } from "lib/aiModels";
 import { isOfficialOpenAIAPIBaseURL } from "lib/aiHttp";
@@ -225,6 +229,9 @@ export const createAIStore = () => {
 	let initializationPromise: Promise<void> | undefined;
 	let secretsPromise: Promise<void> | undefined;
 	let disposed = false;
+	let streamingSlot:
+		| { cancelled: boolean; request?: AIStreamingRequest }
+		| undefined;
 	const requestSequence: Record<AIProvider, number> = {
 		openai: 0,
 		openwebui: 0,
@@ -237,6 +244,32 @@ export const createAIStore = () => {
 			conversations: store.conversations.map(cloneConversation),
 			activeConversationID: store.activeConversationID,
 			openAILifetimeCost: toJS(store.openAILifetimeCost),
+		});
+	};
+
+	const recordRequestResult = (
+		provider: AIProvider,
+		settings: AIProviderSettings,
+		result: AIRequestResult,
+	) => {
+		if (provider !== "openai") return;
+		const { lifetime } = result.usage
+			? isOfficialOpenAIAPIBaseURL(settings.baseURL) &&
+				(result.serviceTier == null || result.serviceTier === "default")
+				? accumulateOpenAIUsageCost(store.openAILifetimeCost, result.usage)
+				: accumulateUnpricedOpenAIUsage(
+						store.openAILifetimeCost,
+						result.usage,
+						isOfficialOpenAIAPIBaseURL(settings.baseURL)
+							? "non-standard-service-tier"
+							: "non-official-endpoint",
+					)
+			: accumulateOpenAIRequestWithoutUsage(
+					store.openAILifetimeCost,
+					result.model,
+				);
+		runInAction(() => {
+			store.openAILifetimeCost = lifetime;
 		});
 	};
 
@@ -635,31 +668,52 @@ export const createAIStore = () => {
 			const validationError = validateAIProviderSettings(provider, settings);
 			if (validationError) throw new Error(validationError);
 			const result = await requestAI(provider, settings, messages);
-			if (provider === "openai") {
-				const { lifetime } = result.usage
-					? isOfficialOpenAIAPIBaseURL(settings.baseURL) &&
-						(result.serviceTier == null || result.serviceTier === "default")
-						? accumulateOpenAIUsageCost(
-								store.openAILifetimeCost,
-								result.usage,
-							)
-						: accumulateUnpricedOpenAIUsage(
-								store.openAILifetimeCost,
-								result.usage,
-								isOfficialOpenAIAPIBaseURL(settings.baseURL)
-									? "non-standard-service-tier"
-									: "non-official-endpoint",
-							)
-					: accumulateOpenAIRequestWithoutUsage(
-							store.openAILifetimeCost,
-							result.model,
-						);
-				runInAction(() => {
-					store.openAILifetimeCost = lifetime;
-				});
-			}
+			recordRequestResult(provider, settings, result);
 			if (!result.text) throw new Error("The API returned no text");
 			return result.text;
+		},
+
+		requestStreaming: async (
+			messages: AIMessage[],
+			onText: (text: string) => void,
+			selection?: Pick<QueuedAIConversation, "provider" | "model">,
+		) => {
+			if (streamingSlot) {
+				throw new Error("Another AI response is already streaming");
+			}
+			const slot: { cancelled: boolean; request?: AIStreamingRequest } = {
+				cancelled: false,
+			};
+			streamingSlot = slot;
+
+			try {
+				await store.ensureSecretsLoaded();
+				if (slot.cancelled) throw new AIStreamCancelledError();
+				const provider = selection?.provider ?? store.settings.provider;
+				const settings = {
+					...store.settings[provider],
+					...(selection ? { model: selection.model } : {}),
+				};
+				const validationError = validateAIProviderSettings(provider, settings);
+				if (validationError) throw new Error(validationError);
+
+				const request = requestAIStream(provider, settings, messages, onText);
+				slot.request = request;
+				if (slot.cancelled) request.cancel();
+				const result = await request.result;
+				recordRequestResult(provider, settings, result);
+				if (!result.text) throw new Error("The API returned no text");
+				return result.text;
+			} finally {
+				if (streamingSlot === slot) streamingSlot = undefined;
+			}
+		},
+
+		cancelStreamingRequest() {
+			if (!streamingSlot) return false;
+			streamingSlot.cancelled = true;
+			streamingSlot.request?.cancel();
+			return true;
 		},
 
 		saveSecureSettings: async () => {
@@ -742,6 +796,8 @@ export const createAIStore = () => {
 
 		cleanUp() {
 			disposed = true;
+			streamingSlot?.request?.cancel();
+			streamingSlot = undefined;
 			requestSequence.openai += 1;
 			requestSequence.openwebui += 1;
 			persistDisposer?.();

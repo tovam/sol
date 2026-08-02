@@ -63,7 +63,31 @@ class SolNative: RCTEventEmitter {
       "applicationsChanged",
       "dailymotionDVRRecordingChanged",
       "externalCommandProvidersChanged",
+      "aiStreamData",
+      "aiStreamCompleted",
+      "aiStreamFailed",
     ]
+  }
+
+  @objc func startAIStream(
+    _ options: NSDictionary,
+    resolver resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    guard let request = options as? [String: Any] else {
+      reject("AIStreamingError", "Invalid AI stream options", nil)
+      return
+    }
+
+    do {
+      resolve(try AIStreamingManager.shared.start(options: request))
+    } catch {
+      reject("AIStreamingError", error.localizedDescription, error)
+    }
+  }
+
+  @objc func cancelAIStream(_ requestID: String) {
+    AIStreamingManager.shared.cancel(requestID: requestID)
   }
 
   @objc func getExternalCommandProviders(

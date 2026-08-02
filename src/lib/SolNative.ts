@@ -103,6 +103,13 @@ export type ExternalCommandProvider = {
 	commands: ExternalCommandDefinition[];
 };
 
+export type AIStreamRequestOptions = {
+	requestID: string;
+	endpoint: string;
+	headers: Record<string, string>;
+	body: Record<string, unknown>;
+};
+
 class SolNative extends NativeEventEmitter {
 	openFile: (path: string) => void;
 	openWithFinder: (path: string) => void;
@@ -112,6 +119,8 @@ class SolNative extends NativeEventEmitter {
 	getApps: () => Promise<
 		Array<{ name: string; url: string; isRunning: boolean }>
 	>;
+	startAIStream: (options: AIStreamRequestOptions) => Promise<string>;
+	cancelAIStream: (requestID: string) => void;
 	getExternalCommandProviders: () => Promise<ExternalCommandProvider[]>;
 	setExternalCommandReservedNames: (names: string[]) => void;
 	invokeExternalCommand: (
@@ -293,6 +302,8 @@ class SolNative extends NativeEventEmitter {
 		this.getEvents = global.__SolProxy.getEvents;
 		this.getCalendars = global.__SolProxy.getCalendars;
 		this.getApps = module.getApps;
+		this.startAIStream = module.startAIStream;
+		this.cancelAIStream = module.cancelAIStream;
 		this.getExternalCommandProviders = module.getExternalCommandProviders;
 		this.setExternalCommandReservedNames =
 			module.setExternalCommandReservedNames;

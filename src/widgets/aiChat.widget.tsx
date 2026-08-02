@@ -1,7 +1,7 @@
 import { BackButton } from "components/BackButton";
 import { AIProviderModelControls } from "components/AIProviderModelControls";
 import { TextInput } from "components/TextInput";
-import type { AIMessage } from "lib/ai";
+import { isAIStreamCancelledError, type AIMessage } from "lib/ai";
 import { solNative } from "lib/SolNative";
 import { observer } from "mobx-react-lite";
 import { useEffect, useRef, useState } from "react";
@@ -26,6 +26,8 @@ export const AIChatWidget = observer(() => {
 	const [input, setInput] = useState("");
 	const [error, setError] = useState("");
 	const [loading, setLoading] = useState(false);
+	const [streamedAnswer, setStreamedAnswer] = useState("");
+	const streamedAnswerRef = useRef("");
 	const sendRef = useRef<(queued?: QueuedAIConversation) => void>(
 		() => undefined,
 	);
@@ -39,7 +41,14 @@ export const AIChatWidget = observer(() => {
 
 	const newConversation = () => {
 		store.ai.startNewConversation();
+		streamedAnswerRef.current = "";
+		setStreamedAnswer("");
 		setError("");
+	};
+
+	const updateStreamedAnswer = (answer: string) => {
+		streamedAnswerRef.current = answer;
+		setStreamedAnswer(answer);
 	};
 
 	const send = async (queued?: QueuedAIConversation) => {
@@ -61,14 +70,16 @@ export const AIChatWidget = observer(() => {
 		if (conversationID) store.ai.setConversationPending(conversationID, true);
 		setInput("");
 		setError("");
+		updateStreamedAnswer("");
 		setLoading(true);
 
 		try {
-			const answer = await store.ai.request(
+			const answer = await store.ai.requestStreaming(
 				messagesWithQuestion.map(({ role, content: messageContent }) => ({
 					role,
 					content: messageContent,
 				})),
+				updateStreamedAnswer,
 				queued
 					? { provider: queued.provider, model: queued.model }
 					: undefined,
@@ -81,15 +92,25 @@ export const AIChatWidget = observer(() => {
 				store.ai.updateConversation(conversationID, completedMessages);
 			}
 		} catch (requestError) {
-			setError(
-				requestError instanceof Error
-					? requestError.message
-					: "The request failed",
-			);
+			const partialAnswer = streamedAnswerRef.current;
+			if (partialAnswer && conversationID) {
+				store.ai.updateConversation(conversationID, [
+					...messagesWithQuestion,
+					createMessage("assistant", partialAnswer),
+				]);
+			}
+			if (!isAIStreamCancelledError(requestError)) {
+				setError(
+					requestError instanceof Error
+						? requestError.message
+						: "The request failed",
+				);
+			}
 		} finally {
 			if (conversationID) store.ai.setConversationPending(conversationID, false);
 			submittingRef.current = false;
 			setLoading(false);
+			updateStreamedAnswer("");
 		}
 	};
 
@@ -149,10 +170,10 @@ export const AIChatWidget = observer(() => {
 							<Text className="text text-xs">Settings</Text>
 						</TouchableOpacity>
 						<View className="w-px h-4 bg-neutral-300 dark:bg-neutral-600" />
-						<TouchableOpacity
-							disabled={loading}
-							className={`h-full px-3 items-center justify-center ${
-								loading ? "opacity-50" : ""
+							<TouchableOpacity
+								disabled={isConversationLoading}
+								className={`h-full px-3 items-center justify-center ${
+									isConversationLoading ? "opacity-50" : ""
 							}`}
 							onPress={newConversation}
 						>
@@ -174,7 +195,11 @@ export const AIChatWidget = observer(() => {
 				ref={scrollView}
 				className="flex-1 px-4 py-3"
 				contentContainerStyle={{ flexGrow: 1, gap: 8, paddingBottom: 12 }}
-				onContentSizeChange={() => scrollView.current?.scrollToEnd()}
+					onContentSizeChange={() =>
+						scrollView.current?.scrollToEnd({
+							animated: !isConversationLoading,
+						})
+					}
 			>
 				{messages.length === 0 && (
 					<View className="flex-1 items-center justify-center py-12">
@@ -208,9 +233,17 @@ export const AIChatWidget = observer(() => {
 					</View>
 				))}
 				{isConversationLoading && (
-					<View className="self-start subBg border border-color px-3 py-2 rounded-lg flex-row items-center gap-2">
-						<ActivityIndicator size="small" />
-						<Text className="text-xs darker-text">Thinking…</Text>
+					<View className="self-start max-w-[84%] subBg border border-color px-3 py-2 rounded-lg">
+						{streamedAnswer ? (
+							<Text selectable className="text text-sm leading-5">
+								{streamedAnswer}
+							</Text>
+						) : (
+							<View className="flex-row items-center gap-2">
+								<ActivityIndicator size="small" />
+								<Text className="text-xs darker-text">Thinking…</Text>
+							</View>
+						)}
 					</View>
 				)}
 			</ScrollView>
@@ -230,17 +263,24 @@ export const AIChatWidget = observer(() => {
 						placeholder="Write a message…"
 					/>
 				</View>
-				<TouchableOpacity
-					className={`px-4 py-2 rounded-lg ${
-						isConversationLoading || !input.trim()
-							? "bg-neutral-500"
-							: "bg-accent-strong"
-					}`}
-					disabled={isConversationLoading || !input.trim()}
-					onPress={() => void send()}
-				>
-					<Text className="text-white text-sm font-semibold">Send  ⌘↩</Text>
-				</TouchableOpacity>
+				{isConversationLoading ? (
+					<TouchableOpacity
+						className="px-4 py-2 rounded-lg border border-red-400/60 subBg"
+						onPress={() => store.ai.cancelStreamingRequest()}
+					>
+						<Text className="text-red-500 text-sm font-semibold">Stop</Text>
+					</TouchableOpacity>
+				) : (
+					<TouchableOpacity
+						className={`px-4 py-2 rounded-lg ${
+							!input.trim() ? "bg-neutral-500" : "bg-accent-strong"
+						}`}
+						disabled={!input.trim()}
+						onPress={() => void send()}
+					>
+						<Text className="text-white text-sm font-semibold">Send  ⌘↩</Text>
+					</TouchableOpacity>
+				)}
 			</View>
 		</View>
 	);
