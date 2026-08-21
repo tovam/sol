@@ -568,6 +568,18 @@ export function createBaseItems(store: IRootStore) {
 			},
 		},
 		{
+			id: "open_floating_spreadsheet",
+			icon: "▦",
+			name: "Open Spreadsheet",
+			alias:
+				"sheets tableurs open load reopen ouvrir charger tableur sauvegardé saved spreadsheet",
+			type: ItemType.CONFIGURATION,
+			preventClose: true,
+			callback: () => {
+				store.ui.setQuery("sheets ");
+			},
+		},
+		{
 			id: "check_for_updates",
 			icon: "🆙",
 			name: "Check for Sol updates",

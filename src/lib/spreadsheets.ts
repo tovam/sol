@@ -1,4 +1,16 @@
 const createAliases = new Set(["sheet", "spreadsheet", "excel", "tableur"]);
+const browseAliases = [
+	"sheets",
+	"tableurs",
+	"open sheet",
+	"open spreadsheet",
+	"open tableur",
+	"load sheet",
+	"load spreadsheet",
+	"load tableur",
+	"ouvrir tableur",
+	"charger tableur",
+];
 
 export type SpreadsheetCommand =
 	| { kind: "create" }
@@ -10,9 +22,11 @@ export const resolveSpreadsheetCommand = (
 	const trimmed = query.trim();
 	const normalized = trimmed.toLocaleLowerCase();
 	if (createAliases.has(normalized)) return { kind: "create" };
-	if (normalized === "sheets") return { kind: "list", filter: "" };
-	if (normalized.startsWith("sheets ")) {
-		return { kind: "list", filter: trimmed.slice(7).trim() };
+	for (const alias of browseAliases) {
+		if (normalized === alias) return { kind: "list", filter: "" };
+		if (normalized.startsWith(`${alias} `)) {
+			return { kind: "list", filter: trimmed.slice(alias.length).trim() };
+		}
 	}
 	return null;
 };
