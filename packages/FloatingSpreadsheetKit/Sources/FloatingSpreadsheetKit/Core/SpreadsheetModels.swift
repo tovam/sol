@@ -344,6 +344,7 @@ enum SpreadsheetActionKind: String, Codable {
   case rename
   case structure
   case charts
+  case layout
 }
 
 struct SpreadsheetAction: Codable, Equatable, Identifiable {
@@ -356,10 +357,12 @@ struct SpreadsheetAction: Codable, Equatable, Identifiable {
   var nameAfter: String?
   var chartsBefore: [SpreadsheetChartDefinition]?
   var chartsAfter: [SpreadsheetChartDefinition]?
+  var columnWidthsBefore: [Int: Double]?
+  var columnWidthsAfter: [Int: Double]?
 }
 
 struct SpreadsheetPayload: Codable {
-  var schemaVersion = 1
+  var schemaVersion: Int
   var id: UUID
   var name: String
   var createdAt: Date
@@ -368,6 +371,62 @@ struct SpreadsheetPayload: Codable {
   var charts: [SpreadsheetChartDefinition]
   var history: [SpreadsheetAction]
   var historyCursor: Int
+  var columnWidths: [Int: Double]
+
+  init(
+    schemaVersion: Int = 2,
+    id: UUID,
+    name: String,
+    createdAt: Date,
+    updatedAt: Date,
+    cells: [PersistedCell],
+    charts: [SpreadsheetChartDefinition],
+    history: [SpreadsheetAction],
+    historyCursor: Int,
+    columnWidths: [Int: Double] = [:]
+  ) {
+    self.schemaVersion = schemaVersion
+    self.id = id
+    self.name = name
+    self.createdAt = createdAt
+    self.updatedAt = updatedAt
+    self.cells = cells
+    self.charts = charts
+    self.history = history
+    self.historyCursor = historyCursor
+    self.columnWidths = columnWidths
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case schemaVersion
+    case id
+    case name
+    case createdAt
+    case updatedAt
+    case cells
+    case charts
+    case history
+    case historyCursor
+    case columnWidths
+  }
+
+  init(from decoder: Decoder) throws {
+    let values = try decoder.container(keyedBy: CodingKeys.self)
+    schemaVersion = try values.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+    id = try values.decode(UUID.self, forKey: .id)
+    name = try values.decode(String.self, forKey: .name)
+    createdAt = try values.decode(Date.self, forKey: .createdAt)
+    updatedAt = try values.decode(Date.self, forKey: .updatedAt)
+    cells = try values.decodeIfPresent([PersistedCell].self, forKey: .cells) ?? []
+    charts = try values.decodeIfPresent(
+      [SpreadsheetChartDefinition].self,
+      forKey: .charts
+    ) ?? []
+    history = try values.decodeIfPresent([SpreadsheetAction].self, forKey: .history) ?? []
+    historyCursor = try values.decodeIfPresent(Int.self, forKey: .historyCursor)
+      ?? history.count
+    columnWidths = try values.decodeIfPresent([Int: Double].self, forKey: .columnWidths) ?? [:]
+  }
 }
 
 public struct FloatingSpreadsheetSummary: Codable, Equatable, Identifiable {

@@ -50,4 +50,32 @@ final class FloatingSpreadsheetKitTests: XCTestCase {
     XCTAssertTrue(document.undo())
     XCTAssertEqual(document.rawInput(at: CellAddress(row: 1, column: 1)), "")
   }
+
+  func testColumnWidthPersistsAndParticipatesInUndoRedo() throws {
+    let document = SpreadsheetDocument(name: "Widths")
+    document.setColumnWidth(174, at: 2)
+
+    let data = try JSONEncoder().encode(document.payload)
+    let restoredPayload = try JSONDecoder().decode(SpreadsheetPayload.self, from: data)
+    let restored = SpreadsheetDocument(payload: restoredPayload)
+
+    XCTAssertEqual(restored.columnWidths[2], 174)
+    XCTAssertTrue(restored.undo())
+    XCTAssertNil(restored.columnWidths[2])
+    XCTAssertTrue(restored.redo())
+    XCTAssertEqual(restored.columnWidths[2], 174)
+  }
+
+  func testLegacyPayloadDefaultsToNoCustomColumnWidths() throws {
+    let document = SpreadsheetDocument(name: "Legacy")
+    let encoded = try JSONEncoder().encode(document.payload)
+    var object = try XCTUnwrap(
+      JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+    )
+    object.removeValue(forKey: "columnWidths")
+    let legacyData = try JSONSerialization.data(withJSONObject: object)
+
+    let decoded = try JSONDecoder().decode(SpreadsheetPayload.self, from: legacyData)
+    XCTAssertEqual(decoded.columnWidths, [:])
+  }
 }

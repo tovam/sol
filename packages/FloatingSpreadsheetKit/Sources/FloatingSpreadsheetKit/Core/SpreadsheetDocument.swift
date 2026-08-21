@@ -16,6 +16,7 @@ final class SpreadsheetDocument {
   private(set) var charts: [SpreadsheetChartDefinition]
   private(set) var history: [SpreadsheetAction]
   private(set) var historyCursor: Int
+  private(set) var columnWidths: [Int: Double]
 
   var onChange: ((SpreadsheetDocument) -> Void)?
 
@@ -33,6 +34,9 @@ final class SpreadsheetDocument {
     charts = payload.charts
     history = Array(payload.history.suffix(Self.historyLimit))
     historyCursor = min(max(0, payload.historyCursor), history.count)
+    columnWidths = payload.columnWidths.filter { column, width in
+      column >= 0 && width.isFinite && width > 0
+    }
   }
 
   convenience init(id: UUID = UUID(), name: String, now: Date = Date()) {
@@ -69,7 +73,8 @@ final class SpreadsheetDocument {
         .sorted { $0.address < $1.address },
       charts: charts,
       history: history,
-      historyCursor: historyCursor
+      historyCursor: historyCursor,
+      columnWidths: columnWidths
     )
   }
 
@@ -189,6 +194,22 @@ final class SpreadsheetDocument {
     }
   }
 
+  func setColumnWidth(_ width: Double, at column: Int) {
+    guard column >= 0, width.isFinite else { return }
+    let clampedWidth = min(600, max(40, width))
+    var updated = columnWidths
+    updated[column] = clampedWidth
+    guard updated != columnWidths else { return }
+    commit(
+      SpreadsheetAction(
+        label: "Resize column \(CellAddress.columnName(column))",
+        kind: .layout,
+        columnWidthsBefore: columnWidths,
+        columnWidthsAfter: updated
+      )
+    )
+  }
+
   func rename(to newName: String) {
     let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty, trimmed != name else { return }
@@ -238,7 +259,13 @@ final class SpreadsheetDocument {
       changed.sourceRange = chart.sourceRange.shiftedForInsertedRows(at: index, count: count)
       return changed
     }
-    commitStructure(before: before, after: after, chartsAfter: chartsAfter, label: "Insert rows")
+    commitStructure(
+      before: before,
+      after: after,
+      chartsAfter: chartsAfter,
+      columnWidthsAfter: columnWidths,
+      label: "Insert rows"
+    )
   }
 
   func deleteRows(at index: Int, count: Int = 1) {
@@ -262,7 +289,13 @@ final class SpreadsheetDocument {
         )
       return changed
     }
-    commitStructure(before: before, after: after, chartsAfter: chartsAfter, label: "Delete rows")
+    commitStructure(
+      before: before,
+      after: after,
+      chartsAfter: chartsAfter,
+      columnWidthsAfter: columnWidths,
+      label: "Delete rows"
+    )
   }
 
   func insertColumns(at index: Int, count: Int = 1) {
@@ -281,7 +314,18 @@ final class SpreadsheetDocument {
       changed.sourceRange = chart.sourceRange.shiftedForInsertedColumns(at: index, count: count)
       return changed
     }
-    commitStructure(before: before, after: after, chartsAfter: chartsAfter, label: "Insert columns")
+    let columnWidthsAfter = Dictionary(
+      uniqueKeysWithValues: columnWidths.map { column, width in
+        (column >= index ? column + count : column, width)
+      }
+    )
+    commitStructure(
+      before: before,
+      after: after,
+      chartsAfter: chartsAfter,
+      columnWidthsAfter: columnWidthsAfter,
+      label: "Insert columns"
+    )
   }
 
   func deleteColumns(at index: Int, count: Int = 1) {
@@ -305,7 +349,21 @@ final class SpreadsheetDocument {
         )
       return changed
     }
-    commitStructure(before: before, after: after, chartsAfter: chartsAfter, label: "Delete columns")
+    let shiftedColumnWidths: [(Int, Double)] = columnWidths.compactMap {
+      column, width -> (Int, Double)? in
+        if column >= index && column <= deletionEnd { return nil }
+        return (column > deletionEnd ? column - count : column, width)
+      }
+    let columnWidthsAfter = Dictionary(
+      uniqueKeysWithValues: shiftedColumnWidths
+    )
+    commitStructure(
+      before: before,
+      after: after,
+      chartsAfter: chartsAfter,
+      columnWidthsAfter: columnWidthsAfter,
+      label: "Delete columns"
+    )
   }
 
   func addChart(_ chart: SpreadsheetChartDefinition) {
@@ -455,6 +513,7 @@ final class SpreadsheetDocument {
     before: [CellAddress: CellRecord],
     after: [CellAddress: CellRecord],
     chartsAfter: [SpreadsheetChartDefinition],
+    columnWidthsAfter: [Int: Double],
     label: String
   ) {
     let addresses = Set(before.keys).union(after.keys)
@@ -466,14 +525,18 @@ final class SpreadsheetDocument {
         after: after[address]
       )
     }.sorted { $0.address < $1.address }
-    guard !changes.isEmpty || chartsAfter != charts else { return }
+    guard !changes.isEmpty || chartsAfter != charts || columnWidthsAfter != columnWidths else {
+      return
+    }
     commit(
       SpreadsheetAction(
         label: label,
         kind: .structure,
         cellChanges: changes,
         chartsBefore: charts,
-        chartsAfter: chartsAfter
+        chartsAfter: chartsAfter,
+        columnWidthsBefore: columnWidths,
+        columnWidthsAfter: columnWidthsAfter
       )
     )
   }
@@ -519,6 +582,9 @@ final class SpreadsheetDocument {
     }
     if let changedCharts = forward ? action.chartsAfter : action.chartsBefore {
       charts = changedCharts
+    }
+    if let changedWidths = forward ? action.columnWidthsAfter : action.columnWidthsBefore {
+      columnWidths = changedWidths
     }
   }
 

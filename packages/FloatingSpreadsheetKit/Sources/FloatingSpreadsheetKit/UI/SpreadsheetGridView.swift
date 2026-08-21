@@ -63,6 +63,12 @@ final class SpreadsheetGridContainerView: NSView {
       self?.columnHeader.needsDisplay = true
       self?.rowHeader.needsDisplay = true
     }
+    gridView.onColumnLayoutChange = { [weak self] in
+      guard let self else { return }
+      columnHeader.needsDisplay = true
+      window?.invalidateCursorRects(for: columnHeader)
+      scrollView.reflectScrolledClipView(scrollView.contentView)
+    }
   }
 
   @available(*, unavailable)
@@ -124,10 +130,13 @@ final class SpreadsheetGridView: NSView, NSTextFieldDelegate {
   static let rowCount = 1_048_576
   static let columnCount = 16_384
   static let rowHeight: CGFloat = 25
-  static let columnWidth: CGFloat = 112
+  static let defaultColumnWidth: CGFloat = 112
+  static let minimumColumnWidth: CGFloat = 40
+  static let maximumColumnWidth: CGFloat = 600
 
   weak var delegate: SpreadsheetGridViewDelegate?
   var onSelectionVisualChange: (() -> Void)?
+  var onColumnLayoutChange: (() -> Void)?
 
   let document: SpreadsheetDocument
   private(set) var selectedRange = CellRange(CellAddress(row: 0, column: 0))
@@ -137,12 +146,13 @@ final class SpreadsheetGridView: NSView, NSTextFieldDelegate {
   private var editingOriginalValue = ""
   private var editingReferenceRanges: [CellRange] = []
   private var isFinishingEdit = false
+  private var previewColumnWidths: [Int: CGFloat] = [:]
   private let previewFormulaEngine = SpreadsheetFormulaEngine()
 
   init(document: SpreadsheetDocument) {
     self.document = document
     let size = NSSize(
-      width: CGFloat(Self.columnCount) * Self.columnWidth,
+      width: Self.totalWidth(using: document.columnWidths),
       height: CGFloat(Self.rowCount) * Self.rowHeight
     )
     super.init(frame: NSRect(origin: .zero, size: size))
@@ -160,6 +170,7 @@ final class SpreadsheetGridView: NSView, NSTextFieldDelegate {
   override var isOpaque: Bool { true }
 
   func reloadData() {
+    refreshDocumentWidth()
     needsDisplay = true
     if let editor {
       editor.frame = cellRect(activeCell).insetBy(dx: 1, dy: 1)
@@ -197,11 +208,8 @@ final class SpreadsheetGridView: NSView, NSTextFieldDelegate {
     NSColor.textBackgroundColor.setFill()
     clippedDirtyRect.fill()
 
-    let firstColumn = max(0, Int(floor(clippedDirtyRect.minX / Self.columnWidth)))
-    let lastColumn = min(
-      Self.columnCount - 1,
-      Int(floor(max(0, clippedDirtyRect.maxX - 0.01) / Self.columnWidth))
-    )
+    let firstColumn = columnIndex(atX: clippedDirtyRect.minX)
+    let lastColumn = columnIndex(atX: max(0, clippedDirtyRect.maxX - 0.01))
     let firstRow = max(0, Int(floor(clippedDirtyRect.minY / Self.rowHeight)))
     let lastRow = min(
       Self.rowCount - 1,
@@ -317,7 +325,7 @@ final class SpreadsheetGridView: NSView, NSTextFieldDelegate {
   ) {
     let path = NSBezierPath()
     for column in firstColumn...(lastColumn + 1) {
-      let x = CGFloat(column) * Self.columnWidth + 0.5
+      let x = columnOrigin(column) + 0.5
       path.move(to: NSPoint(x: x, y: dirtyRect.minY))
       path.line(to: NSPoint(x: x, y: dirtyRect.maxY))
     }
@@ -609,18 +617,19 @@ final class SpreadsheetGridView: NSView, NSTextFieldDelegate {
 
   func cellRect(_ address: CellAddress) -> NSRect {
     NSRect(
-      x: CGFloat(address.column) * Self.columnWidth,
+      x: columnOrigin(address.column),
       y: CGFloat(address.row) * Self.rowHeight,
-      width: Self.columnWidth,
+      width: columnWidth(address.column),
       height: Self.rowHeight
     )
   }
 
   func rangeRect(_ range: CellRange) -> NSRect {
-    NSRect(
-      x: CGFloat(range.start.column) * Self.columnWidth,
+    let minimumX = columnOrigin(range.start.column)
+    return NSRect(
+      x: minimumX,
       y: CGFloat(range.start.row) * Self.rowHeight,
-      width: CGFloat(range.columnCount) * Self.columnWidth,
+      width: columnOrigin(range.end.column + 1) - minimumX,
       height: CGFloat(range.rowCount) * Self.rowHeight
     )
   }
@@ -628,15 +637,98 @@ final class SpreadsheetGridView: NSView, NSTextFieldDelegate {
   private func address(at point: NSPoint) -> CellAddress {
     CellAddress(
       row: min(Self.rowCount - 1, max(0, Int(floor(point.y / Self.rowHeight)))),
-      column: min(Self.columnCount - 1, max(0, Int(floor(point.x / Self.columnWidth))))
+      column: columnIndex(atX: point.x)
     )
+  }
+
+  func columnWidth(_ column: Int) -> CGFloat {
+    if let preview = previewColumnWidths[column] { return preview }
+    return CGFloat(document.columnWidths[column] ?? Double(Self.defaultColumnWidth))
+  }
+
+  func columnOrigin(_ column: Int) -> CGFloat {
+    let safeColumn = min(Self.columnCount, max(0, column))
+    var origin = CGFloat(safeColumn) * Self.defaultColumnWidth
+    for (index, persistedWidth) in document.columnWidths where index < safeColumn {
+      origin += CGFloat(persistedWidth) - Self.defaultColumnWidth
+    }
+    for (index, previewWidth) in previewColumnWidths where index < safeColumn {
+      let persistedWidth = CGFloat(
+        document.columnWidths[index] ?? Double(Self.defaultColumnWidth)
+      )
+      origin += previewWidth - persistedWidth
+    }
+    return origin
+  }
+
+  func columnIndex(atX x: CGFloat) -> Int {
+    let target = max(0, x)
+    var lowerBound = 0
+    var upperBound = Self.columnCount
+    while lowerBound < upperBound {
+      let candidate = (lowerBound + upperBound) / 2
+      if target < columnOrigin(candidate + 1) {
+        upperBound = candidate
+      } else {
+        lowerBound = candidate + 1
+      }
+    }
+    return min(Self.columnCount - 1, lowerBound)
+  }
+
+  func previewColumnWidth(_ width: CGFloat, at column: Int) {
+    let clampedWidth = min(
+      Self.maximumColumnWidth,
+      max(Self.minimumColumnWidth, width)
+    )
+    previewColumnWidths[column] = clampedWidth
+    refreshDocumentWidth()
+    reloadDataForColumnLayout()
+  }
+
+  func commitPreviewedColumnWidth(at column: Int) {
+    guard let width = previewColumnWidths.removeValue(forKey: column) else { return }
+    document.setColumnWidth(Double(width), at: column)
+    refreshDocumentWidth()
+    reloadDataForColumnLayout()
+  }
+
+  private func refreshDocumentWidth() {
+    let requiredWidth = columnOrigin(Self.columnCount)
+    guard frame.width != requiredWidth else { return }
+    var updatedFrame = frame
+    updatedFrame.size.width = requiredWidth
+    frame = updatedFrame
+  }
+
+  private func reloadDataForColumnLayout() {
+    needsDisplay = true
+    if let editor {
+      editor.frame = cellRect(activeCell).insetBy(dx: 1, dy: 1)
+    }
+    onColumnLayoutChange?()
+  }
+
+  private static func totalWidth(using widths: [Int: Double]) -> CGFloat {
+    CGFloat(columnCount) * defaultColumnWidth
+      + widths.reduce(into: CGFloat.zero) { total, entry in
+        total += CGFloat(entry.value) - defaultColumnWidth
+      }
   }
 }
 
 private final class SpreadsheetColumnHeaderView: NSView {
   weak var gridView: SpreadsheetGridView?
+  private static let resizeHitSlop: CGFloat = 4
+  private var resizingColumn: Int?
+  private var dragStartX: CGFloat = 0
+  private var dragStartWidth: CGFloat = 0
   var scrollOffset: CGFloat = 0 {
-    didSet { if oldValue != scrollOffset { needsDisplay = true } }
+    didSet {
+      guard oldValue != scrollOffset else { return }
+      needsDisplay = true
+      window?.invalidateCursorRects(for: self)
+    }
   }
 
   init(gridView: SpreadsheetGridView) {
@@ -659,18 +751,15 @@ private final class SpreadsheetColumnHeaderView: NSView {
     NSColor.controlBackgroundColor.setFill()
     clippedDirtyRect.fill()
     guard let gridView else { return }
-    let first = max(0, Int(floor(scrollOffset / SpreadsheetGridView.columnWidth)))
-    let last = min(
-      SpreadsheetGridView.columnCount - 1,
-      Int(ceil((scrollOffset + bounds.width) / SpreadsheetGridView.columnWidth))
-    )
+    let first = gridView.columnIndex(atX: scrollOffset)
+    let last = gridView.columnIndex(atX: max(0, scrollOffset + bounds.width - 0.01))
     guard first <= last else { return }
     for column in first...last {
-      let x = CGFloat(column) * SpreadsheetGridView.columnWidth - scrollOffset
+      let x = gridView.columnOrigin(column) - scrollOffset
       let rect = NSRect(
         x: x,
         y: 0,
-        width: SpreadsheetGridView.columnWidth,
+        width: gridView.columnWidth(column),
         height: bounds.height
       )
       if column >= gridView.selectedRange.start.column,
@@ -700,6 +789,77 @@ private final class SpreadsheetColumnHeaderView: NSView {
       from: NSPoint(x: 0, y: bounds.height - 0.5),
       to: NSPoint(x: bounds.width, y: bounds.height - 0.5)
     )
+  }
+
+  override func resetCursorRects() {
+    super.resetCursorRects()
+    guard let gridView, bounds.width > 0 else { return }
+    let first = gridView.columnIndex(atX: scrollOffset)
+    let last = gridView.columnIndex(atX: max(0, scrollOffset + bounds.width))
+    for column in first...last {
+      let boundaryX = gridView.columnOrigin(column + 1) - scrollOffset
+      addCursorRect(
+        NSRect(
+          x: boundaryX - Self.resizeHitSlop,
+          y: 0,
+          width: Self.resizeHitSlop * 2,
+          height: bounds.height
+        ),
+        cursor: .resizeLeftRight
+      )
+    }
+  }
+
+  override func mouseDown(with event: NSEvent) {
+    guard let gridView else { return }
+    let point = convert(event.locationInWindow, from: nil)
+    guard let column = resizableColumn(at: point.x, gridView: gridView) else {
+      super.mouseDown(with: event)
+      return
+    }
+    resizingColumn = column
+    dragStartX = point.x
+    dragStartWidth = gridView.columnWidth(column)
+  }
+
+  override func mouseDragged(with event: NSEvent) {
+    guard let gridView, let resizingColumn else {
+      super.mouseDragged(with: event)
+      return
+    }
+    let point = convert(event.locationInWindow, from: nil)
+    gridView.previewColumnWidth(
+      dragStartWidth + point.x - dragStartX,
+      at: resizingColumn
+    )
+    needsDisplay = true
+  }
+
+  override func mouseUp(with event: NSEvent) {
+    guard let gridView, let resizingColumn else {
+      super.mouseUp(with: event)
+      return
+    }
+    gridView.commitPreviewedColumnWidth(at: resizingColumn)
+    self.resizingColumn = nil
+    window?.invalidateCursorRects(for: self)
+  }
+
+  private func resizableColumn(
+    at localX: CGFloat,
+    gridView: SpreadsheetGridView
+  ) -> Int? {
+    let absoluteX = localX + scrollOffset
+    let candidate = gridView.columnIndex(atX: absoluteX)
+    let rightBoundary = gridView.columnOrigin(candidate + 1)
+    if abs(absoluteX - rightBoundary) <= Self.resizeHitSlop {
+      return candidate
+    }
+    guard candidate > 0 else { return nil }
+    let leftBoundary = gridView.columnOrigin(candidate)
+    return abs(absoluteX - leftBoundary) <= Self.resizeHitSlop
+      ? candidate - 1
+      : nil
   }
 }
 
