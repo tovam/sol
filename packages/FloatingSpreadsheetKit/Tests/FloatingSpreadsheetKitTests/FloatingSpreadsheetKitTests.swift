@@ -277,4 +277,22 @@ final class FloatingSpreadsheetKitTests: XCTestCase {
     let legacy = try JSONDecoder().decode(SpreadsheetChartDefinition.self, from: legacyData)
     XCTAssertNil(legacy.referenceLine)
   }
+
+  func testLastValueLabelsPersistAndDefaultToHidden() throws {
+    let chart = SpreadsheetChartDefinition(
+      sourceRange: CellRange(CellAddress(row: 0, column: 0)),
+      showsLastValueLabels: true
+    )
+    let encoded = try JSONEncoder().encode(chart)
+    let restored = try JSONDecoder().decode(SpreadsheetChartDefinition.self, from: encoded)
+    XCTAssertTrue(restored.displaysLastValueLabels)
+
+    var legacyObject = try XCTUnwrap(
+      JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+    )
+    legacyObject.removeValue(forKey: "showsLastValueLabels")
+    let legacyData = try JSONSerialization.data(withJSONObject: legacyObject)
+    let legacy = try JSONDecoder().decode(SpreadsheetChartDefinition.self, from: legacyData)
+    XCTAssertFalse(legacy.displaysLastValueLabels)
+  }
 }

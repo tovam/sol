@@ -175,6 +175,12 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
       action: nil
     )
     labelsCheckbox.state = chart.firstColumnContainsLabels ? .on : .off
+    let lastValueLabelsCheckbox = NSButton(
+      checkboxWithTitle: "Label the last value of every series",
+      target: nil,
+      action: nil
+    )
+    lastValueLabelsCheckbox.state = chart.displaysLastValueLabels ? .on : .off
     let orientation = NSPopUpButton()
     orientation.addItems(withTitles: ["Series in columns", "Series in rows"])
     orientation.selectItem(at: chart.seriesOrientation == .columns ? 0 : 1)
@@ -261,6 +267,7 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
     }
     referenceValueField.isEnabled = axisControlsEnabled
     referenceLabelField.isEnabled = axisControlsEnabled
+    lastValueLabelsCheckbox.isEnabled = axisControlsEnabled
 
     let generalGrid = NSGridView(views: [
       [NSTextField(labelWithString: "Title"), titleField],
@@ -310,6 +317,7 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
       generalGrid,
       headerCheckbox,
       labelsCheckbox,
+      lastValueLabelsCheckbox,
       firstSeparator,
       xHeading,
       xGrid,
@@ -325,7 +333,7 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
     stack.orientation = .vertical
     stack.alignment = .leading
     stack.spacing = 6
-    stack.frame = NSRect(x: 0, y: 0, width: 440, height: 475)
+    stack.frame = NSRect(x: 0, y: 0, width: 440, height: 500)
     for view in [
       generalGrid,
       firstSeparator,
@@ -366,6 +374,11 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
         changed.firstRowContainsHeaders = headerCheckbox.state == .on
         changed.firstColumnContainsLabels = labelsCheckbox.state == .on
         changed.seriesOrientation = orientation.indexOfSelectedItem == 1 ? .rows : .columns
+        if lastValueLabelsCheckbox.isEnabled {
+          changed.showsLastValueLabels = lastValueLabelsCheckbox.state == .on
+            ? true
+            : nil
+        }
 
         let changedXAxis = try chartAxisConfiguration(
           current: xAxis,
@@ -887,6 +900,26 @@ private final class SpreadsheetChartViewModel: ObservableObject {
     return result
   }
 
+  func lastDataBySeries(for definition: SpreadsheetChartDefinition) -> [SpreadsheetChartDatum] {
+    var result: [String: SpreadsheetChartDatum] = [:]
+    for datum in plottableData(for: definition) {
+      guard let current = result[datum.series] else {
+        result[datum.series] = datum
+        continue
+      }
+      if usesDateXAxis {
+        if (datum.xDate ?? .distantPast) >= (current.xDate ?? .distantPast) {
+          result[datum.series] = datum
+        }
+      } else if usesNumericXAxis || definition.type == .scatter {
+        if datum.x >= current.x { result[datum.series] = datum }
+      } else {
+        result[datum.series] = datum
+      }
+    }
+    return result.values.sorted { $0.series.localizedCaseInsensitiveCompare($1.series) == .orderedAscending }
+  }
+
   func xDomain(for definition: SpreadsheetChartDefinition) -> ClosedRange<Double>? {
     guard definition.type != .pie,
       !usesDateXAxis,
@@ -1140,6 +1173,41 @@ private struct SpreadsheetChartView: View {
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 4))
           }
       }
+      if definition.type != .pie, definition.displaysLastValueLabels {
+        ForEach(model.lastDataBySeries(for: definition)) { datum in
+          if model.usesDateXAxis {
+            PointMark(
+              x: .value("Date", datum.xDate ?? .distantPast),
+              y: .value("Last value", datum.value)
+            )
+            .foregroundStyle(by: .value("Series", datum.series))
+            .symbolSize(30)
+            .annotation(position: .top, spacing: 3) {
+              lastValueLabel(datum)
+            }
+          } else if model.usesNumericXAxis || definition.type == .scatter {
+            PointMark(
+              x: .value("X", datum.x),
+              y: .value("Last value", datum.value)
+            )
+            .foregroundStyle(by: .value("Series", datum.series))
+            .symbolSize(30)
+            .annotation(position: .top, spacing: 3) {
+              lastValueLabel(datum)
+            }
+          } else {
+            PointMark(
+              x: .value("Category", datum.category),
+              y: .value("Last value", datum.value)
+            )
+            .foregroundStyle(by: .value("Series", datum.series))
+            .symbolSize(30)
+            .annotation(position: .top, spacing: 3) {
+              lastValueLabel(datum)
+            }
+          }
+        }
+      }
     }
     .modifier(
       SpreadsheetChartScaleModifier(
@@ -1210,6 +1278,17 @@ private struct SpreadsheetChartView: View {
     }
     .chartXAxisLabel(definition.type == .pie ? "" : xAxis.title)
     .chartYAxisLabel(definition.type == .pie ? "" : yAxis.title)
+  }
+
+  private func lastValueLabel(_ datum: SpreadsheetChartDatum) -> some View {
+    Text(
+      "\(datum.series) · \(model.formattedValue(datum.value, isTime: model.usesTimeValueAxis))"
+    )
+    .font(.system(size: 9, weight: .medium))
+    .lineLimit(1)
+    .padding(.horizontal, 4)
+    .padding(.vertical, 2)
+    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 4))
   }
 }
 

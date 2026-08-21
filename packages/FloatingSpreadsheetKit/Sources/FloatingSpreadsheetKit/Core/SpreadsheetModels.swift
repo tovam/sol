@@ -478,6 +478,7 @@ struct SpreadsheetChartDefinition: Codable, Equatable, Identifiable {
   var xAxis: SpreadsheetChartAxisConfiguration?
   var yAxis: SpreadsheetChartAxisConfiguration?
   var referenceLine: SpreadsheetChartReferenceLine?
+  var showsLastValueLabels: Bool?
 
   var effectiveXAxis: SpreadsheetChartAxisConfiguration {
     xAxis ?? .standard
@@ -485,6 +486,10 @@ struct SpreadsheetChartDefinition: Codable, Equatable, Identifiable {
 
   var effectiveYAxis: SpreadsheetChartAxisConfiguration {
     yAxis ?? .standard
+  }
+
+  var displaysLastValueLabels: Bool {
+    showsLastValueLabels ?? false
   }
 
   init(
@@ -499,7 +504,8 @@ struct SpreadsheetChartDefinition: Codable, Equatable, Identifiable {
     frozenSeries: [SpreadsheetChartSeries] = [],
     xAxis: SpreadsheetChartAxisConfiguration? = nil,
     yAxis: SpreadsheetChartAxisConfiguration? = nil,
-    referenceLine: SpreadsheetChartReferenceLine? = nil
+    referenceLine: SpreadsheetChartReferenceLine? = nil,
+    showsLastValueLabels: Bool? = nil
   ) {
     self.id = id
     self.title = title
@@ -513,6 +519,7 @@ struct SpreadsheetChartDefinition: Codable, Equatable, Identifiable {
     self.xAxis = xAxis
     self.yAxis = yAxis
     self.referenceLine = referenceLine
+    self.showsLastValueLabels = showsLastValueLabels
   }
 }
 
