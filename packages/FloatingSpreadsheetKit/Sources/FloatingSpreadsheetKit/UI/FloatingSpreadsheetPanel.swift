@@ -23,11 +23,22 @@ final class FloatingSpreadsheetPanel: NSPanel {
     collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
     isOpaque = false
     backgroundColor = .clear
-    hasShadow = true
+    // The default content view is rectangular. Enabling the system shadow here
+    // makes AppKit cache that rectangle even after the rounded surface is added.
+    hasShadow = false
     isReleasedWhenClosed = false
     hidesOnDeactivate = false
     isMovableByWindowBackground = true
     animationBehavior = .utilityWindow
+  }
+
+  func enableRoundedShadow() {
+    contentView?.layoutSubtreeIfNeeded()
+    hasShadow = true
+    invalidateShadow()
+    DispatchQueue.main.async { [weak self] in
+      self?.invalidateShadow()
+    }
   }
 }
 

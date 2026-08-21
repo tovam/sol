@@ -119,6 +119,7 @@ final class SpreadsheetWindowController: NSWindowController, NSWindowDelegate,
       gridContainer.topAnchor.constraint(equalTo: cellContentBar.bottomAnchor),
       gridContainer.bottomAnchor.constraint(equalTo: backdrop.bottomAnchor),
     ])
+    panel.enableRoundedShadow()
     refreshToolbarSelection()
   }
 

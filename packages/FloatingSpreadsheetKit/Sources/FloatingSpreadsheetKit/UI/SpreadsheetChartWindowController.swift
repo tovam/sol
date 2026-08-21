@@ -115,6 +115,7 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
       host.topAnchor.constraint(equalTo: toolbar.bottomAnchor),
       host.bottomAnchor.constraint(equalTo: backdrop.bottomAnchor, constant: -6),
     ])
+    panel.enableRoundedShadow()
     refreshToolbar()
   }
 
