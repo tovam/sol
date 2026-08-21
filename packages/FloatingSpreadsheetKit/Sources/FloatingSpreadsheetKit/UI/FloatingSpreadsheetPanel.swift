@@ -4,6 +4,14 @@ final class FloatingSpreadsheetPanel: NSPanel {
   override var canBecomeKey: Bool { true }
   override var canBecomeMain: Bool { true }
 
+  override func sendEvent(_ event: NSEvent) {
+    if event.type == .keyDown, event.keyCode == 53 {
+      close()
+      return
+    }
+    super.sendEvent(event)
+  }
+
   convenience init(size: NSSize) {
     self.init(
       contentRect: NSRect(origin: .zero, size: size),
