@@ -98,7 +98,7 @@ final class SpreadsheetRepository {
   func scheduleSave(_ document: SpreadsheetDocument, delay: TimeInterval = 0.35) {
     let payload = document.payload
     pendingLock.lock()
-    pendingSaves[id: document.id]?.cancel()
+    pendingSaves[document.id]?.cancel()
     let work = DispatchWorkItem { [weak self] in
       guard let self else { return }
       try? self.write(payload)
