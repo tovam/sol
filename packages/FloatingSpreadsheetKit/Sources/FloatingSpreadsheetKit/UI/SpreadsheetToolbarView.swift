@@ -16,8 +16,10 @@ protocol SpreadsheetToolbarViewDelegate: AnyObject {
 final class SpreadsheetToolbarView: NSView, NSTextFieldDelegate {
   weak var delegate: SpreadsheetToolbarViewDelegate?
 
+  private let titleContainer = NSView()
   private let titleField = DraggableSpreadsheetTitleField()
   private let addressLabel = NSTextField(labelWithString: "A1")
+  private let renameButton: NSButton
   private let boldButton: NSButton
   private let italicButton: NSButton
   private let dateButton: NSButton
@@ -30,6 +32,7 @@ final class SpreadsheetToolbarView: NSView, NSTextFieldDelegate {
   private let bottomSeparator = NSView()
 
   override init(frame frameRect: NSRect) {
+    renameButton = Self.makeButton(symbol: "pencil", tooltip: "Rename spreadsheet")
     boldButton = Self.makeButton(symbol: "bold", tooltip: "Bold (⌘B)")
     italicButton = Self.makeButton(symbol: "italic", tooltip: "Italic (⌘I)")
     dateButton = Self.makeButton(symbol: "calendar", tooltip: "Date format")
@@ -105,6 +108,19 @@ final class SpreadsheetToolbarView: NSView, NSTextFieldDelegate {
     titleField.finishRenaming()
     titleField.setAccessibilityLabel("Spreadsheet name")
 
+    titleContainer.addSubview(titleField)
+    configureButton(renameButton, action: #selector(rename))
+    renameButton.setButtonType(.momentaryPushIn)
+    titleContainer.addSubview(renameButton)
+    titleField.translatesAutoresizingMaskIntoConstraints = false
+    NSLayoutConstraint.activate([
+      titleField.leadingAnchor.constraint(equalTo: titleContainer.leadingAnchor),
+      titleField.trailingAnchor.constraint(equalTo: renameButton.leadingAnchor),
+      titleField.centerYAnchor.constraint(equalTo: titleContainer.centerYAnchor),
+      renameButton.trailingAnchor.constraint(equalTo: titleContainer.trailingAnchor),
+      renameButton.centerYAnchor.constraint(equalTo: titleContainer.centerYAnchor),
+    ])
+
     addressLabel.font = .monospacedDigitSystemFont(ofSize: 10, weight: .medium)
     addressLabel.textColor = .secondaryLabelColor
     addressLabel.alignment = .center
@@ -126,7 +142,7 @@ final class SpreadsheetToolbarView: NSView, NSTextFieldDelegate {
     let stack = NSStackView(views: [
       closeButton,
       Self.separator(),
-      titleField,
+      titleContainer,
       addressLabel,
       Self.separator(),
       boldButton,
@@ -155,14 +171,15 @@ final class SpreadsheetToolbarView: NSView, NSTextFieldDelegate {
       stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -5),
       stack.topAnchor.constraint(equalTo: topAnchor, constant: 2),
       stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -2),
-      titleField.widthAnchor.constraint(greaterThanOrEqualToConstant: 110),
+      titleContainer.widthAnchor.constraint(greaterThanOrEqualToConstant: 110),
+      titleContainer.heightAnchor.constraint(equalToConstant: 26),
       addressLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 42),
       bottomSeparator.leadingAnchor.constraint(equalTo: leadingAnchor),
       bottomSeparator.trailingAnchor.constraint(equalTo: trailingAnchor),
       bottomSeparator.bottomAnchor.constraint(equalTo: bottomAnchor),
       bottomSeparator.heightAnchor.constraint(equalToConstant: 1),
     ])
-    titleField.setContentHuggingPriority(.defaultLow, for: .horizontal)
+    titleContainer.setContentHuggingPriority(.defaultLow, for: .horizontal)
   }
 
   override func viewDidChangeEffectiveAppearance() {
@@ -179,6 +196,7 @@ final class SpreadsheetToolbarView: NSView, NSTextFieldDelegate {
       dateButton,
       percentButton,
       currencyButton,
+      renameButton,
       settingsButton,
       importButton,
       chartButton,
@@ -200,6 +218,10 @@ final class SpreadsheetToolbarView: NSView, NSTextFieldDelegate {
 
   @objc private func bold() {
     delegate?.spreadsheetToolbarDidRequestBold(self)
+  }
+
+  @objc private func rename() {
+    titleField.startRenaming()
   }
 
   @objc private func italic() {
@@ -268,6 +290,10 @@ private final class DraggableSpreadsheetTitleField: NSTextField {
       return
     }
 
+    startRenaming()
+  }
+
+  func startRenaming() {
     isEditable = true
     isSelectable = true
     window?.makeFirstResponder(self)
