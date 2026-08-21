@@ -30,10 +30,11 @@ final class HotKeyManager {
     mainHotKey.keyUpHandler = PanelManager.shared.toggle
 
     NSEvent.addLocalMonitorForEvents(matching: .keyDown) {
-      // The one-shot HTTP prompt is a separate native interface with its own
-      // keyboard contract. Let its local monitor receive every key instead of
-      // translating arrows, Enter, Tab, or Escape into React Native events.
-      if $0.window?.identifier == externalPromptWindowIdentifier {
+      // This monitor translates keyboard events for Sol's React Native search
+      // window. Native auxiliary windows (spreadsheets, Dailymotion, external
+      // prompts, and future tools) own their keyboard handling and must receive
+      // their events unchanged.
+      if !PanelManager.shared.ownsKeyboardEventWindow($0.window) {
         return $0
       }
 
@@ -52,15 +53,6 @@ final class HotKeyManager {
       if ($0.keyCode == 125 || $0.keyCode == 126)
         && !self
           .catchVerticalArrowsPress
-      {
-        return $0
-      }
-
-      if
-        $0.keyCode == 36,
-        $0.window?.identifier == dailymotionPlayerWindowIdentifier,
-        let fieldEditor = $0.window?.firstResponder as? NSTextView,
-        fieldEditor.isFieldEditor
       {
         return $0
       }

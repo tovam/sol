@@ -155,6 +155,10 @@ private final class ClosingAnimationPanel: NSPanel {
     resizeForCurrentContentSize()
   }
 
+  func ownsKeyboardEventWindow(_ window: NSWindow?) -> Bool {
+    window === mainWindow
+  }
+
   func setGlassAppearance(
     style: String,
     cornerRadius: Double,
