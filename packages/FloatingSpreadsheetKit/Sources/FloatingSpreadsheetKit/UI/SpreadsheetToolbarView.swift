@@ -13,11 +13,11 @@ protocol SpreadsheetToolbarViewDelegate: AnyObject {
   func spreadsheetToolbarDidRequestClose(_ toolbar: SpreadsheetToolbarView)
 }
 
-final class SpreadsheetToolbarView: NSView, NSTextFieldDelegate {
+final class SpreadsheetToolbarView: NSView {
   weak var delegate: SpreadsheetToolbarViewDelegate?
 
   private let titleContainer = NSView()
-  private let titleField = DraggableSpreadsheetTitleField()
+  private let titleEditor = DraggableSpreadsheetTitleView()
   private let addressLabel = NSTextField(labelWithString: "A1")
   private let renameButton: NSButton
   private let boldButton: NSButton
@@ -61,8 +61,8 @@ final class SpreadsheetToolbarView: NSView, NSTextFieldDelegate {
   }
 
   func updateTitle(_ title: String) {
-    guard titleField.currentEditor() == nil else { return }
-    titleField.stringValue = title
+    guard !titleEditor.isRenaming else { return }
+    titleEditor.string = title
   }
 
   func updateSelection(address: String, style: CellStyle) {
@@ -86,37 +86,40 @@ final class SpreadsheetToolbarView: NSView, NSTextFieldDelegate {
 
   override var mouseDownCanMoveWindow: Bool { true }
 
-  func controlTextDidEndEditing(_ notification: Notification) {
-    delegate?.spreadsheetToolbar(self, renameTo: titleField.stringValue)
-    titleField.finishRenaming()
-  }
-
   private func configure() {
     wantsLayer = true
 
-    titleField.stringValue = "Spreadsheet"
-    titleField.placeholderString = "Spreadsheet name"
-    titleField.font = .systemFont(ofSize: 12, weight: .semibold)
-    titleField.textColor = .labelColor
-    titleField.isBordered = false
-    titleField.isBezeled = false
-    titleField.drawsBackground = false
-    titleField.focusRingType = .none
-    titleField.cell?.usesSingleLineMode = true
-    titleField.cell?.lineBreakMode = .byTruncatingTail
-    titleField.delegate = self
-    titleField.finishRenaming()
-    titleField.setAccessibilityLabel("Spreadsheet name")
+    titleEditor.string = "Spreadsheet"
+    titleEditor.font = .systemFont(ofSize: 12, weight: .semibold)
+    titleEditor.textColor = .labelColor
+    titleEditor.drawsBackground = false
+    titleEditor.isRichText = false
+    titleEditor.importsGraphics = false
+    titleEditor.isHorizontallyResizable = false
+    titleEditor.isVerticallyResizable = false
+    titleEditor.textContainerInset = .zero
+    titleEditor.textContainer?.lineFragmentPadding = 0
+    titleEditor.textContainer?.maximumNumberOfLines = 1
+    titleEditor.textContainer?.lineBreakMode = .byClipping
+    titleEditor.textContainer?.widthTracksTextView = true
+    titleEditor.textContainer?.heightTracksTextView = true
+    titleEditor.finishRenaming()
+    titleEditor.onCommit = { [weak self] name in
+      guard let self else { return }
+      delegate?.spreadsheetToolbar(self, renameTo: name)
+    }
+    titleEditor.setAccessibilityLabel("Spreadsheet name")
 
-    titleContainer.addSubview(titleField)
+    titleContainer.addSubview(titleEditor)
     configureButton(renameButton, action: #selector(rename))
     renameButton.setButtonType(.momentaryPushIn)
     titleContainer.addSubview(renameButton)
-    titleField.translatesAutoresizingMaskIntoConstraints = false
+    titleEditor.translatesAutoresizingMaskIntoConstraints = false
     NSLayoutConstraint.activate([
-      titleField.leadingAnchor.constraint(equalTo: titleContainer.leadingAnchor),
-      titleField.trailingAnchor.constraint(equalTo: renameButton.leadingAnchor),
-      titleField.centerYAnchor.constraint(equalTo: titleContainer.centerYAnchor),
+      titleEditor.leadingAnchor.constraint(equalTo: titleContainer.leadingAnchor),
+      titleEditor.trailingAnchor.constraint(equalTo: renameButton.leadingAnchor),
+      titleEditor.centerYAnchor.constraint(equalTo: titleContainer.centerYAnchor),
+      titleEditor.heightAnchor.constraint(equalToConstant: 16),
       renameButton.trailingAnchor.constraint(equalTo: titleContainer.trailingAnchor),
       renameButton.centerYAnchor.constraint(equalTo: titleContainer.centerYAnchor),
     ])
@@ -221,7 +224,9 @@ final class SpreadsheetToolbarView: NSView, NSTextFieldDelegate {
   }
 
   @objc private func rename() {
-    titleField.startRenaming()
+    DispatchQueue.main.async { [weak self] in
+      self?.titleEditor.startRenaming()
+    }
   }
 
   @objc private func italic() {
@@ -281,27 +286,68 @@ final class SpreadsheetToolbarView: NSView, NSTextFieldDelegate {
   }
 }
 
-private final class DraggableSpreadsheetTitleField: NSTextField {
-  override var mouseDownCanMoveWindow: Bool { !isEditable }
+private final class DraggableSpreadsheetTitleView: NSTextView {
+  var onCommit: ((String) -> Void)?
+  private(set) var isRenaming = false
+
+  override var mouseDownCanMoveWindow: Bool { !isRenaming }
 
   override func mouseDown(with event: NSEvent) {
+    if isRenaming {
+      super.mouseDown(with: event)
+      return
+    }
     guard event.clickCount >= 2 else {
       window?.performDrag(with: event)
       return
     }
+    DispatchQueue.main.async { [weak self] in
+      self?.startRenaming()
+    }
+  }
 
-    startRenaming()
+  override func keyDown(with event: NSEvent) {
+    if !hasMarkedText(), (event.keyCode == 36 || event.keyCode == 76) {
+      endRenaming()
+      return
+    }
+    super.keyDown(with: event)
+  }
+
+  override func resignFirstResponder() -> Bool {
+    let shouldCommit = isRenaming
+    let accepted = super.resignFirstResponder()
+    if accepted, shouldCommit {
+      finishRenaming()
+      onCommit?(string)
+    }
+    return accepted
   }
 
   func startRenaming() {
+    guard !isRenaming else { return }
+    isRenaming = true
     isEditable = true
     isSelectable = true
-    window?.makeFirstResponder(self)
-    selectText(nil)
+    guard window?.makeFirstResponder(self) == true else {
+      finishRenaming()
+      return
+    }
+    selectAll(nil)
   }
 
   func finishRenaming() {
+    isRenaming = false
     isEditable = false
     isSelectable = false
+  }
+
+  private func endRenaming() {
+    guard isRenaming else { return }
+    let value = string
+    isRenaming = false
+    _ = window?.makeFirstResponder(nil)
+    finishRenaming()
+    onCommit?(value)
   }
 }

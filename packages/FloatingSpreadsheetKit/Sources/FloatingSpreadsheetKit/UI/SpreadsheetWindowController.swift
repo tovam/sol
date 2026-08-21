@@ -181,6 +181,7 @@ final class SpreadsheetWindowController: NSWindowController, NSWindowDelegate,
   func spreadsheetToolbar(_ toolbar: SpreadsheetToolbarView, renameTo name: String) {
     spreadsheetDocument.rename(to: name)
     toolbar.updateTitle(spreadsheetDocument.name)
+    panel.makeFirstResponder(gridContainer.gridView)
   }
 
   func spreadsheetToolbarDidRequestBold(_ toolbar: SpreadsheetToolbarView) {
