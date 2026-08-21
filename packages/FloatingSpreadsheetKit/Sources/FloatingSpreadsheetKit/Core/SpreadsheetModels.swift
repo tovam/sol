@@ -455,6 +455,16 @@ struct SpreadsheetChartSeries: Codable, Equatable {
   var points: [SpreadsheetChartPoint]
 }
 
+struct SpreadsheetChartReferenceLine: Codable, Equatable {
+  var value: Double
+  var label: String
+
+  init(value: Double, label: String = "") {
+    self.value = value
+    self.label = label
+  }
+}
+
 struct SpreadsheetChartDefinition: Codable, Equatable, Identifiable {
   var id: UUID
   var title: String
@@ -467,6 +477,7 @@ struct SpreadsheetChartDefinition: Codable, Equatable, Identifiable {
   var frozenSeries: [SpreadsheetChartSeries]
   var xAxis: SpreadsheetChartAxisConfiguration?
   var yAxis: SpreadsheetChartAxisConfiguration?
+  var referenceLine: SpreadsheetChartReferenceLine?
 
   var effectiveXAxis: SpreadsheetChartAxisConfiguration {
     xAxis ?? .standard
@@ -487,7 +498,8 @@ struct SpreadsheetChartDefinition: Codable, Equatable, Identifiable {
     isFrozen: Bool = false,
     frozenSeries: [SpreadsheetChartSeries] = [],
     xAxis: SpreadsheetChartAxisConfiguration? = nil,
-    yAxis: SpreadsheetChartAxisConfiguration? = nil
+    yAxis: SpreadsheetChartAxisConfiguration? = nil,
+    referenceLine: SpreadsheetChartReferenceLine? = nil
   ) {
     self.id = id
     self.title = title
@@ -500,6 +512,7 @@ struct SpreadsheetChartDefinition: Codable, Equatable, Identifiable {
     self.frozenSeries = frozenSeries
     self.xAxis = xAxis
     self.yAxis = yAxis
+    self.referenceLine = referenceLine
   }
 }
 

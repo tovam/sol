@@ -223,6 +223,17 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
     yGridCheckbox.state = yAxis.showsGridLines ? .on : .off
     yLabelsCheckbox.state = yAxis.showsLabels ? .on : .off
 
+    let referenceValueField = NSTextField(
+      string: axisBoundText(
+        chart.referenceLine?.value,
+        isTime: yUsesTime,
+        isDate: false
+      )
+    )
+    referenceValueField.placeholderString = yUsesTime ? "None or HH:mm" : "None"
+    let referenceLabelField = NSTextField(string: chart.referenceLine?.label ?? "")
+    referenceLabelField.placeholderString = "Optional label"
+
     let automaticPlaceholder = xUsesDate
       ? "Automatic or YYYY-MM-DD"
       : (xUsesTime ? "Automatic or HH:mm" : "Automatic")
@@ -248,6 +259,8 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
     for control in [yTitleField, yGridCheckbox, yLabelsCheckbox] {
       control.isEnabled = axisControlsEnabled
     }
+    referenceValueField.isEnabled = axisControlsEnabled
+    referenceLabelField.isEnabled = axisControlsEnabled
 
     let generalGrid = NSGridView(views: [
       [NSTextField(labelWithString: "Title"), titleField],
@@ -278,12 +291,20 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
     yChecks.orientation = .horizontal
     yChecks.spacing = 14
 
+    let referenceGrid = NSGridView(views: [
+      [NSTextField(labelWithString: "Value"), referenceValueField],
+      [NSTextField(labelWithString: "Label"), referenceLabelField],
+    ])
+    configureOptionsGrid(referenceGrid)
+
     let xHeading = optionsHeading("X axis")
     let yHeading = optionsHeading("Y axis")
     let firstSeparator = NSBox()
     firstSeparator.boxType = .separator
     let secondSeparator = NSBox()
     secondSeparator.boxType = .separator
+    let thirdSeparator = NSBox()
+    thirdSeparator.boxType = .separator
 
     let stack = NSStackView(views: [
       generalGrid,
@@ -297,12 +318,23 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
       yHeading,
       yGrid,
       yChecks,
+      thirdSeparator,
+      optionsHeading("Reference line"),
+      referenceGrid,
     ])
     stack.orientation = .vertical
     stack.alignment = .leading
     stack.spacing = 6
-    stack.frame = NSRect(x: 0, y: 0, width: 440, height: 405)
-    for view in [generalGrid, firstSeparator, xGrid, secondSeparator, yGrid] {
+    stack.frame = NSRect(x: 0, y: 0, width: 440, height: 475)
+    for view in [
+      generalGrid,
+      firstSeparator,
+      xGrid,
+      secondSeparator,
+      yGrid,
+      thirdSeparator,
+      referenceGrid,
+    ] {
       view.widthAnchor.constraint(equalToConstant: 440).isActive = true
     }
 
@@ -363,6 +395,27 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
         )
         changed.xAxis = changedXAxis == .standard ? nil : changedXAxis
         changed.yAxis = changedYAxis == .standard ? nil : changedYAxis
+        if referenceValueField.isEnabled {
+          let referenceValue = try parseAxisBound(
+            referenceValueField.stringValue,
+            isTime: yUsesTime,
+            isDate: false,
+            name: "Reference line"
+          )
+          if changedYAxis.scale == .logarithmic,
+            referenceValue.map({ $0 <= 0 }) == true
+          {
+            throw SpreadsheetChartSettingsError.nonPositiveLogarithmicBound("reference line")
+          }
+          changed.referenceLine = referenceValue.map {
+            SpreadsheetChartReferenceLine(
+              value: $0,
+              label: referenceLabelField.stringValue.trimmingCharacters(
+                in: .whitespacesAndNewlines
+              )
+            )
+          }
+        }
         if changed.isFrozen {
           changed.frozenSeries = spreadsheetDocument.chartSeries(
             for: changed,
@@ -872,6 +925,15 @@ private final class SpreadsheetChartViewModel: ObservableObject {
     SpreadsheetDate.format(date, locale: document.settings.displayLocale.locale)
   }
 
+  func formattedValue(_ value: Double, isTime: Bool) -> String {
+    if isTime { return SpreadsheetTime.format(value) }
+    let formatter = NumberFormatter()
+    formatter.locale = document.settings.displayLocale.locale
+    formatter.numberStyle = .decimal
+    formatter.maximumFractionDigits = 6
+    return formatter.string(from: NSNumber(value: value)) ?? String(value)
+  }
+
   func yDomain(for definition: SpreadsheetChartDefinition) -> ClosedRange<Double>? {
     guard definition.type != .pie else { return nil }
     return axisDomain(
@@ -964,8 +1026,9 @@ private struct SpreadsheetChartView: View {
   private func chartContent(_ definition: SpreadsheetChartDefinition) -> some View {
     let xAxis = definition.effectiveXAxis
     let yAxis = definition.effectiveYAxis
-    Chart(model.plottableData(for: definition)) { datum in
-      switch definition.type {
+    Chart {
+      ForEach(model.plottableData(for: definition)) { datum in
+        switch definition.type {
       case .line:
         if model.usesDateXAxis {
           LineMark(
@@ -1048,13 +1111,34 @@ private struct SpreadsheetChartView: View {
           .foregroundStyle(by: .value("Series", datum.series))
           .symbolSize(42)
         }
-      case .pie:
-        SectorMark(
-          angle: .value("Value", abs(datum.value)),
-          innerRadius: .ratio(0.48),
-          angularInset: 1.2
-        )
-        .foregroundStyle(by: .value("Category", datum.category))
+        case .pie:
+          SectorMark(
+            angle: .value("Value", abs(datum.value)),
+            innerRadius: .ratio(0.48),
+            angularInset: 1.2
+          )
+          .foregroundStyle(by: .value("Category", datum.category))
+        }
+      }
+      if definition.type != .pie, let referenceLine = definition.referenceLine {
+        RuleMark(y: .value("Reference", referenceLine.value))
+          .foregroundStyle(Color.orange)
+          .lineStyle(StrokeStyle(lineWidth: 1.25, dash: [6, 4]))
+          .annotation(position: .top, alignment: .trailing) {
+            Text(
+              referenceLine.label.isEmpty
+                ? model.formattedValue(
+                  referenceLine.value,
+                  isTime: model.usesTimeValueAxis
+                )
+                : referenceLine.label
+            )
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(Color.orange)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 4))
+          }
       }
     }
     .modifier(

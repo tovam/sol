@@ -256,4 +256,25 @@ final class FloatingSpreadsheetKitTests: XCTestCase {
     XCTAssertEqual(legacy.effectiveXAxis, .standard)
     XCTAssertEqual(legacy.effectiveYAxis, .standard)
   }
+
+  func testChartReferenceLinePersistsAndIsOptionalForLegacyCharts() throws {
+    let chart = SpreadsheetChartDefinition(
+      sourceRange: CellRange(CellAddress(row: 0, column: 0)),
+      referenceLine: SpreadsheetChartReferenceLine(value: 120, label: "Target")
+    )
+    let encoded = try JSONEncoder().encode(chart)
+    let restored = try JSONDecoder().decode(SpreadsheetChartDefinition.self, from: encoded)
+    XCTAssertEqual(
+      restored.referenceLine,
+      SpreadsheetChartReferenceLine(value: 120, label: "Target")
+    )
+
+    var legacyObject = try XCTUnwrap(
+      JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+    )
+    legacyObject.removeValue(forKey: "referenceLine")
+    let legacyData = try JSONSerialization.data(withJSONObject: legacyObject)
+    let legacy = try JSONDecoder().decode(SpreadsheetChartDefinition.self, from: legacyData)
+    XCTAssertNil(legacy.referenceLine)
+  }
 }
