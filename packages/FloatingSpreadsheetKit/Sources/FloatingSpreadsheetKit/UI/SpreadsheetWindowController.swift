@@ -16,7 +16,7 @@ final class SpreadsheetWindowController: NSWindowController, NSWindowDelegate,
 
   init(document: SpreadsheetDocument) {
     spreadsheetDocument = document
-    panel = FloatingSpreadsheetPanel(size: NSSize(width: 860, height: 520))
+    panel = FloatingSpreadsheetPanel(size: NSSize(width: 430, height: 260))
     gridContainer = SpreadsheetGridContainerView(document: document)
     super.init(window: panel)
     configureWindow()
@@ -38,7 +38,7 @@ final class SpreadsheetWindowController: NSWindowController, NSWindowDelegate,
   func presentCentered() {
     FloatingSpreadsheetWindowPlacement.center(
       panel,
-      preferredSize: NSSize(width: 860, height: 520)
+      preferredSize: NSSize(width: 430, height: 260)
     )
     NSApp.activate(ignoringOtherApps: true)
     panel.orderFrontRegardless()
@@ -82,7 +82,7 @@ final class SpreadsheetWindowController: NSWindowController, NSWindowDelegate,
 
   private func configureWindow() {
     panel.delegate = self
-    panel.minSize = NSSize(width: 520, height: 320)
+    panel.minSize = NSSize(width: 400, height: 200)
     panel.contentMinSize = panel.minSize
   }
 
