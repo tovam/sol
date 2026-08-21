@@ -154,7 +154,7 @@ final class SpreadsheetGridView: NSView, NSTextViewDelegate {
   static let rowCount = 1_048_576
   static let columnCount = 16_384
   static let rowHeight: CGFloat = 25
-  static let defaultColumnWidth: CGFloat = 78.4
+  static let defaultColumnWidth: CGFloat = 62.72
   static let minimumColumnWidth: CGFloat = 40
   static let maximumColumnWidth: CGFloat = 600
 
