@@ -46,6 +46,7 @@
 		7047E80827D4DAEB00582E1B /* Sequence.extension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7047E80727D4DAEB00582E1B /* Sequence.extension.swift */; };
 		7062E8332EA53319008A9B69 /* FolderWatcherJSI.mm in Sources */ = {isa = PBXBuildFile; fileRef = 7062E8322EA53311008A9B69 /* FolderWatcherJSI.mm */; };
 		7065EBBF2CDB8C2B008C0A74 /* LaunchAtLogin in Frameworks */ = {isa = PBXBuildFile; productRef = 7065EBBE2CDB8C2B008C0A74 /* LaunchAtLogin */; };
+		F10A00030000000000000001 /* FloatingSpreadsheetKit in Frameworks */ = {isa = PBXBuildFile; productRef = F10A00020000000000000001 /* FloatingSpreadsheetKit */; };
 		706ABFAB2E059FC2000C0F30 /* KeyboardShortcutRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 706ABFAA2E059FC2000C0F30 /* KeyboardShortcutRecorder.swift */; };
 		706ABFAE2E059FCF000C0F30 /* KeyboardShortcutRecorderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 706ABFAD2E059FCF000C0F30 /* KeyboardShortcutRecorderView.swift */; };
 		706ABFAF2E059FCF000C0F30 /* KeyboardShortcutRecorderView.m in Sources */ = {isa = PBXBuildFile; fileRef = 706ABFAC2E059FCF000C0F30 /* KeyboardShortcutRecorderView.m */; };
@@ -196,6 +197,7 @@
 				706D6D572B3894E200941026 /* CoreLocation.framework in Frameworks */,
 				706D6D532B388C1700941026 /* CoreWLAN.framework in Frameworks */,
 				7065EBBF2CDB8C2B008C0A74 /* LaunchAtLogin in Frameworks */,
+				F10A00030000000000000001 /* FloatingSpreadsheetKit in Frameworks */,
 				3919C725599C8DA45324A5C6 /* libPods-macOS.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -406,6 +408,7 @@
 			name = macOS;
 			packageProductDependencies = (
 				7065EBBE2CDB8C2B008C0A74 /* LaunchAtLogin */,
+				F10A00020000000000000001 /* FloatingSpreadsheetKit */,
 			);
 			productName = sol;
 			productReference = 514201492437B4B30078DB4F /* sol-debug.app */;
@@ -436,6 +439,7 @@
 			mainGroup = 83CBB9F61A601CBA00E9B192;
 			packageReferences = (
 				7065EBBD2CDB8C2B008C0A74 /* XCRemoteSwiftPackageReference "LaunchAtLogin-Legacy" */,
+				F10A00010000000000000001 /* XCLocalSwiftPackageReference "FloatingSpreadsheetKit" */,
 			);
 			productRefGroup = 83CBBA001A601CBA00E9B192 /* Products */;
 			projectDirPath = "";
@@ -958,6 +962,13 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		F10A00010000000000000001 /* XCLocalSwiftPackageReference "FloatingSpreadsheetKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../packages/FloatingSpreadsheetKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		7065EBBD2CDB8C2B008C0A74 /* XCRemoteSwiftPackageReference "LaunchAtLogin-Legacy" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -974,6 +985,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 7065EBBD2CDB8C2B008C0A74 /* XCRemoteSwiftPackageReference "LaunchAtLogin-Legacy" */;
 			productName = LaunchAtLogin;
+		};
+		F10A00020000000000000001 /* FloatingSpreadsheetKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F10A00010000000000000001 /* XCLocalSwiftPackageReference "FloatingSpreadsheetKit" */;
+			productName = FloatingSpreadsheetKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

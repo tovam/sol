@@ -46,6 +46,14 @@ RCT_EXTERN_METHOD(invokeExternalCommand : (NSString *)providerID commandName : (
     NSString *)commandName raw : (NSString *)raw arguments : (NSArray *)arguments
     resolver : (RCTPromiseResolveBlock)resolve rejecter : (
     RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(createFloatingSpreadsheet : (RCTPromiseResolveBlock)
+                      resolve rejecter : (RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(getFloatingSpreadsheets : (RCTPromiseResolveBlock)
+                      resolve rejecter : (RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(reopenFloatingSpreadsheet : (NSString *)identifier resolver : (
+    RCTPromiseResolveBlock)resolve rejecter : (RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(deleteFloatingSpreadsheet : (NSString *)identifier resolver : (
+    RCTPromiseResolveBlock)resolve rejecter : (RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(openFile : (NSString)path)
 RCT_EXTERN_METHOD(openWithFinder : (NSString)path)
 RCT_EXTERN_METHOD(toggleDarkMode)

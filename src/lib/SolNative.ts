@@ -110,6 +110,14 @@ export type AIStreamRequestOptions = {
 	body: Record<string, unknown>;
 };
 
+export type FloatingSpreadsheetSummary = {
+	id: string;
+	name: string;
+	updatedAt: number;
+	cellCount: number;
+	chartCount: number;
+};
+
 class SolNative extends NativeEventEmitter {
 	openFile: (path: string) => void;
 	openWithFinder: (path: string) => void;
@@ -131,6 +139,12 @@ class SolNative extends NativeEventEmitter {
 		raw: string,
 		arguments_: string[],
 	) => Promise<boolean>;
+	createFloatingSpreadsheet: () => Promise<FloatingSpreadsheetSummary>;
+	getFloatingSpreadsheets: () => Promise<FloatingSpreadsheetSummary[]>;
+	reopenFloatingSpreadsheet: (
+		identifier: string,
+	) => Promise<FloatingSpreadsheetSummary>;
+	deleteFloatingSpreadsheet: (identifier: string) => Promise<boolean>;
 	toggleDarkMode: () => void;
 	prepareTimerNotifications: () => void;
 	notifyTimerFinished: () => void;
@@ -312,6 +326,10 @@ class SolNative extends NativeEventEmitter {
 		this.setExternalCommandReservedNames =
 			module.setExternalCommandReservedNames;
 		this.invokeExternalCommand = module.invokeExternalCommand;
+		this.createFloatingSpreadsheet = module.createFloatingSpreadsheet;
+		this.getFloatingSpreadsheets = module.getFloatingSpreadsheets;
+		this.reopenFloatingSpreadsheet = module.reopenFloatingSpreadsheet;
+		this.deleteFloatingSpreadsheet = module.deleteFloatingSpreadsheet;
 		this.openFile = module.openFile;
 		this.toggleDarkMode = module.toggleDarkMode;
 		this.prepareTimerNotifications = module.prepareTimerNotifications;

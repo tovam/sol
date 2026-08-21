@@ -1,4 +1,5 @@
 import Foundation
+import FloatingSpreadsheetKit
 import HotKey
 import LaunchAtLogin
 import React
@@ -151,6 +152,63 @@ class SolNative: RCTEventEmitter {
       arguments: arguments
     ) { accepted in
       resolve(accepted)
+    }
+  }
+
+  @objc func createFloatingSpreadsheet(
+    _ resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    do {
+      let summary = try FloatingSpreadsheetManager.shared.createSpreadsheet()
+      resolve(summary.bridgeDictionary)
+    } catch {
+      reject("FloatingSpreadsheetError", error.localizedDescription, error)
+    }
+  }
+
+  @objc func getFloatingSpreadsheets(
+    _ resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    let manager = FloatingSpreadsheetManager.shared
+    DispatchQueue.global(qos: .userInitiated).async {
+      do {
+        let summaries = try manager.savedSpreadsheets().map(\.bridgeDictionary)
+        DispatchQueue.main.async { resolve(summaries) }
+      } catch {
+        DispatchQueue.main.async {
+          reject("FloatingSpreadsheetError", error.localizedDescription, error)
+        }
+      }
+    }
+  }
+
+  @objc func reopenFloatingSpreadsheet(
+    _ identifier: String,
+    resolver resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    do {
+      let summary = try FloatingSpreadsheetManager.shared.reopenSpreadsheet(
+        id: identifier
+      )
+      resolve(summary.bridgeDictionary)
+    } catch {
+      reject("FloatingSpreadsheetError", error.localizedDescription, error)
+    }
+  }
+
+  @objc func deleteFloatingSpreadsheet(
+    _ identifier: String,
+    resolver resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    do {
+      try FloatingSpreadsheetManager.shared.deleteSpreadsheet(id: identifier)
+      resolve(true)
+    } catch {
+      reject("FloatingSpreadsheetError", error.localizedDescription, error)
     }
   }
 

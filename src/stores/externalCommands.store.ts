@@ -10,7 +10,16 @@ import { ItemType } from "./ui.store";
 let providersChangedListener: EmitterSubscription | undefined;
 let reservedCommandsDisposer: (() => void) | undefined;
 
-const builtInCommandNames = ["ai", "ia", "dm"];
+const builtInCommandNames = [
+	"ai",
+	"ia",
+	"dm",
+	"sheet",
+	"spreadsheet",
+	"excel",
+	"tableur",
+	"sheets",
+];
 
 export type ExternalCommandsStore = ReturnType<
 	typeof createExternalCommandsStore

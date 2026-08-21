@@ -19,6 +19,7 @@ import {
 	type TextSelection,
 } from "lib/fileSearch";
 import { fetchPublicIPAddress } from "lib/publicIp";
+import { resolveSpreadsheetCommand } from "lib/spreadsheets";
 import {
 	parseCommandArguments,
 	parseScriptCommandInvocation,
@@ -1051,6 +1052,33 @@ export const createUIStore = (root: IRootStore) => {
 			}
 		},
 		get items(): Item[] {
+			const spreadsheetCommand = resolveSpreadsheetCommand(store.query);
+			if (spreadsheetCommand && root.spreadsheets) {
+				if (spreadsheetCommand.kind === "create") {
+					return [root.spreadsheets.createItem];
+				}
+				const spreadsheetItems = root.spreadsheets.itemsForFilter(
+					spreadsheetCommand.filter,
+				);
+				if (spreadsheetItems.length > 0) return spreadsheetItems;
+				return [
+					{
+						id: "floating_spreadsheets_empty",
+						icon: "▦",
+						name: root.spreadsheets.isLoading
+							? "Loading spreadsheets…"
+							: spreadsheetCommand.filter
+								? "No matching spreadsheets"
+								: "No saved spreadsheets",
+						subName: spreadsheetCommand.filter
+							? "Change the text after “sheets”"
+							: "Use sheet, spreadsheet, excel, or tableur to create one",
+						type: ItemType.CONFIGURATION,
+						preventClose: true,
+					},
+				];
+			}
+
 			const allItems = [
 				...store.apps,
 				...baseItems,
@@ -1262,6 +1290,8 @@ export const createUIStore = (root: IRootStore) => {
 			return finalResults;
 		},
 		get searchItems(): Item[] {
+			const hasSpreadsheetCommand =
+				resolveSpreadsheetCommand(store.query) !== null;
 			const hasAICommand = resolveAICommandPrompt(store.query) !== null;
 			const hasDirectDailymotionCommand =
 				resolveDailymotionDirectCommand(
@@ -1276,6 +1306,7 @@ export const createUIStore = (root: IRootStore) => {
 			const hasExternalCommand =
 				resolveLauncherCommand(store.query, root.externalCommands.items).length > 0;
 			if (
+				hasSpreadsheetCommand ||
 				hasAICommand ||
 				hasDirectDailymotionCommand ||
 				hasDailymotionCommand ||
@@ -1733,6 +1764,9 @@ export const createUIStore = (root: IRootStore) => {
 			};
 			store.selectedIndex = 0;
 			store.temporaryResult = null;
+			if (resolveSpreadsheetCommand(store.query)?.kind === "list") {
+				void root.spreadsheets?.refresh();
+			}
 			const isFileSearchActive =
 				store.focusedWidget === Widget.FILE_SEARCH ||
 				(store.focusedWidget === Widget.SEARCH &&

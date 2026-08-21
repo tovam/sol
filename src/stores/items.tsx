@@ -557,6 +557,17 @@ export function createBaseItems(store: IRootStore) {
 			},
 		},
 		{
+			id: "create_floating_spreadsheet",
+			icon: "▦",
+			name: "New Spreadsheet",
+			alias:
+				"sheet spreadsheet excel tableur floating grid cells formulas csv tsv graphique",
+			type: ItemType.CONFIGURATION,
+			callback: () => {
+				void store.spreadsheets.create();
+			},
+		},
+		{
 			id: "check_for_updates",
 			icon: "🆙",
 			name: "Check for Sol updates",
