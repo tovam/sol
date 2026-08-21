@@ -1,5 +1,25 @@
 import AppKit
 
+private final class SpreadsheetCellEditorField: NSTextField {
+  var onCommitAndMove: ((_ rowDelta: Int, _ columnDelta: Int) -> Void)?
+
+  override func keyDown(with event: NSEvent) {
+    let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+    switch event.keyCode {
+    case 36, 76:
+      onCommitAndMove?(modifiers.contains(.shift) ? -1 : 1, 0)
+    case 48:
+      onCommitAndMove?(0, modifiers.contains(.shift) ? -1 : 1)
+    case 125:
+      onCommitAndMove?(1, 0)
+    case 126:
+      onCommitAndMove?(-1, 0)
+    default:
+      super.keyDown(with: event)
+    }
+  }
+}
+
 protocol SpreadsheetGridViewDelegate: AnyObject {
   func spreadsheetGridView(
     _ gridView: SpreadsheetGridView,
@@ -480,7 +500,9 @@ final class SpreadsheetGridView: NSView, NSTextFieldDelegate {
     guard editor == nil else { return }
     let original = document.rawInput(at: activeCell)
     editingOriginalValue = original
-    let field = NSTextField(frame: cellRect(activeCell).insetBy(dx: 1, dy: 1))
+    let field = SpreadsheetCellEditorField(
+      frame: cellRect(activeCell).insetBy(dx: 1, dy: 1)
+    )
     field.stringValue = replacement ?? original
     field.font = .systemFont(ofSize: 12)
     field.isBordered = true
@@ -492,8 +514,12 @@ final class SpreadsheetGridView: NSView, NSTextFieldDelegate {
     field.cell?.usesSingleLineMode = true
     field.cell?.lineBreakMode = .byClipping
     field.delegate = self
-    field.target = self
-    field.action = #selector(commitEditorAndMoveDown)
+    field.onCommitAndMove = { [weak self] rowDelta, columnDelta in
+      self?.finishEditing(
+        commit: true,
+        movement: (rowDelta, columnDelta)
+      )
+    }
     addSubview(field)
     editor = field
     updateEditingReferences(field.stringValue)
@@ -560,10 +586,6 @@ final class SpreadsheetGridView: NSView, NSTextFieldDelegate {
     default:
       return false
     }
-  }
-
-  @objc private func commitEditorAndMoveDown() {
-    finishEditing(commit: true, movement: (1, 0))
   }
 
   private func updateEditingReferences(_ rawInput: String) {
