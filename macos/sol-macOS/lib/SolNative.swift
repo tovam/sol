@@ -231,6 +231,38 @@ class SolNative: RCTEventEmitter {
     }
   }
 
+  @objc func renameFloatingSpreadsheet(
+    _ identifier: String,
+    name: String,
+    resolver resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    do {
+      let summary = try FloatingSpreadsheetManager.shared.renameSpreadsheet(
+        id: identifier,
+        name: name
+      )
+      resolve(summary.bridgeDictionary)
+    } catch {
+      reject("FloatingSpreadsheetError", error.localizedDescription, error)
+    }
+  }
+
+  @objc func archiveFloatingSpreadsheet(
+    _ identifier: String,
+    resolver resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    do {
+      let summary = try FloatingSpreadsheetManager.shared.archiveSpreadsheet(
+        id: identifier
+      )
+      resolve(summary.bridgeDictionary)
+    } catch {
+      reject("FloatingSpreadsheetError", error.localizedDescription, error)
+    }
+  }
+
   @objc func deleteFloatingSpreadsheet(
     _ identifier: String,
     resolver resolve: @escaping RCTPromiseResolveBlock,

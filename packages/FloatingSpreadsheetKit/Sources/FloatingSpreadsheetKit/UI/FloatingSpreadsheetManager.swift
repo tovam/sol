@@ -100,6 +100,22 @@ public final class FloatingSpreadsheetManager {
   }
 
   @discardableResult
+  public func archiveSpreadsheet(id identifier: String) throws -> FloatingSpreadsheetSummary {
+    try onMain {
+      guard let id = UUID(uuidString: identifier) else {
+        throw SpreadsheetRepositoryError.invalidIdentifier
+      }
+      let document = try loadedDocument(id: id)
+      guard document.archivedAt == nil else {
+        throw SpreadsheetRepositoryError.documentArchived
+      }
+      try archive(document, at: Date())
+      rescheduleArchiveTimer()
+      return document.summary
+    }
+  }
+
+  @discardableResult
   public func renameSpreadsheet(
     id identifier: String,
     name: String
@@ -265,16 +281,21 @@ public final class FloatingSpreadsheetManager {
     for id in dueIdentifiers {
       let document = try loadedDocument(id: id)
       guard document.isDueForArchive(at: date) else { continue }
-      document.archive(at: date)
-      try repository.saveImmediately(document)
-
-      let relatedCharts = chartWindows.values.filter { $0.documentID == id }
-      spreadsheetWindows[id]?.closeWindow()
-      for chartWindow in relatedCharts {
-        chartWindow.closeWindow()
-      }
-      releaseDocumentIfUnused(id: id)
+      try archive(document, at: date)
     }
+  }
+
+  private func archive(_ document: SpreadsheetDocument, at date: Date) throws {
+    let id = document.id
+    document.archive(at: date)
+    try repository.saveImmediately(document)
+
+    let relatedCharts = chartWindows.values.filter { $0.documentID == id }
+    spreadsheetWindows[id]?.closeWindow()
+    for chartWindow in relatedCharts {
+      chartWindow.closeWindow()
+    }
+    releaseDocumentIfUnused(id: id)
   }
 
   private func onMain<T>(_ body: () throws -> T) rethrows -> T {

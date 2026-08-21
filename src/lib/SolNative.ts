@@ -152,6 +152,13 @@ class SolNative extends NativeEventEmitter {
 	restoreArchivedFloatingSpreadsheet: (
 		identifier: string,
 	) => Promise<FloatingSpreadsheetSummary>;
+	renameFloatingSpreadsheet: (
+		identifier: string,
+		name: string,
+	) => Promise<FloatingSpreadsheetSummary>;
+	archiveFloatingSpreadsheet: (
+		identifier: string,
+	) => Promise<FloatingSpreadsheetSummary>;
 	deleteFloatingSpreadsheet: (identifier: string) => Promise<boolean>;
 	toggleDarkMode: () => void;
 	prepareTimerNotifications: () => void;
@@ -341,6 +348,8 @@ class SolNative extends NativeEventEmitter {
 		this.reopenFloatingSpreadsheet = module.reopenFloatingSpreadsheet;
 		this.restoreArchivedFloatingSpreadsheet =
 			module.restoreArchivedFloatingSpreadsheet;
+		this.renameFloatingSpreadsheet = module.renameFloatingSpreadsheet;
+		this.archiveFloatingSpreadsheet = module.archiveFloatingSpreadsheet;
 		this.deleteFloatingSpreadsheet = module.deleteFloatingSpreadsheet;
 		this.openFile = module.openFile;
 		this.toggleDarkMode = module.toggleDarkMode;

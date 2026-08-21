@@ -151,6 +151,30 @@ export const createSpreadsheetsStore = (root: IRootStore) => {
 			}
 		},
 
+		rename: async (identifier: string, name: string) => {
+			try {
+				await solNative.renameFloatingSpreadsheet(identifier, name);
+				await store.refresh();
+			} catch (error) {
+				void solNative.showToast(
+					`Could not rename spreadsheet: ${String(error)}`,
+					"error",
+				);
+			}
+		},
+
+		archive: async (identifier: string) => {
+			try {
+				await solNative.archiveFloatingSpreadsheet(identifier);
+				await Promise.all([store.refresh(), store.refreshArchived()]);
+			} catch (error) {
+				void solNative.showToast(
+					`Could not archive spreadsheet: ${String(error)}`,
+					"error",
+				);
+			}
+		},
+
 		delete: async (identifier: string) => {
 			try {
 				await solNative.deleteFloatingSpreadsheet(identifier);
