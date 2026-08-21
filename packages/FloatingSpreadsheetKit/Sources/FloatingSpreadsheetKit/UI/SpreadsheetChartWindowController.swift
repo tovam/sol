@@ -2,6 +2,7 @@ import AppKit
 import Charts
 import Combine
 import SwiftUI
+import UniformTypeIdentifiers
 
 final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelegate {
   let documentID: UUID
@@ -12,6 +13,7 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
   private let chartID: UUID
   private let panel: FloatingSpreadsheetPanel
   private let model: SpreadsheetChartViewModel
+  private let chartHost: NSView
   private let toolbar = SpreadsheetChartToolbarView()
   private var documentObserver: NSObjectProtocol?
   private var didClose = false
@@ -21,7 +23,9 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
     self.chartID = chartID
     documentID = document.id
     panel = FloatingSpreadsheetPanel(size: NSSize(width: 560, height: 360))
-    model = SpreadsheetChartViewModel(document: document, chartID: chartID)
+    let viewModel = SpreadsheetChartViewModel(document: document, chartID: chartID)
+    model = viewModel
+    chartHost = NSHostingView(rootView: SpreadsheetChartView(model: viewModel))
     super.init(window: panel)
     configureWindow()
     configureContent()
@@ -96,24 +100,24 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
     toolbar.onType = { [weak self] type in self?.changeType(type) }
     toolbar.onToggleFrozen = { [weak self] in self?.toggleFrozen() }
     toolbar.onOptions = { [weak self] in self?.showOptions() }
+    toolbar.onCopyPNG = { [weak self] in self?.copyAsPNG() }
+    toolbar.onSavePNG = { [weak self] in self?.saveAsPNG() }
     toolbar.onReturnToSource = { [weak self] in self?.onReturnToSpreadsheet?() }
     toolbar.onClose = { [weak self] in self?.closeWindow() }
     backdrop.addSubview(toolbar)
 
-    let chartView = SpreadsheetChartView(model: model)
-    let host = NSHostingView(rootView: chartView)
-    host.translatesAutoresizingMaskIntoConstraints = false
-    backdrop.addSubview(host)
+    chartHost.translatesAutoresizingMaskIntoConstraints = false
+    backdrop.addSubview(chartHost)
 
     NSLayoutConstraint.activate([
       toolbar.leadingAnchor.constraint(equalTo: backdrop.leadingAnchor),
       toolbar.trailingAnchor.constraint(equalTo: backdrop.trailingAnchor),
       toolbar.topAnchor.constraint(equalTo: backdrop.topAnchor),
       toolbar.heightAnchor.constraint(equalToConstant: 30),
-      host.leadingAnchor.constraint(equalTo: backdrop.leadingAnchor, constant: 6),
-      host.trailingAnchor.constraint(equalTo: backdrop.trailingAnchor, constant: -6),
-      host.topAnchor.constraint(equalTo: toolbar.bottomAnchor),
-      host.bottomAnchor.constraint(equalTo: backdrop.bottomAnchor, constant: -6),
+      chartHost.leadingAnchor.constraint(equalTo: backdrop.leadingAnchor, constant: 6),
+      chartHost.trailingAnchor.constraint(equalTo: backdrop.trailingAnchor, constant: -6),
+      chartHost.topAnchor.constraint(equalTo: toolbar.bottomAnchor),
+      chartHost.bottomAnchor.constraint(equalTo: backdrop.bottomAnchor, constant: -6),
     ])
     panel.enableRoundedShadow()
     refreshToolbar()
@@ -223,6 +227,59 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
     toolbar.update(type: chart.type, isFrozen: chart.isFrozen)
   }
 
+  private func copyAsPNG() {
+    guard let data = SpreadsheetChartPNGExporter.pngData(for: chartHost) else {
+      showExportError("The chart could not be rendered as a PNG image.")
+      return
+    }
+    let pasteboard = NSPasteboard.general
+    pasteboard.clearContents()
+    guard pasteboard.setData(data, forType: .png) else {
+      showExportError("The PNG image could not be copied to the clipboard.")
+      return
+    }
+    toolbar.showCopySucceeded()
+  }
+
+  private func saveAsPNG() {
+    let savePanel = NSSavePanel()
+    savePanel.title = "Save chart as PNG"
+    savePanel.nameFieldStringValue = suggestedPNGFilename()
+    savePanel.allowedContentTypes = [.png]
+    savePanel.canCreateDirectories = true
+    savePanel.beginSheetModal(for: panel) { [weak self] response in
+      guard response == .OK, let self, let url = savePanel.url else { return }
+      guard let data = SpreadsheetChartPNGExporter.pngData(for: chartHost) else {
+        showExportError("The chart could not be rendered as a PNG image.")
+        return
+      }
+      do {
+        try data.write(to: url, options: .atomic)
+      } catch {
+        showExportError("The PNG image could not be saved.", informativeText: error.localizedDescription)
+      }
+    }
+  }
+
+  private func suggestedPNGFilename() -> String {
+    let title = spreadsheetDocument.charts.first(where: { $0.id == chartID })?.title ?? "Chart"
+    let invalidCharacters = CharacterSet(charactersIn: "/:")
+      .union(.newlines)
+      .union(.controlCharacters)
+    let components = title.components(separatedBy: invalidCharacters)
+    let sanitized = components.joined(separator: "-")
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    return "\(sanitized.isEmpty ? "Chart" : sanitized).png"
+  }
+
+  private func showExportError(_ message: String, informativeText: String = "") {
+    let alert = NSAlert()
+    alert.alertStyle = .warning
+    alert.messageText = message
+    alert.informativeText = informativeText
+    alert.beginSheetModal(for: panel)
+  }
+
   private func validateAlwaysOnTop() {
     guard panel.level != .floating else { return }
     panel.close()
@@ -233,6 +290,8 @@ private final class SpreadsheetChartToolbarView: NSView {
   var onType: ((SpreadsheetChartType) -> Void)?
   var onToggleFrozen: (() -> Void)?
   var onOptions: (() -> Void)?
+  var onCopyPNG: (() -> Void)?
+  var onSavePNG: (() -> Void)?
   var onReturnToSource: (() -> Void)?
   var onClose: (() -> Void)?
 
@@ -244,6 +303,10 @@ private final class SpreadsheetChartToolbarView: NSView {
     symbol: "snowflake",
     tooltip: "Freeze live data"
   )
+  private let copyButton = SpreadsheetChartToolbarView.button(
+    symbol: "doc.on.doc",
+    tooltip: "Copy chart as PNG"
+  )
 
   override init(frame frameRect: NSRect) {
     super.init(frame: frameRect)
@@ -252,21 +315,28 @@ private final class SpreadsheetChartToolbarView: NSView {
 
     let source = Self.button(symbol: "arrowshape.turn.up.left", tooltip: "Return to spreadsheet")
     let options = Self.button(symbol: "slider.horizontal.3", tooltip: "Chart options")
+    let save = Self.button(symbol: "square.and.arrow.down", tooltip: "Save chart as PNG")
     let close = Self.button(symbol: "xmark", tooltip: "Close chart")
     source.target = self
     source.action = #selector(returnToSource)
     options.target = self
     options.action = #selector(showOptions)
+    save.target = self
+    save.action = #selector(savePNG)
     close.target = self
     close.action = #selector(closeWindow)
     typeButton.target = self
     typeButton.action = #selector(showTypes)
     freezeButton.target = self
     freezeButton.action = #selector(toggleFrozen)
+    copyButton.target = self
+    copyButton.action = #selector(copyPNG)
 
     let spacer = NSView()
     spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-    let stack = NSStackView(views: [close, spacer, source, typeButton, freezeButton, options])
+    let stack = NSStackView(
+      views: [close, spacer, source, typeButton, freezeButton, copyButton, save, options]
+    )
     stack.orientation = .horizontal
     stack.alignment = .centerY
     stack.spacing = 4
@@ -297,6 +367,22 @@ private final class SpreadsheetChartToolbarView: NSView {
       accessibilityDescription: isFrozen ? "Unfreeze data" : "Freeze live data"
     )
     freezeButton.contentTintColor = isFrozen ? .controlAccentColor : .secondaryLabelColor
+  }
+
+  func showCopySucceeded() {
+    copyButton.image = NSImage(
+      systemSymbolName: "checkmark",
+      accessibilityDescription: "Chart copied as PNG"
+    )
+    copyButton.contentTintColor = .systemGreen
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { [weak self] in
+      guard let self else { return }
+      copyButton.image = NSImage(
+        systemSymbolName: "doc.on.doc",
+        accessibilityDescription: "Copy chart as PNG"
+      )
+      copyButton.contentTintColor = .secondaryLabelColor
+    }
   }
 
   @objc private func showTypes() {
@@ -330,6 +416,8 @@ private final class SpreadsheetChartToolbarView: NSView {
 
   @objc private func toggleFrozen() { onToggleFrozen?() }
   @objc private func showOptions() { onOptions?() }
+  @objc private func copyPNG() { onCopyPNG?() }
+  @objc private func savePNG() { onSavePNG?() }
   @objc private func returnToSource() { onReturnToSource?() }
   @objc private func closeWindow() { onClose?() }
 
