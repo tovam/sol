@@ -390,8 +390,15 @@ class SolNative: RCTEventEmitter {
   }
 
   @objc func setLaunchAtLogin(_ enabled: Bool) {
-    if LaunchAtLogin.isEnabled != enabled {
-      LaunchAtLogin.isEnabled = enabled
+    // Remove the legacy one-shot login helper during migration. The launch
+    // agent below handles both login launch and crash recovery.
+    if LaunchAtLogin.isEnabled {
+      LaunchAtLogin.isEnabled = false
+    }
+    do {
+      try SolLaunchAgentController.shared.setEnabled(enabled)
+    } catch {
+      NSLog("Could not update Sol launch monitoring: \(error.localizedDescription)")
     }
   }
 
@@ -833,6 +840,7 @@ class SolNative: RCTEventEmitter {
           NSLog("Could not restart Sol: \(error.localizedDescription)")
           return
         }
+        SolLaunchAgentController.shared.prepareForApplicationRestart()
         NSApplication.shared.terminate(self)
       }
     }

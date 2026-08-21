@@ -33,7 +33,7 @@ require_command() {
   fi
 }
 
-for command_name in curl shasum ditto codesign security openssl xattr open pgrep pkill sed; do
+for command_name in curl shasum ditto codesign security openssl xattr open pgrep pkill sed launchctl id; do
   require_command "$command_name"
 done
 
@@ -226,6 +226,7 @@ if [[ "$INSTALL_TARGET" != "/Applications/Sol.app" ]]; then
 fi
 
 print "Installing in /Applications…"
+launchctl bootout "gui/$(id -u)/com.ospfranco.sol.watchdog" >/dev/null 2>&1 || true
 pkill -x sol >/dev/null 2>&1 || true
 for _ in {1..20}; do
   if ! pgrep -x sol >/dev/null 2>&1; then

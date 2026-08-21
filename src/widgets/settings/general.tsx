@@ -658,9 +658,9 @@ export const General = observer(() => {
 		>
 			<View className="flex-row items-center p-2.5 subBg rounded-lg border border-lightBorder dark:border-darkBorder">
 				<View className="flex-1">
-					<Text className="text-sm text">Open at Login</Text>
+					<Text className="text-sm text">Keep Sol available</Text>
 					<Text className="text-xxs text-neutral-500 dark:text-neutral-400">
-						Launch Sol when your computer starts
+						Open at login and relaunch after a crash, never after Quit
 					</Text>
 				</View>
 				<MySwitch

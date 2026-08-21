@@ -74,6 +74,8 @@ class AppDelegate: RCTAppDelegate, UNUserNotificationCenterDelegate {
 
     super.applicationDidFinishLaunching(notification)
 
+    SolLaunchAgentController.shared.applicationDidStart()
+
     UNUserNotificationCenter.current().delegate = self
 
     ExternalCommandProviderRegistry.shared.start()
@@ -94,6 +96,7 @@ class AppDelegate: RCTAppDelegate, UNUserNotificationCenterDelegate {
   }
 
   override func applicationWillTerminate(_ notification: Notification) {
+    SolLaunchAgentController.shared.applicationWillTerminate()
     ExternalPromptCoordinator.shared.cancelAll()
     ExternalCommandProviderRegistry.shared.stop()
     ExternalIntegrationServer.shared.stop()
