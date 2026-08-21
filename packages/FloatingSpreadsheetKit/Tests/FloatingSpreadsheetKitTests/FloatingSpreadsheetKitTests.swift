@@ -101,4 +101,48 @@ final class FloatingSpreadsheetKitTests: XCTestCase {
     XCTAssertTrue(restored.undo())
     XCTAssertEqual(restored.settings, .standard)
   }
+
+  func testScheduledArchivePersistsAndCanBeRestored() throws {
+    let deadline = Date(timeIntervalSince1970: 2_000_000_000)
+    let archivedAt = deadline.addingTimeInterval(10)
+    let document = SpreadsheetDocument(name: "Temporary")
+    var settings = document.settings
+    settings.scheduledArchiveAt = deadline
+    document.updateSettings(settings)
+
+    XCTAssertTrue(document.isDueForArchive(at: deadline))
+    document.archive(at: archivedAt)
+    XCTAssertEqual(document.archivedAt, archivedAt)
+    XCTAssertNil(document.settings.scheduledArchiveAt)
+
+    let data = try JSONEncoder().encode(document.payload)
+    let payload = try JSONDecoder().decode(SpreadsheetPayload.self, from: data)
+    let restored = SpreadsheetDocument(payload: payload)
+    XCTAssertEqual(restored.archivedAt, archivedAt)
+
+    restored.restoreFromArchive(at: archivedAt.addingTimeInterval(10))
+    XCTAssertNil(restored.archivedAt)
+    XCTAssertNil(restored.settings.scheduledArchiveAt)
+  }
+
+  func testRepositorySeparatesActiveAndArchivedSpreadsheets() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "FloatingSpreadsheetKitTests-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    defer { try? FileManager.default.removeItem(at: root) }
+    let repository = SpreadsheetRepository(rootDirectory: root)
+    let document = try repository.createDocument()
+
+    XCTAssertEqual(try repository.loadSummaries().map(\.id), [document.id])
+    XCTAssertTrue(try repository.loadSummaries(archived: true).isEmpty)
+
+    document.archive()
+    try repository.saveImmediately(document)
+    XCTAssertTrue(try repository.loadSummaries().isEmpty)
+    XCTAssertEqual(
+      try repository.loadSummaries(archived: true).map(\.id),
+      [document.id]
+    )
+  }
 }

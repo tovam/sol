@@ -3,11 +3,13 @@ import Foundation
 enum SpreadsheetRepositoryError: LocalizedError {
   case invalidIdentifier
   case documentNotFound
+  case documentArchived
 
   var errorDescription: String? {
     switch self {
     case .invalidIdentifier: return "The spreadsheet identifier is invalid."
     case .documentNotFound: return "The saved spreadsheet could not be found."
+    case .documentArchived: return "The spreadsheet is archived. Restore it from Sol Settings."
     }
   }
 }
@@ -67,7 +69,11 @@ final class SpreadsheetRepository {
     return document
   }
 
-  func loadSummaries() throws -> [FloatingSpreadsheetSummary] {
+  func loadSummaries(archived: Bool = false) throws -> [FloatingSpreadsheetSummary] {
+    try loadAllSummaries().filter { ($0.archivedAt != nil) == archived }
+  }
+
+  func loadAllSummaries() throws -> [FloatingSpreadsheetSummary] {
     try prepareDirectory()
     let urls = try fileManager.contentsOfDirectory(
       at: rootDirectory,

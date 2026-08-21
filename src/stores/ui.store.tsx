@@ -279,6 +279,7 @@ export type SettingsSection =
 	| "TRANSLATE"
 	| "ITEMS"
 	| "SCRIPTS"
+	| "SPREADSHEETS"
 	| "CALENDARS"
 	| "AI"
 	| "DAILYMOTION";

@@ -18,6 +18,7 @@ final class SpreadsheetDocument {
   private(set) var historyCursor: Int
   private(set) var columnWidths: [Int: Double]
   private(set) var settings: SpreadsheetSettings
+  private(set) var archivedAt: Date?
 
   var onChange: ((SpreadsheetDocument) -> Void)?
 
@@ -39,6 +40,7 @@ final class SpreadsheetDocument {
       column >= 0 && width.isFinite && width > 0
     }
     settings = payload.settings
+    archivedAt = payload.archivedAt
   }
 
   convenience init(id: UUID = UUID(), name: String, now: Date = Date()) {
@@ -77,7 +79,8 @@ final class SpreadsheetDocument {
       history: history,
       historyCursor: historyCursor,
       columnWidths: columnWidths,
-      settings: settings
+      settings: settings,
+      archivedAt: archivedAt
     )
   }
 
@@ -243,6 +246,24 @@ final class SpreadsheetDocument {
         nameAfter: trimmed
       )
     )
+  }
+
+  func archive(at date: Date = Date()) {
+    guard archivedAt == nil else { return }
+    archivedAt = date
+    settings.scheduledArchiveAt = nil
+    finishChange(at: date)
+  }
+
+  func restoreFromArchive(at date: Date = Date()) {
+    guard archivedAt != nil else { return }
+    archivedAt = nil
+    settings.scheduledArchiveAt = nil
+    finishChange(at: date)
+  }
+
+  func isDueForArchive(at date: Date) -> Bool {
+    archivedAt == nil && settings.scheduledArchiveAt.map { $0 <= date } == true
   }
 
   @discardableResult
@@ -613,8 +634,8 @@ final class SpreadsheetDocument {
     }
   }
 
-  private func finishChange() {
-    updatedAt = Date()
+  private func finishChange(at date: Date = Date()) {
+    updatedAt = date
     formulaEngine.invalidate()
     onChange?(self)
     NotificationCenter.default.post(name: .floatingSpreadsheetDidChange, object: self)

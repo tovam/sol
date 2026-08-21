@@ -116,6 +116,8 @@ export type FloatingSpreadsheetSummary = {
 	updatedAt: number;
 	cellCount: number;
 	chartCount: number;
+	scheduledArchiveAt?: number;
+	archivedAt?: number;
 };
 
 class SolNative extends NativeEventEmitter {
@@ -141,7 +143,13 @@ class SolNative extends NativeEventEmitter {
 	) => Promise<boolean>;
 	createFloatingSpreadsheet: () => Promise<FloatingSpreadsheetSummary>;
 	getFloatingSpreadsheets: () => Promise<FloatingSpreadsheetSummary[]>;
+	getArchivedFloatingSpreadsheets: () => Promise<
+		FloatingSpreadsheetSummary[]
+	>;
 	reopenFloatingSpreadsheet: (
+		identifier: string,
+	) => Promise<FloatingSpreadsheetSummary>;
+	restoreArchivedFloatingSpreadsheet: (
 		identifier: string,
 	) => Promise<FloatingSpreadsheetSummary>;
 	deleteFloatingSpreadsheet: (identifier: string) => Promise<boolean>;
@@ -328,7 +336,11 @@ class SolNative extends NativeEventEmitter {
 		this.invokeExternalCommand = module.invokeExternalCommand;
 		this.createFloatingSpreadsheet = module.createFloatingSpreadsheet;
 		this.getFloatingSpreadsheets = module.getFloatingSpreadsheets;
+		this.getArchivedFloatingSpreadsheets =
+			module.getArchivedFloatingSpreadsheets;
 		this.reopenFloatingSpreadsheet = module.reopenFloatingSpreadsheet;
+		this.restoreArchivedFloatingSpreadsheet =
+			module.restoreArchivedFloatingSpreadsheet;
 		this.deleteFloatingSpreadsheet = module.deleteFloatingSpreadsheet;
 		this.openFile = module.openFile;
 		this.toggleDarkMode = module.toggleDarkMode;

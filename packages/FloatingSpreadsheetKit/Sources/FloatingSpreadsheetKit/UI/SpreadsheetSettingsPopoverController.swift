@@ -20,6 +20,8 @@ final class SpreadsheetSettingsPopoverController: NSViewController {
     action: nil
   )
   private let currencyPopup = NSPopUpButton()
+  private let archiveCheckbox = NSButton(checkboxWithTitle: "Enabled", target: nil, action: nil)
+  private let archiveDatePicker = NSDatePicker()
 
   init(settings: SpreadsheetSettings) {
     self.settings = settings
@@ -32,7 +34,7 @@ final class SpreadsheetSettingsPopoverController: NSViewController {
   }
 
   override func loadView() {
-    let root = NSView(frame: NSRect(x: 0, y: 0, width: 238, height: 82))
+    let root = NSView(frame: NSRect(x: 0, y: 0, width: 340, height: 132))
 
     localeControl.target = self
     localeControl.action = #selector(changeLocale)
@@ -44,9 +46,25 @@ final class SpreadsheetSettingsPopoverController: NSViewController {
     currencyPopup.action = #selector(changeCurrency)
     currencyPopup.setAccessibilityLabel("Spreadsheet currency")
 
+    archiveCheckbox.target = self
+    archiveCheckbox.action = #selector(toggleScheduledArchive)
+    archiveCheckbox.setAccessibilityLabel("Enable scheduled spreadsheet archive")
+    archiveDatePicker.datePickerStyle = .textFieldAndStepper
+    archiveDatePicker.datePickerElements = [.yearMonthDay, .hourMinute]
+    archiveDatePicker.minDate = Date().addingTimeInterval(60)
+    archiveDatePicker.target = self
+    archiveDatePicker.action = #selector(changeScheduledArchiveDate)
+    archiveDatePicker.setAccessibilityLabel("Scheduled archive date and time")
+
+    let archiveControls = NSStackView(views: [archiveCheckbox, archiveDatePicker])
+    archiveControls.orientation = .horizontal
+    archiveControls.alignment = .centerY
+    archiveControls.spacing = 6
+
     let formatLabel = NSTextField(labelWithString: "Format")
     let currencyLabel = NSTextField(labelWithString: "Currency")
-    for label in [formatLabel, currencyLabel] {
+    let archiveLabel = NSTextField(labelWithString: "Auto-archive")
+    for label in [formatLabel, currencyLabel, archiveLabel] {
       label.font = .systemFont(ofSize: 11)
       label.textColor = .secondaryLabelColor
       label.alignment = .right
@@ -55,6 +73,7 @@ final class SpreadsheetSettingsPopoverController: NSViewController {
     let grid = NSGridView(views: [
       [formatLabel, localeControl],
       [currencyLabel, currencyPopup],
+      [archiveLabel, archiveControls],
     ])
     grid.rowSpacing = 8
     grid.columnSpacing = 10
@@ -63,10 +82,21 @@ final class SpreadsheetSettingsPopoverController: NSViewController {
     grid.translatesAutoresizingMaskIntoConstraints = false
     root.addSubview(grid)
 
+    let archiveExplanation = NSTextField(
+      wrappingLabelWithString: "At this time the window closes and the sheet moves to Sol Settings."
+    )
+    archiveExplanation.font = .systemFont(ofSize: 10)
+    archiveExplanation.textColor = .secondaryLabelColor
+    archiveExplanation.translatesAutoresizingMaskIntoConstraints = false
+    root.addSubview(archiveExplanation)
+
     NSLayoutConstraint.activate([
       grid.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 12),
       grid.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -12),
-      grid.centerYAnchor.constraint(equalTo: root.centerYAnchor),
+      grid.topAnchor.constraint(equalTo: root.topAnchor, constant: 10),
+      archiveExplanation.leadingAnchor.constraint(equalTo: grid.leadingAnchor),
+      archiveExplanation.trailingAnchor.constraint(equalTo: grid.trailingAnchor),
+      archiveExplanation.topAnchor.constraint(equalTo: grid.bottomAnchor, constant: 6),
     ])
 
     view = root
@@ -83,6 +113,12 @@ final class SpreadsheetSettingsPopoverController: NSViewController {
       $0.code == settings.currencyCode
     } ?? 0
     currencyPopup.selectItem(at: currencyIndex)
+    let scheduledArchiveAt = settings.scheduledArchiveAt
+    archiveCheckbox.state = scheduledArchiveAt == nil ? .off : .on
+    archiveDatePicker.isEnabled = scheduledArchiveAt != nil
+    archiveDatePicker.dateValue = scheduledArchiveAt
+      ?? Calendar.current.date(byAdding: .day, value: 1, to: Date())
+      ?? Date().addingTimeInterval(86_400)
   }
 
   @objc private func changeLocale() {
@@ -100,6 +136,26 @@ final class SpreadsheetSettingsPopoverController: NSViewController {
     let selected = currencyPopup.indexOfSelectedItem
     guard selected >= 0, selected < Self.currencies.count else { return }
     settings.currencyCode = Self.currencies[selected].code
+    onChange?(settings)
+  }
+
+  @objc private func toggleScheduledArchive() {
+    if archiveCheckbox.state == .on {
+      let minimum = Date().addingTimeInterval(60)
+      let selected = max(archiveDatePicker.dateValue, minimum)
+      archiveDatePicker.dateValue = selected
+      archiveDatePicker.isEnabled = true
+      settings.scheduledArchiveAt = selected
+    } else {
+      archiveDatePicker.isEnabled = false
+      settings.scheduledArchiveAt = nil
+    }
+    onChange?(settings)
+  }
+
+  @objc private func changeScheduledArchiveDate() {
+    guard archiveCheckbox.state == .on else { return }
+    settings.scheduledArchiveAt = archiveDatePicker.dateValue
     onChange?(settings)
   }
 }

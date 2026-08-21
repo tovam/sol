@@ -249,6 +249,7 @@ enum SpreadsheetDisplayLocale: String, Codable, CaseIterable {
 struct SpreadsheetSettings: Codable, Equatable {
   var displayLocale: SpreadsheetDisplayLocale = .french
   var currencyCode = "EUR"
+  var scheduledArchiveAt: Date?
 
   static let standard = SpreadsheetSettings()
 }
@@ -401,9 +402,10 @@ struct SpreadsheetPayload: Codable {
   var historyCursor: Int
   var columnWidths: [Int: Double]
   var settings: SpreadsheetSettings
+  var archivedAt: Date?
 
   init(
-    schemaVersion: Int = 3,
+    schemaVersion: Int = 4,
     id: UUID,
     name: String,
     createdAt: Date,
@@ -413,7 +415,8 @@ struct SpreadsheetPayload: Codable {
     history: [SpreadsheetAction],
     historyCursor: Int,
     columnWidths: [Int: Double] = [:],
-    settings: SpreadsheetSettings = .standard
+    settings: SpreadsheetSettings = .standard,
+    archivedAt: Date? = nil
   ) {
     self.schemaVersion = schemaVersion
     self.id = id
@@ -426,6 +429,7 @@ struct SpreadsheetPayload: Codable {
     self.historyCursor = historyCursor
     self.columnWidths = columnWidths
     self.settings = settings
+    self.archivedAt = archivedAt
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -440,6 +444,7 @@ struct SpreadsheetPayload: Codable {
     case historyCursor
     case columnWidths
     case settings
+    case archivedAt
   }
 
   init(from decoder: Decoder) throws {
@@ -460,6 +465,7 @@ struct SpreadsheetPayload: Codable {
     columnWidths = try values.decodeIfPresent([Int: Double].self, forKey: .columnWidths) ?? [:]
     settings = try values.decodeIfPresent(SpreadsheetSettings.self, forKey: .settings)
       ?? .standard
+    archivedAt = try values.decodeIfPresent(Date.self, forKey: .archivedAt)
   }
 }
 
@@ -469,6 +475,8 @@ public struct FloatingSpreadsheetSummary: Codable, Equatable, Identifiable {
   public var updatedAt: Date
   public var cellCount: Int
   public var chartCount: Int
+  public var scheduledArchiveAt: Date?
+  public var archivedAt: Date?
 
   init(payload: SpreadsheetPayload) {
     id = payload.id
@@ -476,15 +484,24 @@ public struct FloatingSpreadsheetSummary: Codable, Equatable, Identifiable {
     updatedAt = payload.updatedAt
     cellCount = payload.cells.count
     chartCount = payload.charts.count
+    scheduledArchiveAt = payload.settings.scheduledArchiveAt
+    archivedAt = payload.archivedAt
   }
 
   public var bridgeDictionary: [String: Any] {
-    [
+    var result: [String: Any] = [
       "id": id.uuidString,
       "name": name,
       "updatedAt": updatedAt.timeIntervalSince1970 * 1000,
       "cellCount": cellCount,
       "chartCount": chartCount,
     ]
+    if let scheduledArchiveAt {
+      result["scheduledArchiveAt"] = scheduledArchiveAt.timeIntervalSince1970 * 1000
+    }
+    if let archivedAt {
+      result["archivedAt"] = archivedAt.timeIntervalSince1970 * 1000
+    }
+    return result
   }
 }

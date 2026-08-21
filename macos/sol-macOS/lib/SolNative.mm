@@ -50,7 +50,11 @@ RCT_EXTERN_METHOD(createFloatingSpreadsheet : (RCTPromiseResolveBlock)
                       resolve rejecter : (RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(getFloatingSpreadsheets : (RCTPromiseResolveBlock)
                       resolve rejecter : (RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(getArchivedFloatingSpreadsheets : (RCTPromiseResolveBlock)
+                      resolve rejecter : (RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(reopenFloatingSpreadsheet : (NSString *)identifier resolver : (
+    RCTPromiseResolveBlock)resolve rejecter : (RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(restoreArchivedFloatingSpreadsheet : (NSString *)identifier resolver : (
     RCTPromiseResolveBlock)resolve rejecter : (RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(deleteFloatingSpreadsheet : (NSString *)identifier resolver : (
     RCTPromiseResolveBlock)resolve rejecter : (RCTPromiseRejectBlock)reject)

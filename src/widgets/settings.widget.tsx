@@ -13,6 +13,7 @@ import { General } from "./settings/general";
 import { Items } from "./settings/items";
 import { Scripts } from "./settings/scripts";
 import { Sidebar } from "./settings/sidebar";
+import { SpreadsheetsSettings } from "./settings/spreadsheets";
 import { Translate } from "./settings/translate";
 
 const sectionDetails: Record<
@@ -42,6 +43,10 @@ const sectionDetails: Record<
 	SCRIPTS: {
 		title: "Scripts",
 		description: "Local commands discovered by Sol",
+	},
+	SPREADSHEETS: {
+		title: "Spreadsheets",
+		description: "Expired spreadsheets kept outside regular search",
 	},
 	CALENDARS: {
 		title: "Calendars",
@@ -78,6 +83,7 @@ export const SettingsWidget: FC = observer(() => {
 					{selected === "ITEMS" && <Items />}
 					{selected === "TRANSLATE" && <Translate />}
 					{selected === "SCRIPTS" && <Scripts />}
+					{selected === "SPREADSHEETS" && <SpreadsheetsSettings />}
 					{selected === "CALENDARS" && <Calendars />}
 					{selected === "AI" && <AI />}
 					{selected === "DAILYMOTION" && <DailymotionSettings />}

@@ -29,7 +29,9 @@ export const createSpreadsheetsStore = (root: IRootStore) => {
 	let refreshRequest = 0;
 	const store = makeAutoObservable({
 		summaries: [] as FloatingSpreadsheetSummary[],
+		archivedSummaries: [] as FloatingSpreadsheetSummary[],
 		isLoading: false,
+		isLoadingArchived: false,
 
 		get createItem(): Item {
 			return {
@@ -94,6 +96,23 @@ export const createSpreadsheetsStore = (root: IRootStore) => {
 			}
 		},
 
+		refreshArchived: async () => {
+			runInAction(() => {
+				store.isLoadingArchived = true;
+			});
+			try {
+				const summaries = await solNative.getArchivedFloatingSpreadsheets();
+				runInAction(() => {
+					store.archivedSummaries = summaries;
+					store.isLoadingArchived = false;
+				});
+			} catch {
+				runInAction(() => {
+					store.isLoadingArchived = false;
+				});
+			}
+		},
+
 		create: async () => {
 			try {
 				await solNative.createFloatingSpreadsheet();
@@ -119,10 +138,23 @@ export const createSpreadsheetsStore = (root: IRootStore) => {
 			}
 		},
 
+		restore: async (identifier: string) => {
+			solNative.hideWindow();
+			try {
+				await solNative.restoreArchivedFloatingSpreadsheet(identifier);
+				await Promise.all([store.refresh(), store.refreshArchived()]);
+			} catch (error) {
+				void solNative.showToast(
+					`Could not restore spreadsheet: ${String(error)}`,
+					"error",
+				);
+			}
+		},
+
 		delete: async (identifier: string) => {
 			try {
 				await solNative.deleteFloatingSpreadsheet(identifier);
-				await store.refresh();
+				await Promise.all([store.refresh(), store.refreshArchived()]);
 			} catch (error) {
 				void solNative.showToast(
 					`Could not delete spreadsheet: ${String(error)}`,

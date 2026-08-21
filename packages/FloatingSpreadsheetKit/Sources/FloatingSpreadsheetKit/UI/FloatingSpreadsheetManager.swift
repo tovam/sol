@@ -8,6 +8,9 @@ public final class FloatingSpreadsheetManager {
   private var spreadsheetWindows: [UUID: SpreadsheetWindowController] = [:]
   private var chartWindows: [UUID: SpreadsheetChartWindowController] = [:]
   private var terminationObserver: NSObjectProtocol?
+  private var documentObserver: NSObjectProtocol?
+  private var archiveTimer: Timer?
+  private var isArchivingDueSpreadsheets = false
 
   private init() {
     terminationObserver = NotificationCenter.default.addObserver(
@@ -18,12 +21,27 @@ public final class FloatingSpreadsheetManager {
       guard let self else { return }
       self.repository.flush(Array(self.documents.values))
     }
+    documentObserver = NotificationCenter.default.addObserver(
+      forName: .floatingSpreadsheetDidChange,
+      object: nil,
+      queue: .main
+    ) { [weak self] notification in
+      guard notification.object is SpreadsheetDocument else { return }
+      self?.rescheduleArchiveTimer()
+    }
+    DispatchQueue.main.async { [weak self] in
+      self?.rescheduleArchiveTimer()
+    }
   }
 
   deinit {
     if let terminationObserver {
       NotificationCenter.default.removeObserver(terminationObserver)
     }
+    if let documentObserver {
+      NotificationCenter.default.removeObserver(documentObserver)
+    }
+    archiveTimer?.invalidate()
   }
 
   @discardableResult
@@ -32,12 +50,23 @@ public final class FloatingSpreadsheetManager {
       let document = try repository.createDocument()
       documents[document.id] = document
       presentSpreadsheet(document)
+      rescheduleArchiveTimer()
       return document.summary
     }
   }
 
   public func savedSpreadsheets() throws -> [FloatingSpreadsheetSummary] {
-    try repository.loadSummaries()
+    try onMain {
+      try archiveDueSpreadsheets()
+      return try repository.loadSummaries()
+    }
+  }
+
+  public func archivedSpreadsheets() throws -> [FloatingSpreadsheetSummary] {
+    try onMain {
+      try archiveDueSpreadsheets()
+      return try repository.loadSummaries(archived: true)
+    }
   }
 
   @discardableResult
@@ -47,7 +76,25 @@ public final class FloatingSpreadsheetManager {
         throw SpreadsheetRepositoryError.invalidIdentifier
       }
       let document = try loadedDocument(id: id)
+      guard document.archivedAt == nil else {
+        throw SpreadsheetRepositoryError.documentArchived
+      }
       presentSpreadsheet(document)
+      return document.summary
+    }
+  }
+
+  @discardableResult
+  public func restoreSpreadsheet(id identifier: String) throws -> FloatingSpreadsheetSummary {
+    try onMain {
+      guard let id = UUID(uuidString: identifier) else {
+        throw SpreadsheetRepositoryError.invalidIdentifier
+      }
+      let document = try loadedDocument(id: id)
+      document.restoreFromArchive()
+      try repository.saveImmediately(document)
+      presentSpreadsheet(document)
+      rescheduleArchiveTimer()
       return document.summary
     }
   }
@@ -85,6 +132,7 @@ public final class FloatingSpreadsheetManager {
       }
       documents.removeValue(forKey: id)
       try repository.deleteDocument(id: id)
+      rescheduleArchiveTimer()
     }
   }
 
@@ -155,6 +203,77 @@ public final class FloatingSpreadsheetManager {
     }
     if wasLoadedBeforeOperation || documents[id] != nil {
       documents.removeValue(forKey: id)
+    }
+  }
+
+  private func rescheduleArchiveTimer() {
+    dispatchPrecondition(condition: .onQueue(.main))
+    archiveTimer?.invalidate()
+    archiveTimer = nil
+
+    var deadlines = Dictionary(
+      uniqueKeysWithValues: (try? repository.loadSummaries())?.compactMap { summary in
+        summary.scheduledArchiveAt.map { (summary.id, $0) }
+      } ?? []
+    )
+    for document in documents.values {
+      if document.archivedAt == nil, let deadline = document.settings.scheduledArchiveAt {
+        deadlines[document.id] = deadline
+      } else {
+        deadlines.removeValue(forKey: document.id)
+      }
+    }
+    guard let nextDeadline = deadlines.values.min() else { return }
+    let delay = max(0, nextDeadline.timeIntervalSinceNow)
+    if delay == 0 {
+      DispatchQueue.main.async { [weak self] in
+        try? self?.archiveDueSpreadsheets()
+      }
+      return
+    }
+    let timer = Timer(timeInterval: delay, repeats: false) { [weak self] _ in
+      try? self?.archiveDueSpreadsheets()
+    }
+    archiveTimer = timer
+    RunLoop.main.add(timer, forMode: .common)
+  }
+
+  private func archiveDueSpreadsheets(at date: Date = Date()) throws {
+    guard !isArchivingDueSpreadsheets else { return }
+    isArchivingDueSpreadsheets = true
+    defer {
+      isArchivingDueSpreadsheets = false
+      rescheduleArchiveTimer()
+    }
+
+    var deadlines = Dictionary(
+      uniqueKeysWithValues: try repository.loadSummaries().compactMap { summary in
+        summary.scheduledArchiveAt.map { (summary.id, $0) }
+      }
+    )
+    for document in documents.values {
+      if document.archivedAt == nil, let deadline = document.settings.scheduledArchiveAt {
+        deadlines[document.id] = deadline
+      } else {
+        deadlines.removeValue(forKey: document.id)
+      }
+    }
+
+    let dueIdentifiers = deadlines.compactMap { id, deadline in
+      deadline <= date ? id : nil
+    }
+    for id in dueIdentifiers {
+      let document = try loadedDocument(id: id)
+      guard document.isDueForArchive(at: date) else { continue }
+      document.archive(at: date)
+      try repository.saveImmediately(document)
+
+      let relatedCharts = chartWindows.values.filter { $0.documentID == id }
+      spreadsheetWindows[id]?.closeWindow()
+      for chartWindow in relatedCharts {
+        chartWindow.closeWindow()
+      }
+      releaseDocumentIfUnused(id: id)
     }
   }
 

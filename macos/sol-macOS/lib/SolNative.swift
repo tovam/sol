@@ -184,6 +184,23 @@ class SolNative: RCTEventEmitter {
     }
   }
 
+  @objc func getArchivedFloatingSpreadsheets(
+    _ resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    let manager = FloatingSpreadsheetManager.shared
+    DispatchQueue.global(qos: .userInitiated).async {
+      do {
+        let summaries = try manager.archivedSpreadsheets().map(\.bridgeDictionary)
+        DispatchQueue.main.async { resolve(summaries) }
+      } catch {
+        DispatchQueue.main.async {
+          reject("FloatingSpreadsheetError", error.localizedDescription, error)
+        }
+      }
+    }
+  }
+
   @objc func reopenFloatingSpreadsheet(
     _ identifier: String,
     resolver resolve: @escaping RCTPromiseResolveBlock,
@@ -191,6 +208,21 @@ class SolNative: RCTEventEmitter {
   ) {
     do {
       let summary = try FloatingSpreadsheetManager.shared.reopenSpreadsheet(
+        id: identifier
+      )
+      resolve(summary.bridgeDictionary)
+    } catch {
+      reject("FloatingSpreadsheetError", error.localizedDescription, error)
+    }
+  }
+
+  @objc func restoreArchivedFloatingSpreadsheet(
+    _ identifier: String,
+    resolver resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    do {
+      let summary = try FloatingSpreadsheetManager.shared.restoreSpreadsheet(
         id: identifier
       )
       resolve(summary.bridgeDictionary)
