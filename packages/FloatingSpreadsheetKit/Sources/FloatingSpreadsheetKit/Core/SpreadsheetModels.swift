@@ -358,6 +358,38 @@ enum SpreadsheetSeriesOrientation: String, Codable, CaseIterable {
   case rows
 }
 
+enum SpreadsheetChartAxisScale: String, Codable, CaseIterable {
+  case linear
+  case logarithmic
+}
+
+struct SpreadsheetChartAxisConfiguration: Codable, Equatable {
+  var title: String
+  var minimum: Double?
+  var maximum: Double?
+  var scale: SpreadsheetChartAxisScale
+  var showsGridLines: Bool
+  var showsLabels: Bool
+
+  static let standard = SpreadsheetChartAxisConfiguration()
+
+  init(
+    title: String = "",
+    minimum: Double? = nil,
+    maximum: Double? = nil,
+    scale: SpreadsheetChartAxisScale = .linear,
+    showsGridLines: Bool = true,
+    showsLabels: Bool = true
+  ) {
+    self.title = title
+    self.minimum = minimum
+    self.maximum = maximum
+    self.scale = scale
+    self.showsGridLines = showsGridLines
+    self.showsLabels = showsLabels
+  }
+}
+
 struct SpreadsheetChartPoint: Codable, Equatable {
   var category: String
   var x: Double?
@@ -381,6 +413,16 @@ struct SpreadsheetChartDefinition: Codable, Equatable, Identifiable {
   var seriesOrientation: SpreadsheetSeriesOrientation
   var isFrozen: Bool
   var frozenSeries: [SpreadsheetChartSeries]
+  var xAxis: SpreadsheetChartAxisConfiguration?
+  var yAxis: SpreadsheetChartAxisConfiguration?
+
+  var effectiveXAxis: SpreadsheetChartAxisConfiguration {
+    xAxis ?? .standard
+  }
+
+  var effectiveYAxis: SpreadsheetChartAxisConfiguration {
+    yAxis ?? .standard
+  }
 
   init(
     id: UUID = UUID(),
@@ -391,7 +433,9 @@ struct SpreadsheetChartDefinition: Codable, Equatable, Identifiable {
     firstColumnContainsLabels: Bool = true,
     seriesOrientation: SpreadsheetSeriesOrientation = .columns,
     isFrozen: Bool = false,
-    frozenSeries: [SpreadsheetChartSeries] = []
+    frozenSeries: [SpreadsheetChartSeries] = [],
+    xAxis: SpreadsheetChartAxisConfiguration? = nil,
+    yAxis: SpreadsheetChartAxisConfiguration? = nil
   ) {
     self.id = id
     self.title = title
@@ -402,6 +446,8 @@ struct SpreadsheetChartDefinition: Codable, Equatable, Identifiable {
     self.seriesOrientation = seriesOrientation
     self.isFrozen = isFrozen
     self.frozenSeries = frozenSeries
+    self.xAxis = xAxis
+    self.yAxis = yAxis
   }
 }
 

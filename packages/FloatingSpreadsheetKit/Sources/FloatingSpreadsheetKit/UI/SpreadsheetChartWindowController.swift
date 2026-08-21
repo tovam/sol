@@ -151,6 +151,13 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
 
   private func showOptions() {
     guard let chart = spreadsheetDocument.charts.first(where: { $0.id == chartID }) else { return }
+    let xAxis = chart.effectiveXAxis
+    let yAxis = chart.effectiveYAxis
+    let xUsesTime = model.usesTimeXAxis
+    let yUsesTime = model.usesTimeValueAxis
+    let supportsXAxisDomain = chart.type != .pie && (chart.type == .scatter || xUsesTime)
+    let supportsYAxisDomain = chart.type != .pie
+
     let rangeField = NSTextField(string: chart.sourceRange.description)
     rangeField.placeholderString = "A1:D12"
     let titleField = NSTextField(string: chart.title)
@@ -170,24 +177,125 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
     orientation.addItems(withTitles: ["Series in columns", "Series in rows"])
     orientation.selectItem(at: chart.seriesOrientation == .columns ? 0 : 1)
 
-    let grid = NSGridView(views: [
+    let xTitleField = NSTextField(string: xAxis.title)
+    xTitleField.placeholderString = "Optional"
+    let xMinimumField = NSTextField(string: axisBoundText(xAxis.minimum, isTime: xUsesTime))
+    let xMaximumField = NSTextField(string: axisBoundText(xAxis.maximum, isTime: xUsesTime))
+    let xScalePopup = axisScalePopup(selected: xAxis.scale)
+    let xGridCheckbox = NSButton(
+      checkboxWithTitle: "Grid lines",
+      target: nil,
+      action: nil
+    )
+    let xLabelsCheckbox = NSButton(
+      checkboxWithTitle: "Labels",
+      target: nil,
+      action: nil
+    )
+    xGridCheckbox.state = xAxis.showsGridLines ? .on : .off
+    xLabelsCheckbox.state = xAxis.showsLabels ? .on : .off
+
+    let yTitleField = NSTextField(string: yAxis.title)
+    yTitleField.placeholderString = "Optional"
+    let yMinimumField = NSTextField(string: axisBoundText(yAxis.minimum, isTime: yUsesTime))
+    let yMaximumField = NSTextField(string: axisBoundText(yAxis.maximum, isTime: yUsesTime))
+    let yScalePopup = axisScalePopup(selected: yAxis.scale)
+    let yGridCheckbox = NSButton(
+      checkboxWithTitle: "Grid lines",
+      target: nil,
+      action: nil
+    )
+    let yLabelsCheckbox = NSButton(
+      checkboxWithTitle: "Labels",
+      target: nil,
+      action: nil
+    )
+    yGridCheckbox.state = yAxis.showsGridLines ? .on : .off
+    yLabelsCheckbox.state = yAxis.showsLabels ? .on : .off
+
+    let automaticPlaceholder = xUsesTime ? "Automatic or HH:mm" : "Automatic"
+    xMinimumField.placeholderString = supportsXAxisDomain ? automaticPlaceholder : "Categorical axis"
+    xMaximumField.placeholderString = supportsXAxisDomain ? automaticPlaceholder : "Categorical axis"
+    xMinimumField.isEnabled = supportsXAxisDomain
+    xMaximumField.isEnabled = supportsXAxisDomain
+    xScalePopup.isEnabled = supportsXAxisDomain && !xUsesTime
+    if !xScalePopup.isEnabled { xScalePopup.selectItem(at: 0) }
+
+    let yAutomaticPlaceholder = yUsesTime ? "Automatic or HH:mm" : "Automatic"
+    yMinimumField.placeholderString = supportsYAxisDomain ? yAutomaticPlaceholder : "No axis"
+    yMaximumField.placeholderString = supportsYAxisDomain ? yAutomaticPlaceholder : "No axis"
+    yMinimumField.isEnabled = supportsYAxisDomain
+    yMaximumField.isEnabled = supportsYAxisDomain
+    yScalePopup.isEnabled = supportsYAxisDomain && !yUsesTime
+    if !yScalePopup.isEnabled { yScalePopup.selectItem(at: 0) }
+
+    let axisControlsEnabled = chart.type != .pie
+    for control in [xTitleField, xGridCheckbox, xLabelsCheckbox] {
+      control.isEnabled = axisControlsEnabled
+    }
+    for control in [yTitleField, yGridCheckbox, yLabelsCheckbox] {
+      control.isEnabled = axisControlsEnabled
+    }
+
+    let generalGrid = NSGridView(views: [
       [NSTextField(labelWithString: "Title"), titleField],
       [NSTextField(labelWithString: "Data range"), rangeField],
       [NSTextField(labelWithString: "Series"), orientation],
     ])
-    grid.rowSpacing = 7
-    grid.columnSpacing = 10
-    grid.column(at: 0).xPlacement = .trailing
-    grid.column(at: 1).xPlacement = .fill
+    configureOptionsGrid(generalGrid)
 
-    let stack = NSStackView(views: [grid, headerCheckbox, labelsCheckbox])
+    let xGrid = NSGridView(views: [
+      [NSTextField(labelWithString: "Title"), xTitleField],
+      [NSTextField(labelWithString: "Minimum"), xMinimumField],
+      [NSTextField(labelWithString: "Maximum"), xMaximumField],
+      [NSTextField(labelWithString: "Scale"), xScalePopup],
+    ])
+    configureOptionsGrid(xGrid)
+    let xChecks = NSStackView(views: [xGridCheckbox, xLabelsCheckbox])
+    xChecks.orientation = .horizontal
+    xChecks.spacing = 14
+
+    let yGrid = NSGridView(views: [
+      [NSTextField(labelWithString: "Title"), yTitleField],
+      [NSTextField(labelWithString: "Minimum"), yMinimumField],
+      [NSTextField(labelWithString: "Maximum"), yMaximumField],
+      [NSTextField(labelWithString: "Scale"), yScalePopup],
+    ])
+    configureOptionsGrid(yGrid)
+    let yChecks = NSStackView(views: [yGridCheckbox, yLabelsCheckbox])
+    yChecks.orientation = .horizontal
+    yChecks.spacing = 14
+
+    let xHeading = optionsHeading("X axis")
+    let yHeading = optionsHeading("Y axis")
+    let firstSeparator = NSBox()
+    firstSeparator.boxType = .separator
+    let secondSeparator = NSBox()
+    secondSeparator.boxType = .separator
+
+    let stack = NSStackView(views: [
+      generalGrid,
+      headerCheckbox,
+      labelsCheckbox,
+      firstSeparator,
+      xHeading,
+      xGrid,
+      xChecks,
+      secondSeparator,
+      yHeading,
+      yGrid,
+      yChecks,
+    ])
     stack.orientation = .vertical
     stack.alignment = .leading
-    stack.spacing = 7
-    stack.frame = NSRect(x: 0, y: 0, width: 380, height: 132)
+    stack.spacing = 6
+    stack.frame = NSRect(x: 0, y: 0, width: 440, height: 405)
+    for view in [generalGrid, firstSeparator, xGrid, secondSeparator, yGrid] {
+      view.widthAnchor.constraint(equalToConstant: 440).isActive = true
+    }
 
     let alert = NSAlert()
-    alert.messageText = "Chart options"
+    alert.messageText = "Chart settings"
     alert.accessoryView = stack
     alert.addButton(withTitle: "Save")
     alert.addButton(withTitle: "Cancel")
@@ -201,24 +309,155 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
       guard response == .alertFirstButtonReturn,
         let range = CellRange(rangeField.stringValue)
       else {
-        if response == .alertFirstButtonReturn { NSSound.beep() }
+        if response == .alertFirstButtonReturn {
+          showChartSettingsError("Use a data range such as A1:D12.")
+        }
         return
       }
-      var changed = chart
-      changed.title = titleField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-      if changed.title.isEmpty { changed.title = "Chart" }
-      changed.sourceRange = range
-      changed.firstRowContainsHeaders = headerCheckbox.state == .on
-      changed.firstColumnContainsLabels = labelsCheckbox.state == .on
-      changed.seriesOrientation = orientation.indexOfSelectedItem == 1 ? .rows : .columns
-      if changed.isFrozen {
-        changed.frozenSeries = spreadsheetDocument.chartSeries(
-          for: changed,
-          ignoringFrozenState: true
+      do {
+        var changed = chart
+        changed.title = titleField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if changed.title.isEmpty { changed.title = "Chart" }
+        changed.sourceRange = range
+        changed.firstRowContainsHeaders = headerCheckbox.state == .on
+        changed.firstColumnContainsLabels = labelsCheckbox.state == .on
+        changed.seriesOrientation = orientation.indexOfSelectedItem == 1 ? .rows : .columns
+
+        let changedXAxis = try chartAxisConfiguration(
+          current: xAxis,
+          titleField: xTitleField,
+          minimumField: xMinimumField,
+          maximumField: xMaximumField,
+          scalePopup: xScalePopup,
+          gridCheckbox: xGridCheckbox,
+          labelsCheckbox: xLabelsCheckbox,
+          supportsDomain: supportsXAxisDomain,
+          isTime: xUsesTime,
+          axisName: "X"
         )
+        let changedYAxis = try chartAxisConfiguration(
+          current: yAxis,
+          titleField: yTitleField,
+          minimumField: yMinimumField,
+          maximumField: yMaximumField,
+          scalePopup: yScalePopup,
+          gridCheckbox: yGridCheckbox,
+          labelsCheckbox: yLabelsCheckbox,
+          supportsDomain: supportsYAxisDomain,
+          isTime: yUsesTime,
+          axisName: "Y"
+        )
+        changed.xAxis = changedXAxis == .standard ? nil : changedXAxis
+        changed.yAxis = changedYAxis == .standard ? nil : changedYAxis
+        if changed.isFrozen {
+          changed.frozenSeries = spreadsheetDocument.chartSeries(
+            for: changed,
+            ignoringFrozenState: true
+          )
+        }
+        spreadsheetDocument.updateChart(changed, label: "Update chart settings")
+      } catch {
+        showChartSettingsError(error.localizedDescription)
       }
-      spreadsheetDocument.updateChart(changed)
     }
+  }
+
+  private func configureOptionsGrid(_ grid: NSGridView) {
+    grid.rowSpacing = 6
+    grid.columnSpacing = 10
+    grid.column(at: 0).xPlacement = .trailing
+    grid.column(at: 1).xPlacement = .fill
+  }
+
+  private func optionsHeading(_ title: String) -> NSTextField {
+    let label = NSTextField(labelWithString: title)
+    label.font = .systemFont(ofSize: 12, weight: .semibold)
+    return label
+  }
+
+  private func axisScalePopup(selected: SpreadsheetChartAxisScale) -> NSPopUpButton {
+    let popup = NSPopUpButton()
+    popup.addItems(withTitles: ["Linear", "Logarithmic"])
+    popup.selectItem(at: selected == .logarithmic ? 1 : 0)
+    return popup
+  }
+
+  private func axisBoundText(_ value: Double?, isTime: Bool) -> String {
+    guard let value else { return "" }
+    if isTime { return SpreadsheetTime.format(value) }
+    let formatter = NumberFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.usesGroupingSeparator = false
+    formatter.minimumFractionDigits = 0
+    formatter.maximumFractionDigits = 10
+    return formatter.string(from: NSNumber(value: value)) ?? String(value)
+  }
+
+  private func chartAxisConfiguration(
+    current: SpreadsheetChartAxisConfiguration,
+    titleField: NSTextField,
+    minimumField: NSTextField,
+    maximumField: NSTextField,
+    scalePopup: NSPopUpButton,
+    gridCheckbox: NSButton,
+    labelsCheckbox: NSButton,
+    supportsDomain: Bool,
+    isTime: Bool,
+    axisName: String
+  ) throws -> SpreadsheetChartAxisConfiguration {
+    guard titleField.isEnabled else { return current }
+    let minimum = supportsDomain
+      ? try parseAxisBound(minimumField.stringValue, isTime: isTime, name: "\(axisName) minimum")
+      : current.minimum
+    let maximum = supportsDomain
+      ? try parseAxisBound(maximumField.stringValue, isTime: isTime, name: "\(axisName) maximum")
+      : current.maximum
+    let scale: SpreadsheetChartAxisScale = scalePopup.isEnabled
+      && scalePopup.indexOfSelectedItem == 1
+      ? .logarithmic
+      : .linear
+
+    if let minimum, let maximum, minimum >= maximum {
+      throw SpreadsheetChartSettingsError.invalidRange(axisName)
+    }
+    if scale == .logarithmic,
+      (minimum.map { $0 <= 0 } == true || maximum.map { $0 <= 0 } == true)
+    {
+      throw SpreadsheetChartSettingsError.nonPositiveLogarithmicBound(axisName)
+    }
+
+    return SpreadsheetChartAxisConfiguration(
+      title: titleField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines),
+      minimum: minimum,
+      maximum: maximum,
+      scale: scale,
+      showsGridLines: gridCheckbox.state == .on,
+      showsLabels: labelsCheckbox.state == .on
+    )
+  }
+
+  private func parseAxisBound(
+    _ rawValue: String,
+    isTime: Bool,
+    name: String
+  ) throws -> Double? {
+    let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !value.isEmpty else { return nil }
+    if isTime, let time = SpreadsheetTime.parse(value) { return time }
+    let normalized = value.replacingOccurrences(of: ",", with: ".")
+    guard let number = Double(normalized), number.isFinite else {
+      throw SpreadsheetChartSettingsError.invalidBound(name, isTime: isTime)
+    }
+    return number
+  }
+
+  private func showChartSettingsError(_ message: String) {
+    NSSound.beep()
+    let errorAlert = NSAlert()
+    errorAlert.alertStyle = .warning
+    errorAlert.messageText = "Invalid chart settings"
+    errorAlert.informativeText = message
+    errorAlert.beginSheetModal(for: panel)
   }
 
   private func refreshToolbar() {
@@ -285,6 +524,25 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
   }
 }
 
+private enum SpreadsheetChartSettingsError: LocalizedError {
+  case invalidBound(String, isTime: Bool)
+  case invalidRange(String)
+  case nonPositiveLogarithmicBound(String)
+
+  var errorDescription: String? {
+    switch self {
+    case .invalidBound(let name, let isTime):
+      return isTime
+        ? "\(name) must be a number or a time such as 9:30."
+        : "\(name) must be a number."
+    case .invalidRange(let axis):
+      return "The \(axis) axis minimum must be lower than its maximum."
+    case .nonPositiveLogarithmicBound(let axis):
+      return "The \(axis) axis bounds must be greater than zero for a logarithmic scale."
+    }
+  }
+}
+
 private final class SpreadsheetChartToolbarView: NSView {
   var onType: ((SpreadsheetChartType) -> Void)?
   var onToggleFrozen: (() -> Void)?
@@ -313,7 +571,7 @@ private final class SpreadsheetChartToolbarView: NSView {
     layer?.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.7).cgColor
 
     let source = Self.button(symbol: "arrowshape.turn.up.left", tooltip: "Return to spreadsheet")
-    let options = Self.button(symbol: "slider.horizontal.3", tooltip: "Chart options")
+    let options = Self.button(symbol: "gearshape", tooltip: "Chart settings")
     let save = Self.button(symbol: "square.and.arrow.down", tooltip: "Save chart as PNG")
     let close = Self.button(symbol: "xmark", tooltip: "Close chart")
     source.target = self
@@ -499,6 +757,86 @@ private final class SpreadsheetChartViewModel: ObservableObject {
       }
     }
   }
+
+  func plottableData(for definition: SpreadsheetChartDefinition) -> [SpreadsheetChartDatum] {
+    let hasNumericXAxis = definition.type == .scatter || usesTimeXAxis
+    let xScale = definition.effectiveXAxis.scale
+    let yScale = definition.effectiveYAxis.scale
+    return data.filter { datum in
+      let hasValidX = definition.type == .pie
+        || !hasNumericXAxis
+        || xScale == .linear
+        || datum.x > 0
+      let hasValidY = definition.type == .pie
+        || yScale == .linear
+        || datum.value > 0
+      return hasValidX && hasValidY
+    }
+  }
+
+  func xDomain(for definition: SpreadsheetChartDefinition) -> ClosedRange<Double>? {
+    guard definition.type != .pie,
+      definition.type == .scatter || usesTimeXAxis
+    else {
+      return nil
+    }
+    return axisDomain(
+      values: plottableData(for: definition).map(\.x),
+      configuration: definition.effectiveXAxis
+    )
+  }
+
+  func yDomain(for definition: SpreadsheetChartDefinition) -> ClosedRange<Double>? {
+    guard definition.type != .pie else { return nil }
+    return axisDomain(
+      values: plottableData(for: definition).map(\.value),
+      configuration: definition.effectiveYAxis
+    )
+  }
+
+  private func axisDomain(
+    values: [Double],
+    configuration: SpreadsheetChartAxisConfiguration
+  ) -> ClosedRange<Double>? {
+    guard configuration.scale == .logarithmic
+      || configuration.minimum != nil
+      || configuration.maximum != nil
+    else {
+      return nil
+    }
+
+    let validValues = values.filter {
+      $0.isFinite && (configuration.scale == .linear || $0 > 0)
+    }
+    let fallbackMinimum = configuration.scale == .logarithmic ? 1.0 : 0.0
+    let fallbackMaximum = configuration.scale == .logarithmic ? 10.0 : 1.0
+    var lower = configuration.minimum ?? validValues.min() ?? fallbackMinimum
+    var upper = configuration.maximum ?? validValues.max() ?? fallbackMaximum
+
+    if configuration.scale == .logarithmic {
+      lower = max(lower, Double.leastNormalMagnitude)
+      upper = max(upper, Double.leastNormalMagnitude)
+    }
+    if lower >= upper {
+      if configuration.minimum != nil, configuration.maximum == nil {
+        upper = configuration.scale == .logarithmic
+          ? lower * 10
+          : lower + max(abs(lower) * 0.1, 1)
+      } else if configuration.minimum == nil, configuration.maximum != nil {
+        lower = configuration.scale == .logarithmic
+          ? max(Double.leastNormalMagnitude, upper / 10)
+          : upper - max(abs(upper) * 0.1, 1)
+      } else if configuration.scale == .logarithmic {
+        lower = max(Double.leastNormalMagnitude, lower / 10)
+        upper *= 10
+      } else {
+        let padding = max(abs(lower) * 0.1, 1)
+        lower -= padding
+        upper += padding
+      }
+    }
+    return lower...upper
+  }
 }
 
 private struct SpreadsheetChartView: View {
@@ -517,6 +855,12 @@ private struct SpreadsheetChartView: View {
             systemImage: "chart.xyaxis.line",
             description: Text("Change the source range or enter numbers in the spreadsheet.")
           )
+        } else if model.plottableData(for: chart).isEmpty {
+          ContentUnavailableView(
+            "No plottable data",
+            systemImage: "chart.xyaxis.line",
+            description: Text("Logarithmic axes require values greater than zero.")
+          )
         } else {
           chartContent(chart)
             .chartLegend(position: .bottom, alignment: .center, spacing: 8)
@@ -532,7 +876,9 @@ private struct SpreadsheetChartView: View {
 
   @ViewBuilder
   private func chartContent(_ definition: SpreadsheetChartDefinition) -> some View {
-    Chart(model.data) { datum in
+    let xAxis = definition.effectiveXAxis
+    let yAxis = definition.effectiveYAxis
+    Chart(model.plottableData(for: definition)) { datum in
       switch definition.type {
       case .line:
         if model.usesTimeXAxis {
@@ -596,35 +942,94 @@ private struct SpreadsheetChartView: View {
         .foregroundStyle(by: .value("Category", datum.category))
       }
     }
+    .modifier(
+      SpreadsheetChartScaleModifier(
+        xDomain: model.xDomain(for: definition),
+        yDomain: model.yDomain(for: definition),
+        xScale: xAxis.scale,
+        yScale: yAxis.scale
+      )
+    )
     .chartXAxis {
-      if model.usesTimeXAxis && definition.type != .pie {
-        AxisMarks(values: .automatic(desiredCount: 6)) { value in
-          AxisGridLine()
-          AxisTick()
-          AxisValueLabel {
-            if let time = value.as(Double.self) {
-              Text(SpreadsheetTime.format(time))
+      if definition.type != .pie {
+        if model.usesTimeXAxis {
+          AxisMarks(values: .automatic(desiredCount: 6)) { value in
+            if xAxis.showsGridLines { AxisGridLine() }
+            AxisTick()
+            if xAxis.showsLabels {
+              AxisValueLabel {
+                if let time = value.as(Double.self) {
+                  Text(SpreadsheetTime.format(time))
+                }
+              }
             }
           }
+        } else {
+          AxisMarks(values: .automatic(desiredCount: 6)) { _ in
+            if xAxis.showsGridLines { AxisGridLine() }
+            AxisTick()
+            if xAxis.showsLabels { AxisValueLabel() }
+          }
         }
-      } else {
-        AxisMarks()
       }
     }
     .chartYAxis {
-      if model.usesTimeValueAxis && definition.type != .pie {
-        AxisMarks(values: .automatic(desiredCount: 6)) { value in
-          AxisGridLine()
-          AxisTick()
-          AxisValueLabel {
-            if let time = value.as(Double.self) {
-              Text(SpreadsheetTime.format(time))
+      if definition.type != .pie {
+        if model.usesTimeValueAxis {
+          AxisMarks(values: .automatic(desiredCount: 6)) { value in
+            if yAxis.showsGridLines { AxisGridLine() }
+            AxisTick()
+            if yAxis.showsLabels {
+              AxisValueLabel {
+                if let time = value.as(Double.self) {
+                  Text(SpreadsheetTime.format(time))
+                }
+              }
             }
           }
+        } else {
+          AxisMarks(values: .automatic(desiredCount: 6)) { _ in
+            if yAxis.showsGridLines { AxisGridLine() }
+            AxisTick()
+            if yAxis.showsLabels { AxisValueLabel() }
+          }
         }
-      } else {
-        AxisMarks()
       }
+    }
+    .chartXAxisLabel(definition.type == .pie ? "" : xAxis.title)
+    .chartYAxisLabel(definition.type == .pie ? "" : yAxis.title)
+  }
+}
+
+private struct SpreadsheetChartScaleModifier: ViewModifier {
+  let xDomain: ClosedRange<Double>?
+  let yDomain: ClosedRange<Double>?
+  let xScale: SpreadsheetChartAxisScale
+  let yScale: SpreadsheetChartAxisScale
+
+  @ViewBuilder
+  func body(content: Content) -> some View {
+    if let xDomain {
+      if xScale == .logarithmic {
+        applyYScale(to: content.chartXScale(domain: xDomain, type: .log))
+      } else {
+        applyYScale(to: content.chartXScale(domain: xDomain))
+      }
+    } else {
+      applyYScale(to: content)
+    }
+  }
+
+  @ViewBuilder
+  private func applyYScale<ChartView: View>(to content: ChartView) -> some View {
+    if let yDomain {
+      if yScale == .logarithmic {
+        content.chartYScale(domain: yDomain, type: .log)
+      } else {
+        content.chartYScale(domain: yDomain)
+      }
+    } else {
+      content
     }
   }
 }

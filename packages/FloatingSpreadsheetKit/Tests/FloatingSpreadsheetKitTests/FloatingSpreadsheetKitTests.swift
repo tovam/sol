@@ -192,4 +192,43 @@ final class FloatingSpreadsheetKitTests: XCTestCase {
     XCTAssertEqual(point?.valueIsTime, true)
     XCTAssertEqual(point?.value, Double(10 * 60 + 30) / Double(24 * 60))
   }
+
+  func testChartAxisSettingsPersistAndLegacyChartsKeepAutomaticAxes() throws {
+    let chart = SpreadsheetChartDefinition(
+      sourceRange: CellRange(CellAddress(row: 0, column: 0)),
+      xAxis: SpreadsheetChartAxisConfiguration(
+        title: "Elapsed time",
+        minimum: 1,
+        maximum: 100,
+        scale: .logarithmic,
+        showsGridLines: false
+      ),
+      yAxis: SpreadsheetChartAxisConfiguration(
+        title: "Price",
+        minimum: 0,
+        maximum: 250,
+        showsLabels: false
+      )
+    )
+
+    let encoded = try JSONEncoder().encode(chart)
+    let restored = try JSONDecoder().decode(SpreadsheetChartDefinition.self, from: encoded)
+    XCTAssertEqual(restored.effectiveXAxis.title, "Elapsed time")
+    XCTAssertEqual(restored.effectiveXAxis.scale, .logarithmic)
+    XCTAssertEqual(restored.effectiveXAxis.minimum, 1)
+    XCTAssertEqual(restored.effectiveXAxis.maximum, 100)
+    XCTAssertFalse(restored.effectiveXAxis.showsGridLines)
+    XCTAssertEqual(restored.effectiveYAxis.title, "Price")
+    XCTAssertFalse(restored.effectiveYAxis.showsLabels)
+
+    var legacyObject = try XCTUnwrap(
+      JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+    )
+    legacyObject.removeValue(forKey: "xAxis")
+    legacyObject.removeValue(forKey: "yAxis")
+    let legacyData = try JSONSerialization.data(withJSONObject: legacyObject)
+    let legacy = try JSONDecoder().decode(SpreadsheetChartDefinition.self, from: legacyData)
+    XCTAssertEqual(legacy.effectiveXAxis, .standard)
+    XCTAssertEqual(legacy.effectiveYAxis, .standard)
+  }
 }
