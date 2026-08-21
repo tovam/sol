@@ -86,14 +86,14 @@ final class SpreadsheetWindowController: NSWindowController, NSWindowDelegate,
 
   private func configureWindow() {
     panel.delegate = self
-    panel.minSize = NSSize(width: 400, height: 200)
+    panel.minSize = FloatingSpreadsheetPanel.windowSize(
+      forSurfaceSize: NSSize(width: 400, height: 200)
+    )
     panel.contentMinSize = panel.minSize
   }
 
   private func configureContent() {
-    let backdrop = FloatingSpreadsheetBackdropView(frame: panel.contentView?.bounds ?? .zero)
-    backdrop.autoresizingMask = [.width, .height]
-    panel.contentView = backdrop
+    let backdrop = panel.installRoundedContent()
 
     toolbar.delegate = self
     toolbar.updateTitle(spreadsheetDocument.name)
@@ -119,7 +119,6 @@ final class SpreadsheetWindowController: NSWindowController, NSWindowDelegate,
       gridContainer.topAnchor.constraint(equalTo: cellContentBar.bottomAnchor),
       gridContainer.bottomAnchor.constraint(equalTo: backdrop.bottomAnchor),
     ])
-    panel.enableRoundedShadow()
     refreshToolbarSelection()
   }
 

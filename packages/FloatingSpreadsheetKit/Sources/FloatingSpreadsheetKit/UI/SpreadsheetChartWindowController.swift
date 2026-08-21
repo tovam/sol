@@ -87,14 +87,14 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
 
   private func configureWindow() {
     panel.delegate = self
-    panel.minSize = NSSize(width: 360, height: 250)
+    panel.minSize = FloatingSpreadsheetPanel.windowSize(
+      forSurfaceSize: NSSize(width: 360, height: 250)
+    )
     panel.contentMinSize = panel.minSize
   }
 
   private func configureContent() {
-    let backdrop = FloatingSpreadsheetBackdropView(frame: panel.contentView?.bounds ?? .zero)
-    backdrop.autoresizingMask = [.width, .height]
-    panel.contentView = backdrop
+    let backdrop = panel.installRoundedContent()
 
     toolbar.translatesAutoresizingMaskIntoConstraints = false
     toolbar.onType = { [weak self] type in self?.changeType(type) }
@@ -119,7 +119,6 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
       chartHost.topAnchor.constraint(equalTo: toolbar.bottomAnchor),
       chartHost.bottomAnchor.constraint(equalTo: backdrop.bottomAnchor, constant: -6),
     ])
-    panel.enableRoundedShadow()
     refreshToolbar()
   }
 

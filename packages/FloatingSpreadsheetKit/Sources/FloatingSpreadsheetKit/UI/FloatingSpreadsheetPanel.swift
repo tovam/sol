@@ -1,6 +1,8 @@
 import AppKit
 
 final class FloatingSpreadsheetPanel: NSPanel {
+  static let shadowPadding: CGFloat = 14
+
   override var canBecomeKey: Bool { true }
   override var canBecomeMain: Bool { true }
 
@@ -25,8 +27,9 @@ final class FloatingSpreadsheetPanel: NSPanel {
   }
 
   convenience init(size: NSSize) {
+    let framedSize = Self.windowSize(forSurfaceSize: size)
     self.init(
-      contentRect: NSRect(origin: .zero, size: size),
+      contentRect: NSRect(origin: .zero, size: framedSize),
       styleMask: [.borderless, .resizable],
       backing: .buffered,
       defer: false
@@ -44,18 +47,81 @@ final class FloatingSpreadsheetPanel: NSPanel {
     animationBehavior = .utilityWindow
   }
 
-  func enableRoundedShadow() {
-    contentView?.layoutSubtreeIfNeeded()
-    hasShadow = true
-    invalidateShadow()
-    DispatchQueue.main.async { [weak self] in
-      self?.invalidateShadow()
-    }
+  static func windowSize(forSurfaceSize size: NSSize) -> NSSize {
+    NSSize(
+      width: size.width + shadowPadding * 2,
+      height: size.height + shadowPadding * 2
+    )
+  }
+
+  func installRoundedContent() -> FloatingSpreadsheetBackdropView {
+    let host = FloatingSpreadsheetShadowHostView(frame: contentView?.bounds ?? .zero)
+    host.autoresizingMask = [.width, .height]
+    contentView = host
+    return host.backdrop
   }
 
   private func isEscape(_ event: NSEvent) -> Bool {
     event.type == .keyDown
       && (event.keyCode == 53 || event.charactersIgnoringModifiers == "\u{1B}")
+  }
+}
+
+private final class FloatingSpreadsheetShadowHostView: NSView {
+  let backdrop = FloatingSpreadsheetBackdropView(frame: .zero)
+  private let shadowLayer = CALayer()
+
+  override init(frame frameRect: NSRect) {
+    super.init(frame: frameRect)
+    wantsLayer = true
+    layer?.backgroundColor = NSColor.clear.cgColor
+    layer?.masksToBounds = true
+
+    shadowLayer.masksToBounds = false
+    shadowLayer.shadowColor = NSColor.black.cgColor
+    shadowLayer.shadowOpacity = 0.25
+    shadowLayer.shadowRadius = 10
+    shadowLayer.shadowOffset = CGSize(width: 0, height: -2)
+    layer?.addSublayer(shadowLayer)
+
+    addSubview(backdrop)
+    applyColors()
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) has not been implemented")
+  }
+
+  override var isOpaque: Bool { false }
+
+  override func layout() {
+    super.layout()
+    let padding = FloatingSpreadsheetPanel.shadowPadding
+    let surfaceFrame = bounds.insetBy(dx: padding, dy: padding)
+    backdrop.frame = surfaceFrame
+
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    shadowLayer.frame = surfaceFrame
+    shadowLayer.cornerRadius = 14
+    shadowLayer.cornerCurve = .continuous
+    shadowLayer.shadowPath = CGPath(
+      roundedRect: shadowLayer.bounds,
+      cornerWidth: 14,
+      cornerHeight: 14,
+      transform: nil
+    )
+    CATransaction.commit()
+  }
+
+  override func viewDidChangeEffectiveAppearance() {
+    super.viewDidChangeEffectiveAppearance()
+    applyColors()
+  }
+
+  private func applyColors() {
+    shadowLayer.backgroundColor = NSColor.windowBackgroundColor.cgColor
   }
 }
 
@@ -95,13 +161,19 @@ enum FloatingSpreadsheetWindowPlacement {
     let screen = NSScreen.screens.first(where: { $0.frame.contains(mouseLocation) })
       ?? NSScreen.main
     guard let screen else {
-      window.setContentSize(preferredSize)
+      let requestedSize = window is FloatingSpreadsheetPanel
+        ? FloatingSpreadsheetPanel.windowSize(forSurfaceSize: preferredSize)
+        : preferredSize
+      window.setContentSize(requestedSize)
       window.center()
       return
     }
+    let requestedSize = window is FloatingSpreadsheetPanel
+      ? FloatingSpreadsheetPanel.windowSize(forSurfaceSize: preferredSize)
+      : preferredSize
     let size = NSSize(
-      width: min(preferredSize.width, screen.visibleFrame.width * 0.9),
-      height: min(preferredSize.height, screen.visibleFrame.height * 0.86)
+      width: min(requestedSize.width, screen.visibleFrame.width * 0.9),
+      height: min(requestedSize.height, screen.visibleFrame.height * 0.86)
     )
     window.setFrame(
       NSRect(
