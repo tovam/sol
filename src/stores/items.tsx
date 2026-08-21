@@ -572,7 +572,7 @@ export function createBaseItems(store: IRootStore) {
 			icon: "▦",
 			name: "Open Spreadsheet",
 			alias:
-				"sheets tableurs open load reopen ouvrir charger tableur sauvegardé saved spreadsheet",
+				"sheet sheets spreadsheet spreadsheets excel tableur tableurs open load reopen ouvrir charger sauvegardé saved",
 			type: ItemType.CONFIGURATION,
 			preventClose: true,
 			callback: () => {

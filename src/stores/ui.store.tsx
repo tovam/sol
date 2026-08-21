@@ -1072,7 +1072,7 @@ export const createUIStore = (root: IRootStore) => {
 								? "No matching spreadsheets"
 								: "No saved spreadsheets",
 						subName: spreadsheetCommand.filter
-							? "Change the text after “sheets”"
+							? "Change the name after the spreadsheet command"
 							: "Use sheet, spreadsheet, excel, or tableur to create one",
 						type: ItemType.CONFIGURATION,
 						preventClose: true,
