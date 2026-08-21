@@ -33,6 +33,10 @@ RCT_EXTERN_METHOD(supportedEvents)
 RCT_EXTERN_METHOD(startAIStream : (NSDictionary *)options resolver : (
     RCTPromiseResolveBlock)resolve rejecter : (RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(cancelAIStream : (NSString *)requestID)
+RCT_EXTERN_METHOD(readAISecrets : (RCTPromiseResolveBlock)
+                      resolve rejecter : (RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(writeAISecrets : (NSString *)contents resolver : (
+    RCTPromiseResolveBlock)resolve rejecter : (RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(getApps : (RCTPromiseResolveBlock)
                       resolve rejecter : (RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(getExternalCommandProviders : (RCTPromiseResolveBlock)

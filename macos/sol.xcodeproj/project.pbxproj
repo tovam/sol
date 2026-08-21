@@ -18,6 +18,7 @@
 		A11CE0020000000000000001 /* ScreenRuler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A11CE0010000000000000001 /* ScreenRuler.swift */; };
 		A15E00020000000000000001 /* AIStreamingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A15E00010000000000000001 /* AIStreamingManager.swift */; };
 		A16A00020000000000000001 /* SolLaunchAgentController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A16A00010000000000000001 /* SolLaunchAgentController.swift */; };
+		A17A00020000000000000001 /* AISecretsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A17A00010000000000000001 /* AISecretsStore.swift */; };
 		B6A000020000000000000001 /* BackgroundSounds.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6A000010000000000000001 /* BackgroundSounds.swift */; };
 		B7A000020000000000000001 /* RedScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7A000010000000000000001 /* RedScreen.swift */; };
 		B8A000020000000000000001 /* MigraineMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8A000010000000000000001 /* MigraineMode.swift */; };
@@ -104,6 +105,7 @@
 		A11CE0010000000000000001 /* ScreenRuler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenRuler.swift; sourceTree = "<group>"; };
 		A15E00010000000000000001 /* AIStreamingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIStreamingManager.swift; sourceTree = "<group>"; };
 		A16A00010000000000000001 /* SolLaunchAgentController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SolLaunchAgentController.swift; sourceTree = "<group>"; };
+		A17A00010000000000000001 /* AISecretsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AISecretsStore.swift; sourceTree = "<group>"; };
 		B6A000010000000000000001 /* BackgroundSounds.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundSounds.swift; sourceTree = "<group>"; };
 		B7A000010000000000000001 /* RedScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RedScreen.swift; sourceTree = "<group>"; };
 		B8A000010000000000000001 /* MigraineMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MigraineMode.swift; sourceTree = "<group>"; };
@@ -299,6 +301,7 @@
 			children = (
 				A15E00010000000000000001 /* AIStreamingManager.swift */,
 				A16A00010000000000000001 /* SolLaunchAgentController.swift */,
+				A17A00010000000000000001 /* AISecretsStore.swift */,
 				E17000010000000000000001 /* ExternalIntegrationServer.swift */,
 				E17000030000000000000001 /* ExternalPrompt.swift */,
 				E17000050000000000000001 /* ExternalCommandProviders.swift */,
@@ -632,6 +635,7 @@
 			files = (
 				A15E00020000000000000001 /* AIStreamingManager.swift in Sources */,
 				A16A00020000000000000001 /* SolLaunchAgentController.swift in Sources */,
+				A17A00020000000000000001 /* AISecretsStore.swift in Sources */,
 				E17000020000000000000001 /* ExternalIntegrationServer.swift in Sources */,
 				E17000040000000000000001 /* ExternalPrompt.swift in Sources */,
 				E17000060000000000000001 /* ExternalCommandProviders.swift in Sources */,

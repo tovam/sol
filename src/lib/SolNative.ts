@@ -121,6 +121,8 @@ class SolNative extends NativeEventEmitter {
 	>;
 	startAIStream: (options: AIStreamRequestOptions) => Promise<string>;
 	cancelAIStream: (requestID: string) => void;
+	readAISecrets: () => Promise<string | null>;
+	writeAISecrets: (contents: string) => Promise<boolean>;
 	getExternalCommandProviders: () => Promise<ExternalCommandProvider[]>;
 	setExternalCommandReservedNames: (names: string[]) => void;
 	invokeExternalCommand: (
@@ -304,6 +306,8 @@ class SolNative extends NativeEventEmitter {
 		this.getApps = module.getApps;
 		this.startAIStream = module.startAIStream;
 		this.cancelAIStream = module.cancelAIStream;
+		this.readAISecrets = module.readAISecrets;
+		this.writeAISecrets = module.writeAISecrets;
 		this.getExternalCommandProviders = module.getExternalCommandProviders;
 		this.setExternalCommandReservedNames =
 			module.setExternalCommandReservedNames;

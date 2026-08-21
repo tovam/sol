@@ -44,7 +44,7 @@ export const AI = observer(() => {
 		setMessage("");
 		try {
 			await ai.saveSecureSettings();
-			setMessage("Saved locally without using macOS Keychain");
+			setMessage("Saved securely in macOS Keychain");
 		} catch (error) {
 			setMessage(
 				error instanceof Error ? error.message : "Could not save settings",
@@ -225,8 +225,8 @@ export const AI = observer(() => {
 				</TouchableOpacity>
 			</View>
 			<Text className="text-xs darker-text">
-				API keys are stored separately in a private file readable only by your
-				macOS user. Sol never asks Keychain for them.
+				API keys are encrypted in the macOS Keychain. Its application ACL grants
+				Sol access through its stable signing identity without prompting on launch.
 			</Text>
 		</ScrollView>
 	);

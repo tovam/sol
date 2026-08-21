@@ -90,6 +90,39 @@ class SolNative: RCTEventEmitter {
     AIStreamingManager.shared.cancel(requestID: requestID)
   }
 
+  @objc func readAISecrets(
+    _ resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    DispatchQueue.global(qos: .userInitiated).async {
+      do {
+        let value = try AISecretsStore.shared.read()
+        DispatchQueue.main.async { resolve(value) }
+      } catch {
+        DispatchQueue.main.async {
+          reject("AISecretsKeychainError", error.localizedDescription, error)
+        }
+      }
+    }
+  }
+
+  @objc func writeAISecrets(
+    _ contents: String,
+    resolver resolve: @escaping RCTPromiseResolveBlock,
+    rejecter reject: @escaping RCTPromiseRejectBlock
+  ) {
+    DispatchQueue.global(qos: .userInitiated).async {
+      do {
+        try AISecretsStore.shared.write(contents)
+        DispatchQueue.main.async { resolve(true) }
+      } catch {
+        DispatchQueue.main.async {
+          reject("AISecretsKeychainError", error.localizedDescription, error)
+        }
+      }
+    }
+  }
+
   @objc func getExternalCommandProviders(
     _ resolve: @escaping RCTPromiseResolveBlock,
     rejecter _: RCTPromiseRejectBlock

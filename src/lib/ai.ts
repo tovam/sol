@@ -63,7 +63,7 @@ export function isAIStreamCancelledError(error: unknown) {
 	);
 }
 
-const AI_SECRETS_FILE_PATH = `/Users/${solNative.userName()}/.config/sol/ai-secrets.json`;
+const LEGACY_AI_SECRETS_FILE_PATH = `/Users/${solNative.userName()}/.config/sol/ai-secrets.json`;
 
 export const DEFAULT_AI_SETTINGS: AISettings = {
 	provider: "openai",
@@ -263,21 +263,22 @@ export async function fetchAIModels(
 	}
 }
 
-export async function loadAISettings(): Promise<AISettings> {
-	const savedValue = solNative.readFile(AI_SECRETS_FILE_PATH);
-	if (!savedValue) {
-		return {
-			...DEFAULT_AI_SETTINGS,
-			openai: { ...DEFAULT_AI_SETTINGS.openai },
-			openwebui: { ...DEFAULT_AI_SETTINGS.openwebui },
-		};
-	}
+function cloneDefaultAISettings(): AISettings {
+	return {
+		...DEFAULT_AI_SETTINGS,
+		openai: { ...DEFAULT_AI_SETTINGS.openai },
+		openwebui: { ...DEFAULT_AI_SETTINGS.openwebui },
+	};
+}
+
+function decodeAISettings(savedValue: string): AISettings | null {
 	try {
 		const saved = asRecord(JSON.parse(savedValue));
+		if (!saved) return null;
 		const apiKeys = asRecord(saved?.apiKeys);
-		if (saved?.version === 2 && apiKeys) {
+		if ((saved.version === 2 || saved.version === 3) && apiKeys) {
 			return {
-				...DEFAULT_AI_SETTINGS,
+				...cloneDefaultAISettings(),
 				openai: {
 					...DEFAULT_AI_SETTINGS.openai,
 					apiKey:
@@ -294,9 +295,9 @@ export async function loadAISettings(): Promise<AISettings> {
 		}
 
 		const savedProvider =
-			saved?.provider === "openwebui" ? "openwebui" : "openai";
-		const savedOpenAI = asRecord(saved?.openai);
-		const savedOpenWebUI = asRecord(saved?.openwebui);
+			saved.provider === "openwebui" ? "openwebui" : "openai";
+		const savedOpenAI = asRecord(saved.openai);
+		const savedOpenWebUI = asRecord(saved.openwebui);
 		const decodeLegacyProviderSettings = (
 			value: Record<string, unknown> | null,
 			defaults: AIProviderSettings,
@@ -319,32 +320,57 @@ export async function loadAISettings(): Promise<AISettings> {
 			),
 		};
 	} catch {
-		return {
-			...DEFAULT_AI_SETTINGS,
-			openai: { ...DEFAULT_AI_SETTINGS.openai },
-			openwebui: { ...DEFAULT_AI_SETTINGS.openwebui },
-		};
+		return null;
 	}
 }
 
-export async function saveAISettings(settings: AISettings) {
-	const didWrite = solNative.writeFile(
-		AI_SECRETS_FILE_PATH,
-		JSON.stringify(
-			{
-				version: 2,
-				apiKeys: {
-					openai: settings.openai.apiKey,
-					openwebui: settings.openwebui.apiKey,
-				},
-			},
-			null,
-			2,
-		),
-	);
-	if (!didWrite) {
-		throw new Error("Could not save API keys in Sol's private settings file");
+function encodeAISecrets(settings: AISettings) {
+	return JSON.stringify({
+		version: 3,
+		apiKeys: {
+			openai: settings.openai.apiKey,
+			openwebui: settings.openwebui.apiKey,
+		},
+	});
+}
+
+function removeLegacyAISecretsFile() {
+	if (!solNative.exists(LEGACY_AI_SECRETS_FILE_PATH)) return;
+	try {
+		solNative.del(LEGACY_AI_SECRETS_FILE_PATH);
+	} catch {
+		// The Keychain copy remains authoritative. A later launch retries the
+		// cleanup without ever printing or otherwise exposing the file contents.
 	}
+}
+
+export async function loadAISettings(): Promise<AISettings> {
+	const keychainValue = await solNative.readAISecrets();
+	if (keychainValue != null) {
+		const settings = decodeAISettings(keychainValue);
+		if (!settings) {
+			throw new Error("The AI credentials stored in Keychain are invalid");
+		}
+		removeLegacyAISecretsFile();
+		return settings;
+	}
+
+	const legacyValue = solNative.readFile(LEGACY_AI_SECRETS_FILE_PATH);
+	if (!legacyValue) return cloneDefaultAISettings();
+	const legacySettings = decodeAISettings(legacyValue);
+	if (!legacySettings) return cloneDefaultAISettings();
+
+	await solNative.writeAISecrets(encodeAISecrets(legacySettings));
+	removeLegacyAISecretsFile();
+	return legacySettings;
+}
+
+export async function saveAISettings(settings: AISettings) {
+	const didWrite = await solNative.writeAISecrets(encodeAISecrets(settings));
+	if (!didWrite) {
+		throw new Error("Could not save API keys in the macOS Keychain");
+	}
+	removeLegacyAISecretsFile();
 }
 
 export async function requestAI(
