@@ -540,6 +540,12 @@ final class SpreadsheetGridView: NSView, NSTextFieldDelegate {
     case #selector(NSResponder.insertBacktab(_:)):
       finishEditing(commit: true, movement: (0, -1))
       return true
+    case #selector(NSResponder.moveUp(_:)):
+      finishEditing(commit: true, movement: (-1, 0))
+      return true
+    case #selector(NSResponder.moveDown(_:)):
+      finishEditing(commit: true, movement: (1, 0))
+      return true
     case #selector(NSResponder.cancelOperation(_:)):
       finishEditing(commit: false)
       return true
