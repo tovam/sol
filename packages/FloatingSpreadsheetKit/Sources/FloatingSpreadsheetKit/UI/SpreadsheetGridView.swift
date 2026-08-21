@@ -488,12 +488,10 @@ final class SpreadsheetGridView: NSView, NSTextFieldDelegate {
     editor = field
     updateEditingReferences(field.stringValue)
     window?.makeFirstResponder(field)
-    if replacement == nil {
-      field.currentEditor()?.selectedRange = NSRange(
-        location: (field.stringValue as NSString).length,
-        length: 0
-      )
-    }
+    field.currentEditor()?.selectedRange = NSRange(
+      location: (field.stringValue as NSString).length,
+      length: 0
+    )
   }
 
   private func finishEditing(commit: Bool, movement: (Int, Int)? = nil) {
