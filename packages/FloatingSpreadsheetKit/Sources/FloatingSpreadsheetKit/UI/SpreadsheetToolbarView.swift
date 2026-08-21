@@ -25,6 +25,7 @@ final class SpreadsheetToolbarView: NSView, NSTextFieldDelegate {
   private let importButton: NSButton
   private let chartButton: NSButton
   private let closeButton: NSButton
+  private let bottomSeparator = NSView()
 
   override init(frame frameRect: NSRect) {
     boldButton = Self.makeButton(symbol: "bold", tooltip: "Bold (⌘B)")
@@ -78,11 +79,11 @@ final class SpreadsheetToolbarView: NSView, NSTextFieldDelegate {
 
   private func configure() {
     wantsLayer = true
-    layer?.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.72).cgColor
 
     titleField.stringValue = "Spreadsheet"
     titleField.placeholderString = "Spreadsheet name"
     titleField.font = .systemFont(ofSize: 12, weight: .semibold)
+    titleField.textColor = .labelColor
     titleField.isBordered = false
     titleField.isBezeled = false
     titleField.drawsBackground = false
@@ -130,6 +131,11 @@ final class SpreadsheetToolbarView: NSView, NSTextFieldDelegate {
     stack.translatesAutoresizingMaskIntoConstraints = false
     addSubview(stack)
 
+    bottomSeparator.wantsLayer = true
+    bottomSeparator.translatesAutoresizingMaskIntoConstraints = false
+    addSubview(bottomSeparator)
+    applyColors()
+
     NSLayoutConstraint.activate([
       stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 5),
       stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -5),
@@ -137,8 +143,34 @@ final class SpreadsheetToolbarView: NSView, NSTextFieldDelegate {
       stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -2),
       titleField.widthAnchor.constraint(greaterThanOrEqualToConstant: 110),
       addressLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 42),
+      bottomSeparator.leadingAnchor.constraint(equalTo: leadingAnchor),
+      bottomSeparator.trailingAnchor.constraint(equalTo: trailingAnchor),
+      bottomSeparator.bottomAnchor.constraint(equalTo: bottomAnchor),
+      bottomSeparator.heightAnchor.constraint(equalToConstant: 1),
     ])
     titleField.setContentHuggingPriority(.defaultLow, for: .horizontal)
+  }
+
+  override func viewDidChangeEffectiveAppearance() {
+    super.viewDidChangeEffectiveAppearance()
+    applyColors()
+  }
+
+  private func applyColors() {
+    layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.96).cgColor
+    bottomSeparator.layer?.backgroundColor = NSColor.separatorColor.cgColor
+    for button in [
+      boldButton,
+      italicButton,
+      dateButton,
+      percentButton,
+      currencyButton,
+      importButton,
+      chartButton,
+      closeButton,
+    ] {
+      button.contentTintColor = .labelColor
+    }
   }
 
   private func configureButton(_ button: NSButton, action: Selector) {

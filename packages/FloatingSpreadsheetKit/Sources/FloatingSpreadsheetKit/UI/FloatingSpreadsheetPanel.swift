@@ -25,7 +25,7 @@ final class FloatingSpreadsheetPanel: NSPanel {
 final class FloatingSpreadsheetBackdropView: NSVisualEffectView {
   override init(frame frameRect: NSRect) {
     super.init(frame: frameRect)
-    material = .hudWindow
+    material = .popover
     blendingMode = .behindWindow
     state = .active
     wantsLayer = true
@@ -33,7 +33,17 @@ final class FloatingSpreadsheetBackdropView: NSVisualEffectView {
     layer?.cornerCurve = .continuous
     layer?.masksToBounds = true
     layer?.borderWidth = 0.5
-    layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.55).cgColor
+    applyColors()
+  }
+
+  override func viewDidChangeEffectiveAppearance() {
+    super.viewDidChangeEffectiveAppearance()
+    applyColors()
+  }
+
+  private func applyColors() {
+    layer?.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.58).cgColor
+    layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.8).cgColor
   }
 
   @available(*, unavailable)

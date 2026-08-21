@@ -32,18 +32,19 @@ final class SpreadsheetGridContainerView: NSView {
     super.init(frame: .zero)
 
     wantsLayer = true
-    layer?.backgroundColor = NSColor.clear.cgColor
+    layer?.backgroundColor = NSColor.textBackgroundColor.cgColor
 
     scrollView.documentView = gridView
     scrollView.hasHorizontalScroller = true
     scrollView.hasVerticalScroller = true
     scrollView.autohidesScrollers = true
-    scrollView.drawsBackground = false
+    scrollView.drawsBackground = true
+    scrollView.backgroundColor = .textBackgroundColor
     scrollView.borderType = .noBorder
     scrollView.contentView.postsBoundsChangedNotifications = true
 
     cornerView.wantsLayer = true
-    cornerView.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+    cornerView.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
 
     addSubview(scrollView)
     addSubview(columnHeader)
@@ -319,7 +320,7 @@ final class SpreadsheetGridView: NSView, NSTextFieldDelegate {
       path.move(to: NSPoint(x: dirtyRect.minX, y: y))
       path.line(to: NSPoint(x: dirtyRect.maxX, y: y))
     }
-    NSColor.separatorColor.withAlphaComponent(0.48).setStroke()
+    NSColor.gridColor.setStroke()
     path.lineWidth = 0.5
     path.stroke()
   }
@@ -632,7 +633,7 @@ private final class SpreadsheetColumnHeaderView: NSView {
   override var isFlipped: Bool { true }
 
   override func draw(_ dirtyRect: NSRect) {
-    NSColor.windowBackgroundColor.setFill()
+    NSColor.controlBackgroundColor.setFill()
     dirtyRect.fill()
     guard let gridView else { return }
     let first = max(0, Int(floor(scrollOffset / SpreadsheetGridView.columnWidth)))
@@ -665,13 +666,13 @@ private final class SpreadsheetColumnHeaderView: NSView {
           .paragraphStyle: paragraph,
         ]
       )
-      NSColor.separatorColor.setStroke()
+      NSColor.gridColor.setStroke()
       NSBezierPath.strokeLine(
         from: NSPoint(x: rect.maxX - 0.5, y: 0),
         to: NSPoint(x: rect.maxX - 0.5, y: bounds.height)
       )
     }
-    NSColor.separatorColor.setStroke()
+    NSColor.gridColor.setStroke()
     NSBezierPath.strokeLine(
       from: NSPoint(x: 0, y: bounds.height - 0.5),
       to: NSPoint(x: bounds.width, y: bounds.height - 0.5)
@@ -696,7 +697,7 @@ private final class SpreadsheetRowHeaderView: NSView {
   override var isFlipped: Bool { true }
 
   override func draw(_ dirtyRect: NSRect) {
-    NSColor.windowBackgroundColor.setFill()
+    NSColor.controlBackgroundColor.setFill()
     dirtyRect.fill()
     guard let gridView else { return }
     let first = max(0, Int(floor(scrollOffset / SpreadsheetGridView.rowHeight)))
@@ -729,13 +730,13 @@ private final class SpreadsheetRowHeaderView: NSView {
           .paragraphStyle: paragraph,
         ]
       )
-      NSColor.separatorColor.setStroke()
+      NSColor.gridColor.setStroke()
       NSBezierPath.strokeLine(
         from: NSPoint(x: 0, y: rect.maxY - 0.5),
         to: NSPoint(x: bounds.width, y: rect.maxY - 0.5)
       )
     }
-    NSColor.separatorColor.setStroke()
+    NSColor.gridColor.setStroke()
     NSBezierPath.strokeLine(
       from: NSPoint(x: bounds.width - 0.5, y: 0),
       to: NSPoint(x: bounds.width - 0.5, y: bounds.height)
