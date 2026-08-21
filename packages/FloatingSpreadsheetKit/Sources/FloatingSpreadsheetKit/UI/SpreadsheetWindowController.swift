@@ -3,6 +3,8 @@ import AppKit
 final class SpreadsheetWindowController: NSWindowController, NSWindowDelegate,
   SpreadsheetGridViewDelegate, SpreadsheetToolbarViewDelegate
 {
+  private static let preferredSurfaceSize = NSSize(width: 430, height: 390)
+
   var onClose: (() -> Void)?
   var onOpenChart: ((SpreadsheetChartDefinition) -> Void)?
 
@@ -19,7 +21,7 @@ final class SpreadsheetWindowController: NSWindowController, NSWindowDelegate,
 
   init(document: SpreadsheetDocument) {
     spreadsheetDocument = document
-    panel = FloatingSpreadsheetPanel(size: NSSize(width: 430, height: 260))
+    panel = FloatingSpreadsheetPanel(size: Self.preferredSurfaceSize)
     gridContainer = SpreadsheetGridContainerView(document: document)
     super.init(window: panel)
     configureWindow()
@@ -41,7 +43,7 @@ final class SpreadsheetWindowController: NSWindowController, NSWindowDelegate,
   func presentCentered() {
     FloatingSpreadsheetWindowPlacement.center(
       panel,
-      preferredSize: NSSize(width: 430, height: 260)
+      preferredSize: Self.preferredSurfaceSize
     )
     NSApp.activate(ignoringOtherApps: true)
     panel.orderFrontRegardless()
