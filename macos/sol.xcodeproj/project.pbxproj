@@ -47,6 +47,7 @@
 		7062E8332EA53319008A9B69 /* FolderWatcherJSI.mm in Sources */ = {isa = PBXBuildFile; fileRef = 7062E8322EA53311008A9B69 /* FolderWatcherJSI.mm */; };
 		7065EBBF2CDB8C2B008C0A74 /* LaunchAtLogin in Frameworks */ = {isa = PBXBuildFile; productRef = 7065EBBE2CDB8C2B008C0A74 /* LaunchAtLogin */; };
 		F10A00030000000000000001 /* FloatingSpreadsheetKit in Frameworks */ = {isa = PBXBuildFile; productRef = F10A00020000000000000001 /* FloatingSpreadsheetKit */; };
+		F20A00030000000000000001 /* FloatingStopwatchKit in Frameworks */ = {isa = PBXBuildFile; productRef = F20A00020000000000000001 /* FloatingStopwatchKit */; };
 		706ABFAB2E059FC2000C0F30 /* KeyboardShortcutRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 706ABFAA2E059FC2000C0F30 /* KeyboardShortcutRecorder.swift */; };
 		706ABFAE2E059FCF000C0F30 /* KeyboardShortcutRecorderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 706ABFAD2E059FCF000C0F30 /* KeyboardShortcutRecorderView.swift */; };
 		706ABFAF2E059FCF000C0F30 /* KeyboardShortcutRecorderView.m in Sources */ = {isa = PBXBuildFile; fileRef = 706ABFAC2E059FCF000C0F30 /* KeyboardShortcutRecorderView.m */; };
@@ -198,6 +199,7 @@
 				706D6D532B388C1700941026 /* CoreWLAN.framework in Frameworks */,
 				7065EBBF2CDB8C2B008C0A74 /* LaunchAtLogin in Frameworks */,
 				F10A00030000000000000001 /* FloatingSpreadsheetKit in Frameworks */,
+				F20A00030000000000000001 /* FloatingStopwatchKit in Frameworks */,
 				3919C725599C8DA45324A5C6 /* libPods-macOS.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -409,6 +411,7 @@
 			packageProductDependencies = (
 				7065EBBE2CDB8C2B008C0A74 /* LaunchAtLogin */,
 				F10A00020000000000000001 /* FloatingSpreadsheetKit */,
+				F20A00020000000000000001 /* FloatingStopwatchKit */,
 			);
 			productName = sol;
 			productReference = 514201492437B4B30078DB4F /* sol-debug.app */;
@@ -440,6 +443,7 @@
 			packageReferences = (
 				7065EBBD2CDB8C2B008C0A74 /* XCRemoteSwiftPackageReference "LaunchAtLogin-Legacy" */,
 				F10A00010000000000000001 /* XCLocalSwiftPackageReference "FloatingSpreadsheetKit" */,
+				F20A00010000000000000001 /* XCLocalSwiftPackageReference "FloatingStopwatchKit" */,
 			);
 			productRefGroup = 83CBBA001A601CBA00E9B192 /* Products */;
 			projectDirPath = "";
@@ -967,6 +971,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../packages/FloatingSpreadsheetKit;
 		};
+		F20A00010000000000000001 /* XCLocalSwiftPackageReference "FloatingStopwatchKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../packages/FloatingStopwatchKit;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -990,6 +998,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = F10A00010000000000000001 /* XCLocalSwiftPackageReference "FloatingSpreadsheetKit" */;
 			productName = FloatingSpreadsheetKit;
+		};
+		F20A00020000000000000001 /* FloatingStopwatchKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F20A00010000000000000001 /* XCLocalSwiftPackageReference "FloatingStopwatchKit" */;
+			productName = FloatingStopwatchKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

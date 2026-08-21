@@ -48,6 +48,7 @@ RCT_EXTERN_METHOD(invokeExternalCommand : (NSString *)providerID commandName : (
     RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(createFloatingSpreadsheet : (RCTPromiseResolveBlock)
                       resolve rejecter : (RCTPromiseRejectBlock)reject)
+RCT_EXTERN_METHOD(openFloatingStopwatch)
 RCT_EXTERN_METHOD(getFloatingSpreadsheets : (RCTPromiseResolveBlock)
                       resolve rejecter : (RCTPromiseRejectBlock)reject)
 RCT_EXTERN_METHOD(getArchivedFloatingSpreadsheets : (RCTPromiseResolveBlock)

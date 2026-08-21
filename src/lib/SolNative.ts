@@ -142,6 +142,7 @@ class SolNative extends NativeEventEmitter {
 		arguments_: string[],
 	) => Promise<boolean>;
 	createFloatingSpreadsheet: () => Promise<FloatingSpreadsheetSummary>;
+	openFloatingStopwatch: () => void;
 	getFloatingSpreadsheets: () => Promise<FloatingSpreadsheetSummary[]>;
 	getArchivedFloatingSpreadsheets: () => Promise<
 		FloatingSpreadsheetSummary[]
@@ -342,6 +343,7 @@ class SolNative extends NativeEventEmitter {
 			module.setExternalCommandReservedNames;
 		this.invokeExternalCommand = module.invokeExternalCommand;
 		this.createFloatingSpreadsheet = module.createFloatingSpreadsheet;
+		this.openFloatingStopwatch = module.openFloatingStopwatch;
 		this.getFloatingSpreadsheets = module.getFloatingSpreadsheets;
 		this.getArchivedFloatingSpreadsheets =
 			module.getArchivedFloatingSpreadsheets;

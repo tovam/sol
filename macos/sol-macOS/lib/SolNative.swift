@@ -1,5 +1,6 @@
 import Foundation
 import FloatingSpreadsheetKit
+import FloatingStopwatchKit
 import HotKey
 import LaunchAtLogin
 import React
@@ -165,6 +166,10 @@ class SolNative: RCTEventEmitter {
     } catch {
       reject("FloatingSpreadsheetError", error.localizedDescription, error)
     }
+  }
+
+  @objc func openFloatingStopwatch() {
+    FloatingStopwatchManager.shared.presentStopwatch()
   }
 
   @objc func getFloatingSpreadsheets(

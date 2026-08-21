@@ -580,6 +580,16 @@ export function createBaseItems(store: IRootStore) {
 			},
 		},
 		{
+			id: "floating_stopwatch",
+			icon: "⏱",
+			name: "Stopwatch",
+			alias: "stopwatch chrono chronomètre chronometre lap laps",
+			type: ItemType.CONFIGURATION,
+			callback: () => {
+				solNative.openFloatingStopwatch();
+			},
+		},
+		{
 			id: "check_for_updates",
 			icon: "🆙",
 			name: "Check for Sol updates",
@@ -645,7 +655,7 @@ export function createBaseItems(store: IRootStore) {
 			id: "timer",
 			icon: "⏱️",
 			name: "Create a Timer",
-			alias: "timer countdown pomodoro minuteur chronomètre",
+			alias: "timer countdown pomodoro minuteur",
 			type: ItemType.CONFIGURATION,
 			callback: () => {
 				const duration = parseTimerDuration(store.ui.query);
