@@ -277,7 +277,7 @@ final class SpreadsheetGridView: NSView, NSTextViewDelegate {
 
     let paragraph = NSMutableParagraphStyle()
     switch document.value(at: address) {
-    case .number, .date:
+    case .number, .date, .time:
       paragraph.alignment = .right
     default:
       paragraph.alignment = .left

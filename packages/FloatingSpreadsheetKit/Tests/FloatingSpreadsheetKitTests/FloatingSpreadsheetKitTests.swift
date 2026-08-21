@@ -145,4 +145,51 @@ final class FloatingSpreadsheetKitTests: XCTestCase {
       [document.id]
     )
   }
+
+  func testOneAndTwoDigitHoursAreRecognizedAsTimes() {
+    let document = SpreadsheetDocument(name: "Times")
+    let oneDigit = CellAddress(row: 0, column: 0)
+    let twoDigits = CellAddress(row: 1, column: 0)
+    let malformed = CellAddress(row: 2, column: 0)
+    document.setRawInput("9:05", at: oneDigit)
+    document.setRawInput("09:05", at: twoDigits)
+    document.setRawInput("9:5", at: malformed)
+
+    let expected = Double(9 * 60 + 5) / Double(24 * 60)
+    XCTAssertEqual(document.value(at: oneDigit), .time(expected))
+    XCTAssertEqual(document.value(at: twoDigits), .time(expected))
+    XCTAssertEqual(document.displayText(at: oneDigit), "9:05")
+    XCTAssertEqual(document.displayText(at: twoDigits), "9:05")
+    XCTAssertEqual(document.value(at: malformed), .text("9:5"))
+  }
+
+  func testInvalidClockTimesRemainText() {
+    let document = SpreadsheetDocument(name: "Invalid times")
+    let values = ["24:00", "12:60", "123:45", "-1:30"]
+    for (row, rawValue) in values.enumerated() {
+      let address = CellAddress(row: row, column: 0)
+      document.setRawInput(rawValue, at: address)
+      XCTAssertEqual(document.value(at: address), .text(rawValue))
+    }
+  }
+
+  func testChartPointsKeepTimeAxisAndValueMetadata() {
+    let document = SpreadsheetDocument(name: "Time chart")
+    document.setRawInput("Time", at: CellAddress(row: 0, column: 0))
+    document.setRawInput("End", at: CellAddress(row: 0, column: 1))
+    document.setRawInput("9:00", at: CellAddress(row: 1, column: 0))
+    document.setRawInput("10:30", at: CellAddress(row: 1, column: 1))
+    let chart = SpreadsheetChartDefinition(
+      sourceRange: CellRange(
+        start: CellAddress(row: 0, column: 0),
+        end: CellAddress(row: 1, column: 1)
+      )
+    )
+
+    let point = document.chartSeries(for: chart).first?.points.first
+    XCTAssertEqual(point?.category, "9:00")
+    XCTAssertEqual(point?.xIsTime, true)
+    XCTAssertEqual(point?.valueIsTime, true)
+    XCTAssertEqual(point?.value, Double(10 * 60 + 30) / Double(24 * 60))
+  }
 }

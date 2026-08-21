@@ -215,6 +215,7 @@ enum CellDisplayFormat: Codable, Equatable {
   case automatic
   case number
   case date
+  case time
   case percent
   case currency(code: String)
 }
@@ -282,6 +283,7 @@ enum SpreadsheetValue: Equatable {
   case number(Double)
   case text(String)
   case date(Date)
+  case time(Double)
   case boolean(Bool)
   case error(SpreadsheetFormulaError)
 
@@ -289,6 +291,8 @@ enum SpreadsheetValue: Equatable {
     switch self {
     case .number(let value):
       return value
+    case .time(let fractionOfDay):
+      return fractionOfDay
     case .boolean(let value):
       return value ? 1 : 0
     default:
@@ -299,6 +303,45 @@ enum SpreadsheetValue: Equatable {
   var isBlank: Bool {
     if case .blank = self { return true }
     return false
+  }
+
+  var isTime: Bool {
+    if case .time = self { return true }
+    return false
+  }
+}
+
+enum SpreadsheetTime {
+  static let minutesPerDay = 24 * 60
+
+  static func parse(_ input: String) -> Double? {
+    let value = input.trimmingCharacters(in: .whitespacesAndNewlines)
+    let parts = value.split(separator: ":", omittingEmptySubsequences: false)
+    guard parts.count == 2,
+      (parts[0].count == 1 || parts[0].count == 2),
+      parts[1].count == 2,
+      parts[0].allSatisfy(\.isNumber),
+      parts[1].allSatisfy(\.isNumber),
+      let hour = Int(parts[0]),
+      let minute = Int(parts[1]),
+      (0...23).contains(hour),
+      (0...59).contains(minute)
+    else {
+      return nil
+    }
+    return Double(hour * 60 + minute) / Double(minutesPerDay)
+  }
+
+  static func format(_ fractionOfDay: Double) -> String {
+    guard fractionOfDay.isFinite else { return "" }
+    let roundedMinutes = Int((fractionOfDay * Double(minutesPerDay)).rounded())
+    let wrappedMinutes = ((roundedMinutes % minutesPerDay) + minutesPerDay)
+      % minutesPerDay
+    return String(
+      format: "%d:%02d",
+      wrappedMinutes / 60,
+      wrappedMinutes % 60
+    )
   }
 }
 
@@ -319,6 +362,8 @@ struct SpreadsheetChartPoint: Codable, Equatable {
   var category: String
   var x: Double?
   var value: Double
+  var xIsTime: Bool?
+  var valueIsTime: Bool?
 }
 
 struct SpreadsheetChartSeries: Codable, Equatable {

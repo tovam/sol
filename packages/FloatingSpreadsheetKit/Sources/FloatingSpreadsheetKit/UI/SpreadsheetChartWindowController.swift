@@ -453,6 +453,8 @@ private struct SpreadsheetChartDatum: Identifiable {
   var category: String
   var x: Double
   var value: Double
+  var xIsTime: Bool
+  var valueIsTime: Bool
 }
 
 private final class SpreadsheetChartViewModel: ObservableObject {
@@ -461,6 +463,14 @@ private final class SpreadsheetChartViewModel: ObservableObject {
 
   private let document: SpreadsheetDocument
   private let chartID: UUID
+
+  var usesTimeXAxis: Bool {
+    !data.isEmpty && data.allSatisfy(\.xIsTime)
+  }
+
+  var usesTimeValueAxis: Bool {
+    !data.isEmpty && data.allSatisfy(\.valueIsTime)
+  }
 
   init(document: SpreadsheetDocument, chartID: UUID) {
     self.document = document
@@ -482,7 +492,9 @@ private final class SpreadsheetChartViewModel: ObservableObject {
           series: series.name,
           category: point.category,
           x: point.x ?? Double(index),
-          value: point.value
+          value: point.value,
+          xIsTime: point.xIsTime == true,
+          valueIsTime: point.valueIsTime == true
         )
       }
     }
@@ -523,25 +535,51 @@ private struct SpreadsheetChartView: View {
     Chart(model.data) { datum in
       switch definition.type {
       case .line:
-        LineMark(
-          x: .value("Category", datum.category),
-          y: .value("Value", datum.value)
-        )
-        .foregroundStyle(by: .value("Series", datum.series))
-        .symbol(by: .value("Series", datum.series))
+        if model.usesTimeXAxis {
+          LineMark(
+            x: .value("Time", datum.x),
+            y: .value("Value", datum.value)
+          )
+          .foregroundStyle(by: .value("Series", datum.series))
+          .symbol(by: .value("Series", datum.series))
+        } else {
+          LineMark(
+            x: .value("Category", datum.category),
+            y: .value("Value", datum.value)
+          )
+          .foregroundStyle(by: .value("Series", datum.series))
+          .symbol(by: .value("Series", datum.series))
+        }
       case .bar:
-        BarMark(
-          x: .value("Category", datum.category),
-          y: .value("Value", datum.value)
-        )
-        .foregroundStyle(by: .value("Series", datum.series))
+        if model.usesTimeXAxis {
+          BarMark(
+            x: .value("Time", datum.x),
+            y: .value("Value", datum.value)
+          )
+          .foregroundStyle(by: .value("Series", datum.series))
+        } else {
+          BarMark(
+            x: .value("Category", datum.category),
+            y: .value("Value", datum.value)
+          )
+          .foregroundStyle(by: .value("Series", datum.series))
+        }
       case .area:
-        AreaMark(
-          x: .value("Category", datum.category),
-          y: .value("Value", datum.value)
-        )
-        .foregroundStyle(by: .value("Series", datum.series))
-        .opacity(0.55)
+        if model.usesTimeXAxis {
+          AreaMark(
+            x: .value("Time", datum.x),
+            y: .value("Value", datum.value)
+          )
+          .foregroundStyle(by: .value("Series", datum.series))
+          .opacity(0.55)
+        } else {
+          AreaMark(
+            x: .value("Category", datum.category),
+            y: .value("Value", datum.value)
+          )
+          .foregroundStyle(by: .value("Series", datum.series))
+          .opacity(0.55)
+        }
       case .scatter:
         PointMark(
           x: .value("X", datum.x),
@@ -556,6 +594,36 @@ private struct SpreadsheetChartView: View {
           angularInset: 1.2
         )
         .foregroundStyle(by: .value("Category", datum.category))
+      }
+    }
+    .chartXAxis {
+      if model.usesTimeXAxis && definition.type != .pie {
+        AxisMarks(values: .automatic(desiredCount: 6)) { value in
+          AxisGridLine()
+          AxisTick()
+          AxisValueLabel {
+            if let time = value.as(Double.self) {
+              Text(SpreadsheetTime.format(time))
+            }
+          }
+        }
+      } else {
+        AxisMarks()
+      }
+    }
+    .chartYAxis {
+      if model.usesTimeValueAxis && definition.type != .pie {
+        AxisMarks(values: .automatic(desiredCount: 6)) { value in
+          AxisGridLine()
+          AxisTick()
+          AxisValueLabel {
+            if let time = value.as(Double.self) {
+              Text(SpreadsheetTime.format(time))
+            }
+          }
+        }
+      } else {
+        AxisMarks()
       }
     }
   }

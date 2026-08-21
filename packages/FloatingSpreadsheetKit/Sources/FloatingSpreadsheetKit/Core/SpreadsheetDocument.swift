@@ -123,6 +123,8 @@ final class SpreadsheetDocument {
       formatter.dateStyle = .short
       formatter.timeStyle = .none
       return formatter.string(from: date)
+    case .time(let fractionOfDay):
+      return SpreadsheetTime.format(fractionOfDay)
     case .number(let number):
       return formatNumber(number, as: format)
     }
@@ -467,15 +469,23 @@ final class SpreadsheetDocument {
         : fallbackName
       let points = (dataStartRow...range.end.row).compactMap { row -> SpreadsheetChartPoint? in
         let valueAddress = CellAddress(row: row, column: column)
-        guard let number = value(at: valueAddress).numericValue else { return nil }
+        let pointValue = value(at: valueAddress)
+        guard let number = pointValue.numericValue else { return nil }
         let labelAddress = CellAddress(row: row, column: range.start.column)
+        let labelValue = value(at: labelAddress)
         let category = chart.firstColumnContainsLabels
           ? nonEmptyDisplayText(at: labelAddress, fallback: String(row + 1))
           : String(row + 1)
         let x = chart.firstColumnContainsLabels
-          ? value(at: labelAddress).numericValue
+          ? labelValue.numericValue
           : Double(row - dataStartRow)
-        return SpreadsheetChartPoint(category: category, x: x, value: number)
+        return SpreadsheetChartPoint(
+          category: category,
+          x: x,
+          value: number,
+          xIsTime: chart.firstColumnContainsLabels ? labelValue.isTime : false,
+          valueIsTime: pointValue.isTime
+        )
       }
       return SpreadsheetChartSeries(name: seriesName, points: points)
     }
@@ -499,8 +509,10 @@ final class SpreadsheetDocument {
       let points = (dataStartColumn...range.end.column).compactMap {
         column -> SpreadsheetChartPoint? in
         let valueAddress = CellAddress(row: row, column: column)
-        guard let number = value(at: valueAddress).numericValue else { return nil }
+        let pointValue = value(at: valueAddress)
+        guard let number = pointValue.numericValue else { return nil }
         let headerAddress = CellAddress(row: range.start.row, column: column)
+        let headerValue = value(at: headerAddress)
         let category = chart.firstRowContainsHeaders
           ? nonEmptyDisplayText(
             at: headerAddress,
@@ -508,9 +520,15 @@ final class SpreadsheetDocument {
           )
           : CellAddress.columnName(column)
         let x = chart.firstRowContainsHeaders
-          ? value(at: headerAddress).numericValue
+          ? headerValue.numericValue
           : Double(column - dataStartColumn)
-        return SpreadsheetChartPoint(category: category, x: x, value: number)
+        return SpreadsheetChartPoint(
+          category: category,
+          x: x,
+          value: number,
+          xIsTime: chart.firstRowContainsHeaders ? headerValue.isTime : false,
+          valueIsTime: pointValue.isTime
+        )
       }
       return SpreadsheetChartSeries(name: seriesName, points: points)
     }
@@ -655,10 +673,14 @@ final class SpreadsheetDocument {
       return .percent
     }
     if case .date = value { return .date }
+    if case .time = value { return .time }
     return .automatic
   }
 
   private func formatNumber(_ number: Double, as format: CellDisplayFormat) -> String {
+    if format == .time {
+      return SpreadsheetTime.format(number)
+    }
     if format == .date {
       var components = DateComponents()
       components.calendar = Calendar(identifier: .gregorian)

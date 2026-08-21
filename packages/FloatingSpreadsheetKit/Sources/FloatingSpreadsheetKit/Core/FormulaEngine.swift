@@ -428,6 +428,9 @@ final class SpreadsheetFormulaEngine {
     {
       return .number(number / 100)
     }
+    if let time = SpreadsheetTime.parse(trimmed) {
+      return .time(time)
+    }
     if let number = FlexibleNumberParser.parse(trimmed) {
       return .number(number)
     }
@@ -649,6 +652,7 @@ final class SpreadsheetFormulaEngine {
     switch value {
     case .blank: return 0
     case .number(let number): return number
+    case .time(let fractionOfDay): return fractionOfDay
     case .boolean(let boolean): return boolean ? 1 : 0
     case .text(let text): return FlexibleNumberParser.parse(text)
     default: return nil
