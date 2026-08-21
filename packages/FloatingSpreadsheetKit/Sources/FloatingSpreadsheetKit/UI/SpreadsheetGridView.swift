@@ -188,18 +188,24 @@ final class SpreadsheetGridView: NSView, NSTextFieldDelegate {
   }
 
   override func draw(_ dirtyRect: NSRect) {
-    NSColor.textBackgroundColor.setFill()
-    dirtyRect.fill()
+    let clippedDirtyRect = dirtyRect.intersection(bounds)
+    guard !clippedDirtyRect.isEmpty else { return }
+    NSGraphicsContext.saveGraphicsState()
+    defer { NSGraphicsContext.restoreGraphicsState() }
+    NSBezierPath(rect: bounds).addClip()
 
-    let firstColumn = max(0, Int(floor(dirtyRect.minX / Self.columnWidth)))
+    NSColor.textBackgroundColor.setFill()
+    clippedDirtyRect.fill()
+
+    let firstColumn = max(0, Int(floor(clippedDirtyRect.minX / Self.columnWidth)))
     let lastColumn = min(
       Self.columnCount - 1,
-      Int(floor(max(0, dirtyRect.maxX - 0.01) / Self.columnWidth))
+      Int(floor(max(0, clippedDirtyRect.maxX - 0.01) / Self.columnWidth))
     )
-    let firstRow = max(0, Int(floor(dirtyRect.minY / Self.rowHeight)))
+    let firstRow = max(0, Int(floor(clippedDirtyRect.minY / Self.rowHeight)))
     let lastRow = min(
       Self.rowCount - 1,
-      Int(floor(max(0, dirtyRect.maxY - 0.01) / Self.rowHeight))
+      Int(floor(max(0, clippedDirtyRect.maxY - 0.01) / Self.rowHeight))
     )
     guard firstColumn <= lastColumn, firstRow <= lastRow else { return }
 
@@ -209,7 +215,7 @@ final class SpreadsheetGridView: NSView, NSTextFieldDelegate {
       firstColumn: firstColumn,
       lastColumn: lastColumn
     )
-    drawSelection(in: dirtyRect)
+    drawSelection(in: clippedDirtyRect)
 
     for row in firstRow...lastRow {
       for column in firstColumn...lastColumn {
@@ -217,7 +223,7 @@ final class SpreadsheetGridView: NSView, NSTextFieldDelegate {
       }
     }
     drawGrid(
-      dirtyRect,
+      clippedDirtyRect,
       firstRow: firstRow,
       lastRow: lastRow,
       firstColumn: firstColumn,
@@ -633,8 +639,14 @@ private final class SpreadsheetColumnHeaderView: NSView {
   override var isFlipped: Bool { true }
 
   override func draw(_ dirtyRect: NSRect) {
+    let clippedDirtyRect = dirtyRect.intersection(bounds)
+    guard !clippedDirtyRect.isEmpty else { return }
+    NSGraphicsContext.saveGraphicsState()
+    defer { NSGraphicsContext.restoreGraphicsState() }
+    NSBezierPath(rect: bounds).addClip()
+
     NSColor.controlBackgroundColor.setFill()
-    dirtyRect.fill()
+    clippedDirtyRect.fill()
     guard let gridView else { return }
     let first = max(0, Int(floor(scrollOffset / SpreadsheetGridView.columnWidth)))
     let last = min(
@@ -697,8 +709,14 @@ private final class SpreadsheetRowHeaderView: NSView {
   override var isFlipped: Bool { true }
 
   override func draw(_ dirtyRect: NSRect) {
+    let clippedDirtyRect = dirtyRect.intersection(bounds)
+    guard !clippedDirtyRect.isEmpty else { return }
+    NSGraphicsContext.saveGraphicsState()
+    defer { NSGraphicsContext.restoreGraphicsState() }
+    NSBezierPath(rect: bounds).addClip()
+
     NSColor.controlBackgroundColor.setFill()
-    dirtyRect.fill()
+    clippedDirtyRect.fill()
     guard let gridView else { return }
     let first = max(0, Int(floor(scrollOffset / SpreadsheetGridView.rowHeight)))
     let last = min(
