@@ -9,6 +9,7 @@ final class SpreadsheetWindowController: NSWindowController, NSWindowDelegate,
   private let spreadsheetDocument: SpreadsheetDocument
   private let panel: FloatingSpreadsheetPanel
   private let toolbar = SpreadsheetToolbarView()
+  private let cellContentBar = SpreadsheetCellContentBarView()
   private let gridContainer: SpreadsheetGridContainerView
   private var documentObserver: NSObjectProtocol?
   private var chartPopover: NSPopover?
@@ -97,9 +98,11 @@ final class SpreadsheetWindowController: NSWindowController, NSWindowDelegate,
     toolbar.delegate = self
     toolbar.updateTitle(spreadsheetDocument.name)
     toolbar.translatesAutoresizingMaskIntoConstraints = false
+    cellContentBar.translatesAutoresizingMaskIntoConstraints = false
     gridContainer.gridView.delegate = self
     gridContainer.translatesAutoresizingMaskIntoConstraints = false
     backdrop.addSubview(toolbar)
+    backdrop.addSubview(cellContentBar)
     backdrop.addSubview(gridContainer)
 
     NSLayoutConstraint.activate([
@@ -107,9 +110,13 @@ final class SpreadsheetWindowController: NSWindowController, NSWindowDelegate,
       toolbar.trailingAnchor.constraint(equalTo: backdrop.trailingAnchor),
       toolbar.topAnchor.constraint(equalTo: backdrop.topAnchor),
       toolbar.heightAnchor.constraint(equalToConstant: 32),
+      cellContentBar.leadingAnchor.constraint(equalTo: backdrop.leadingAnchor),
+      cellContentBar.trailingAnchor.constraint(equalTo: backdrop.trailingAnchor),
+      cellContentBar.topAnchor.constraint(equalTo: toolbar.bottomAnchor),
+      cellContentBar.heightAnchor.constraint(equalToConstant: 20),
       gridContainer.leadingAnchor.constraint(equalTo: backdrop.leadingAnchor),
       gridContainer.trailingAnchor.constraint(equalTo: backdrop.trailingAnchor),
-      gridContainer.topAnchor.constraint(equalTo: toolbar.bottomAnchor),
+      gridContainer.topAnchor.constraint(equalTo: cellContentBar.bottomAnchor),
       gridContainer.bottomAnchor.constraint(equalTo: backdrop.bottomAnchor),
     ])
     refreshToolbarSelection()
@@ -315,6 +322,10 @@ final class SpreadsheetWindowController: NSWindowController, NSWindowDelegate,
     let address = gridContainer.gridView.activeCell
     let style = spreadsheetDocument.record(at: address)?.style ?? .plain
     toolbar.updateSelection(address: address.description, style: style)
+    cellContentBar.update(
+      address: address,
+      rawContent: spreadsheetDocument.rawInput(at: address)
+    )
   }
 
   private func validateAlwaysOnTop() {
