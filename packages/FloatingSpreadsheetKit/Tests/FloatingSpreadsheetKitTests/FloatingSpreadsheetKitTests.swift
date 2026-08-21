@@ -193,6 +193,31 @@ final class FloatingSpreadsheetKitTests: XCTestCase {
     XCTAssertEqual(point?.value, Double(10 * 60 + 30) / Double(24 * 60))
   }
 
+  func testChartPointsRecognizeDatesOnTheXAxis() throws {
+    let document = SpreadsheetDocument(name: "Date chart")
+    document.setRawInput("Date", at: CellAddress(row: 0, column: 0))
+    document.setRawInput("Sales", at: CellAddress(row: 0, column: 1))
+    document.setRawInput("2026-08-21", at: CellAddress(row: 1, column: 0))
+    document.setRawInput("42", at: CellAddress(row: 1, column: 1))
+    let chart = SpreadsheetChartDefinition(
+      sourceRange: CellRange(
+        start: CellAddress(row: 0, column: 0),
+        end: CellAddress(row: 1, column: 1)
+      )
+    )
+
+    let point = try XCTUnwrap(document.chartSeries(for: chart).first?.points.first)
+    XCTAssertEqual(
+      point.category,
+      document.displayText(at: CellAddress(row: 1, column: 0))
+    )
+    XCTAssertEqual(
+      point.xDate,
+      try XCTUnwrap(SpreadsheetDate.parse("2026-08-21"))
+    )
+    XCTAssertNil(point.x)
+  }
+
   func testChartAxisSettingsPersistAndLegacyChartsKeepAutomaticAxes() throws {
     let chart = SpreadsheetChartDefinition(
       sourceRange: CellRange(CellAddress(row: 0, column: 0)),

@@ -482,6 +482,7 @@ final class SpreadsheetDocument {
         return SpreadsheetChartPoint(
           category: category,
           x: x,
+          xDate: chart.firstColumnContainsLabels ? labelValue.dateValue : nil,
           value: number,
           xIsTime: chart.firstColumnContainsLabels ? labelValue.isTime : false,
           valueIsTime: pointValue.isTime
@@ -525,6 +526,7 @@ final class SpreadsheetDocument {
         return SpreadsheetChartPoint(
           category: category,
           x: x,
+          xDate: chart.firstRowContainsHeaders ? headerValue.dateValue : nil,
           value: number,
           xIsTime: chart.firstRowContainsHeaders ? headerValue.isTime : false,
           valueIsTime: pointValue.isTime

@@ -153,9 +153,11 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
     guard let chart = spreadsheetDocument.charts.first(where: { $0.id == chartID }) else { return }
     let xAxis = chart.effectiveXAxis
     let yAxis = chart.effectiveYAxis
+    let xUsesDate = model.usesDateXAxis
     let xUsesTime = model.usesTimeXAxis
     let yUsesTime = model.usesTimeValueAxis
-    let supportsXAxisDomain = chart.type != .pie && (chart.type == .scatter || xUsesTime)
+    let supportsXAxisDomain = chart.type != .pie
+      && (chart.type == .scatter || model.usesNumericXAxis || xUsesDate || xUsesTime)
     let supportsYAxisDomain = chart.type != .pie
 
     let rangeField = NSTextField(string: chart.sourceRange.description)
@@ -179,8 +181,12 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
 
     let xTitleField = NSTextField(string: xAxis.title)
     xTitleField.placeholderString = "Optional"
-    let xMinimumField = NSTextField(string: axisBoundText(xAxis.minimum, isTime: xUsesTime))
-    let xMaximumField = NSTextField(string: axisBoundText(xAxis.maximum, isTime: xUsesTime))
+    let xMinimumField = NSTextField(
+      string: axisBoundText(xAxis.minimum, isTime: xUsesTime, isDate: xUsesDate)
+    )
+    let xMaximumField = NSTextField(
+      string: axisBoundText(xAxis.maximum, isTime: xUsesTime, isDate: xUsesDate)
+    )
     let xScalePopup = axisScalePopup(selected: xAxis.scale)
     let xGridCheckbox = NSButton(
       checkboxWithTitle: "Grid lines",
@@ -197,8 +203,12 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
 
     let yTitleField = NSTextField(string: yAxis.title)
     yTitleField.placeholderString = "Optional"
-    let yMinimumField = NSTextField(string: axisBoundText(yAxis.minimum, isTime: yUsesTime))
-    let yMaximumField = NSTextField(string: axisBoundText(yAxis.maximum, isTime: yUsesTime))
+    let yMinimumField = NSTextField(
+      string: axisBoundText(yAxis.minimum, isTime: yUsesTime, isDate: false)
+    )
+    let yMaximumField = NSTextField(
+      string: axisBoundText(yAxis.maximum, isTime: yUsesTime, isDate: false)
+    )
     let yScalePopup = axisScalePopup(selected: yAxis.scale)
     let yGridCheckbox = NSButton(
       checkboxWithTitle: "Grid lines",
@@ -213,12 +223,14 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
     yGridCheckbox.state = yAxis.showsGridLines ? .on : .off
     yLabelsCheckbox.state = yAxis.showsLabels ? .on : .off
 
-    let automaticPlaceholder = xUsesTime ? "Automatic or HH:mm" : "Automatic"
+    let automaticPlaceholder = xUsesDate
+      ? "Automatic or YYYY-MM-DD"
+      : (xUsesTime ? "Automatic or HH:mm" : "Automatic")
     xMinimumField.placeholderString = supportsXAxisDomain ? automaticPlaceholder : "Categorical axis"
     xMaximumField.placeholderString = supportsXAxisDomain ? automaticPlaceholder : "Categorical axis"
     xMinimumField.isEnabled = supportsXAxisDomain
     xMaximumField.isEnabled = supportsXAxisDomain
-    xScalePopup.isEnabled = supportsXAxisDomain && !xUsesTime
+    xScalePopup.isEnabled = supportsXAxisDomain && !xUsesTime && !xUsesDate
     if !xScalePopup.isEnabled { xScalePopup.selectItem(at: 0) }
 
     let yAutomaticPlaceholder = yUsesTime ? "Automatic or HH:mm" : "Automatic"
@@ -333,6 +345,7 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
           labelsCheckbox: xLabelsCheckbox,
           supportsDomain: supportsXAxisDomain,
           isTime: xUsesTime,
+          isDate: xUsesDate,
           axisName: "X"
         )
         let changedYAxis = try chartAxisConfiguration(
@@ -345,6 +358,7 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
           labelsCheckbox: yLabelsCheckbox,
           supportsDomain: supportsYAxisDomain,
           isTime: yUsesTime,
+          isDate: false,
           axisName: "Y"
         )
         changed.xAxis = changedXAxis == .standard ? nil : changedXAxis
@@ -382,8 +396,11 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
     return popup
   }
 
-  private func axisBoundText(_ value: Double?, isTime: Bool) -> String {
+  private func axisBoundText(_ value: Double?, isTime: Bool, isDate: Bool) -> String {
     guard let value else { return "" }
+    if isDate {
+      return SpreadsheetDate.format(Date(timeIntervalSince1970: value))
+    }
     if isTime { return SpreadsheetTime.format(value) }
     let formatter = NumberFormatter()
     formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -403,14 +420,25 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
     labelsCheckbox: NSButton,
     supportsDomain: Bool,
     isTime: Bool,
+    isDate: Bool,
     axisName: String
   ) throws -> SpreadsheetChartAxisConfiguration {
     guard titleField.isEnabled else { return current }
     let minimum = supportsDomain
-      ? try parseAxisBound(minimumField.stringValue, isTime: isTime, name: "\(axisName) minimum")
+      ? try parseAxisBound(
+        minimumField.stringValue,
+        isTime: isTime,
+        isDate: isDate,
+        name: "\(axisName) minimum"
+      )
       : current.minimum
     let maximum = supportsDomain
-      ? try parseAxisBound(maximumField.stringValue, isTime: isTime, name: "\(axisName) maximum")
+      ? try parseAxisBound(
+        maximumField.stringValue,
+        isTime: isTime,
+        isDate: isDate,
+        name: "\(axisName) maximum"
+      )
       : current.maximum
     let scale: SpreadsheetChartAxisScale = scalePopup.isEnabled
       && scalePopup.indexOfSelectedItem == 1
@@ -439,14 +467,25 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
   private func parseAxisBound(
     _ rawValue: String,
     isTime: Bool,
+    isDate: Bool,
     name: String
   ) throws -> Double? {
     let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !value.isEmpty else { return nil }
+    if isDate {
+      guard let date = SpreadsheetDate.parse(value) else {
+        throw SpreadsheetChartSettingsError.invalidBound(
+          name,
+          isTime: false,
+          isDate: true
+        )
+      }
+      return date.timeIntervalSince1970
+    }
     if isTime, let time = SpreadsheetTime.parse(value) { return time }
     let normalized = value.replacingOccurrences(of: ",", with: ".")
     guard let number = Double(normalized), number.isFinite else {
-      throw SpreadsheetChartSettingsError.invalidBound(name, isTime: isTime)
+      throw SpreadsheetChartSettingsError.invalidBound(name, isTime: isTime, isDate: false)
     }
     return number
   }
@@ -525,13 +564,14 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
 }
 
 private enum SpreadsheetChartSettingsError: LocalizedError {
-  case invalidBound(String, isTime: Bool)
+  case invalidBound(String, isTime: Bool, isDate: Bool)
   case invalidRange(String)
   case nonPositiveLogarithmicBound(String)
 
   var errorDescription: String? {
     switch self {
-    case .invalidBound(let name, let isTime):
+    case .invalidBound(let name, let isTime, let isDate):
+      if isDate { return "\(name) must be a date such as 2026-08-21." }
       return isTime
         ? "\(name) must be a number or a time such as 9:30."
         : "\(name) must be a number."
@@ -710,6 +750,8 @@ private struct SpreadsheetChartDatum: Identifiable {
   var series: String
   var category: String
   var x: Double
+  var xDate: Date?
+  var xIsNumeric: Bool
   var value: Double
   var xIsTime: Bool
   var valueIsTime: Bool
@@ -724,6 +766,14 @@ private final class SpreadsheetChartViewModel: ObservableObject {
 
   var usesTimeXAxis: Bool {
     !data.isEmpty && data.allSatisfy(\.xIsTime)
+  }
+
+  var usesDateXAxis: Bool {
+    !data.isEmpty && data.allSatisfy { $0.xDate != nil }
+  }
+
+  var usesNumericXAxis: Bool {
+    !data.isEmpty && data.allSatisfy(\.xIsNumeric)
   }
 
   var usesTimeValueAxis: Bool {
@@ -750,6 +800,8 @@ private final class SpreadsheetChartViewModel: ObservableObject {
           series: series.name,
           category: point.category,
           x: point.x ?? Double(index),
+          xDate: point.xDate,
+          xIsNumeric: point.x != nil,
           value: point.value,
           xIsTime: point.xIsTime == true,
           valueIsTime: point.valueIsTime == true
@@ -759,11 +811,12 @@ private final class SpreadsheetChartViewModel: ObservableObject {
   }
 
   func plottableData(for definition: SpreadsheetChartDefinition) -> [SpreadsheetChartDatum] {
-    let hasNumericXAxis = definition.type == .scatter || usesTimeXAxis
+    let hasNumericXAxis = definition.type == .scatter || usesNumericXAxis || usesTimeXAxis
     let xScale = definition.effectiveXAxis.scale
     let yScale = definition.effectiveYAxis.scale
-    return data.filter { datum in
+    var result = data.filter { datum in
       let hasValidX = definition.type == .pie
+        || usesDateXAxis
         || !hasNumericXAxis
         || xScale == .linear
         || datum.x > 0
@@ -772,11 +825,19 @@ private final class SpreadsheetChartViewModel: ObservableObject {
         || datum.value > 0
       return hasValidX && hasValidY
     }
+    if usesDateXAxis {
+      result.sort {
+        if $0.xDate == $1.xDate { return $0.series < $1.series }
+        return ($0.xDate ?? .distantPast) < ($1.xDate ?? .distantPast)
+      }
+    }
+    return result
   }
 
   func xDomain(for definition: SpreadsheetChartDefinition) -> ClosedRange<Double>? {
     guard definition.type != .pie,
-      definition.type == .scatter || usesTimeXAxis
+      !usesDateXAxis,
+      definition.type == .scatter || usesNumericXAxis || usesTimeXAxis
     else {
       return nil
     }
@@ -784,6 +845,31 @@ private final class SpreadsheetChartViewModel: ObservableObject {
       values: plottableData(for: definition).map(\.x),
       configuration: definition.effectiveXAxis
     )
+  }
+
+  func xDateDomain(for definition: SpreadsheetChartDefinition) -> ClosedRange<Date>? {
+    guard definition.type != .pie, usesDateXAxis else { return nil }
+    let configuration = definition.effectiveXAxis
+    guard configuration.minimum != nil || configuration.maximum != nil else { return nil }
+    let dates = plottableData(for: definition).compactMap(\.xDate)
+    var lower = configuration.minimum.map { Date(timeIntervalSince1970: $0) }
+      ?? dates.min()
+      ?? Date(timeIntervalSince1970: 0)
+    var upper = configuration.maximum.map { Date(timeIntervalSince1970: $0) }
+      ?? dates.max()
+      ?? lower.addingTimeInterval(86_400)
+    if lower >= upper {
+      if configuration.minimum != nil, configuration.maximum == nil {
+        upper = lower.addingTimeInterval(86_400)
+      } else {
+        lower = upper.addingTimeInterval(-86_400)
+      }
+    }
+    return lower...upper
+  }
+
+  func formattedDate(_ date: Date) -> String {
+    SpreadsheetDate.format(date, locale: document.settings.displayLocale.locale)
   }
 
   func yDomain(for definition: SpreadsheetChartDefinition) -> ClosedRange<Double>? {
@@ -881,9 +967,16 @@ private struct SpreadsheetChartView: View {
     Chart(model.plottableData(for: definition)) { datum in
       switch definition.type {
       case .line:
-        if model.usesTimeXAxis {
+        if model.usesDateXAxis {
           LineMark(
-            x: .value("Time", datum.x),
+            x: .value("Date", datum.xDate ?? .distantPast),
+            y: .value("Value", datum.value)
+          )
+          .foregroundStyle(by: .value("Series", datum.series))
+          .symbol(by: .value("Series", datum.series))
+        } else if model.usesNumericXAxis {
+          LineMark(
+            x: .value(model.usesTimeXAxis ? "Time" : "X", datum.x),
             y: .value("Value", datum.value)
           )
           .foregroundStyle(by: .value("Series", datum.series))
@@ -897,9 +990,15 @@ private struct SpreadsheetChartView: View {
           .symbol(by: .value("Series", datum.series))
         }
       case .bar:
-        if model.usesTimeXAxis {
+        if model.usesDateXAxis {
           BarMark(
-            x: .value("Time", datum.x),
+            x: .value("Date", datum.xDate ?? .distantPast),
+            y: .value("Value", datum.value)
+          )
+          .foregroundStyle(by: .value("Series", datum.series))
+        } else if model.usesNumericXAxis {
+          BarMark(
+            x: .value(model.usesTimeXAxis ? "Time" : "X", datum.x),
             y: .value("Value", datum.value)
           )
           .foregroundStyle(by: .value("Series", datum.series))
@@ -911,9 +1010,16 @@ private struct SpreadsheetChartView: View {
           .foregroundStyle(by: .value("Series", datum.series))
         }
       case .area:
-        if model.usesTimeXAxis {
+        if model.usesDateXAxis {
           AreaMark(
-            x: .value("Time", datum.x),
+            x: .value("Date", datum.xDate ?? .distantPast),
+            y: .value("Value", datum.value)
+          )
+          .foregroundStyle(by: .value("Series", datum.series))
+          .opacity(0.55)
+        } else if model.usesNumericXAxis {
+          AreaMark(
+            x: .value(model.usesTimeXAxis ? "Time" : "X", datum.x),
             y: .value("Value", datum.value)
           )
           .foregroundStyle(by: .value("Series", datum.series))
@@ -927,12 +1033,21 @@ private struct SpreadsheetChartView: View {
           .opacity(0.55)
         }
       case .scatter:
-        PointMark(
-          x: .value("X", datum.x),
-          y: .value("Value", datum.value)
-        )
-        .foregroundStyle(by: .value("Series", datum.series))
-        .symbolSize(42)
+        if model.usesDateXAxis {
+          PointMark(
+            x: .value("Date", datum.xDate ?? .distantPast),
+            y: .value("Value", datum.value)
+          )
+          .foregroundStyle(by: .value("Series", datum.series))
+          .symbolSize(42)
+        } else {
+          PointMark(
+            x: .value("X", datum.x),
+            y: .value("Value", datum.value)
+          )
+          .foregroundStyle(by: .value("Series", datum.series))
+          .symbolSize(42)
+        }
       case .pie:
         SectorMark(
           angle: .value("Value", abs(datum.value)),
@@ -945,6 +1060,7 @@ private struct SpreadsheetChartView: View {
     .modifier(
       SpreadsheetChartScaleModifier(
         xDomain: model.xDomain(for: definition),
+        xDateDomain: model.xDateDomain(for: definition),
         yDomain: model.yDomain(for: definition),
         xScale: xAxis.scale,
         yScale: yAxis.scale
@@ -952,7 +1068,19 @@ private struct SpreadsheetChartView: View {
     )
     .chartXAxis {
       if definition.type != .pie {
-        if model.usesTimeXAxis {
+        if model.usesDateXAxis {
+          AxisMarks(values: .automatic(desiredCount: 6)) { value in
+            if xAxis.showsGridLines { AxisGridLine() }
+            AxisTick()
+            if xAxis.showsLabels {
+              AxisValueLabel {
+                if let date = value.as(Date.self) {
+                  Text(model.formattedDate(date))
+                }
+              }
+            }
+          }
+        } else if model.usesTimeXAxis {
           AxisMarks(values: .automatic(desiredCount: 6)) { value in
             if xAxis.showsGridLines { AxisGridLine() }
             AxisTick()
@@ -1003,13 +1131,16 @@ private struct SpreadsheetChartView: View {
 
 private struct SpreadsheetChartScaleModifier: ViewModifier {
   let xDomain: ClosedRange<Double>?
+  let xDateDomain: ClosedRange<Date>?
   let yDomain: ClosedRange<Double>?
   let xScale: SpreadsheetChartAxisScale
   let yScale: SpreadsheetChartAxisScale
 
   @ViewBuilder
   func body(content: Content) -> some View {
-    if let xDomain {
+    if let xDateDomain {
+      applyYScale(to: content.chartXScale(domain: xDateDomain))
+    } else if let xDomain {
       if xScale == .logarithmic {
         applyYScale(to: content.chartXScale(domain: xDomain, type: .log))
       } else {

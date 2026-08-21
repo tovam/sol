@@ -309,6 +309,11 @@ enum SpreadsheetValue: Equatable {
     if case .time = self { return true }
     return false
   }
+
+  var dateValue: Date? {
+    if case .date(let date) = self { return date }
+    return nil
+  }
 }
 
 enum SpreadsheetTime {
@@ -342,6 +347,36 @@ enum SpreadsheetTime {
       wrappedMinutes / 60,
       wrappedMinutes % 60
     )
+  }
+}
+
+enum SpreadsheetDate {
+  static func parse(_ input: String) -> Date? {
+    let value = input.trimmingCharacters(in: .whitespacesAndNewlines)
+    let isoFormatter = ISO8601DateFormatter()
+    if let date = isoFormatter.date(from: value) { return date }
+
+    let formats = ["yyyy-MM-dd", "dd/MM/yyyy", "MM/dd/yyyy", "dd-MM-yyyy"]
+    for format in formats {
+      let formatter = DateFormatter()
+      formatter.locale = .current
+      formatter.calendar = .current
+      formatter.timeZone = .current
+      formatter.dateFormat = format
+      formatter.isLenient = false
+      if let date = formatter.date(from: value) { return date }
+    }
+    return nil
+  }
+
+  static func format(_ date: Date, locale: Locale = .current) -> String {
+    let formatter = DateFormatter()
+    formatter.locale = locale
+    formatter.calendar = .current
+    formatter.timeZone = .current
+    formatter.dateStyle = .short
+    formatter.timeStyle = .none
+    return formatter.string(from: date)
   }
 }
 
@@ -393,9 +428,26 @@ struct SpreadsheetChartAxisConfiguration: Codable, Equatable {
 struct SpreadsheetChartPoint: Codable, Equatable {
   var category: String
   var x: Double?
+  var xDate: Date?
   var value: Double
   var xIsTime: Bool?
   var valueIsTime: Bool?
+
+  init(
+    category: String,
+    x: Double?,
+    xDate: Date? = nil,
+    value: Double,
+    xIsTime: Bool? = nil,
+    valueIsTime: Bool? = nil
+  ) {
+    self.category = category
+    self.x = x
+    self.xDate = xDate
+    self.value = value
+    self.xIsTime = xIsTime
+    self.valueIsTime = valueIsTime
+  }
 }
 
 struct SpreadsheetChartSeries: Codable, Equatable {

@@ -434,7 +434,7 @@ final class SpreadsheetFormulaEngine {
     if let number = FlexibleNumberParser.parse(trimmed) {
       return .number(number)
     }
-    if let date = Self.parseDate(trimmed) {
+    if let date = SpreadsheetDate.parse(trimmed) {
       return .date(date)
     }
     switch trimmed.uppercased() {
@@ -679,20 +679,4 @@ final class SpreadsheetFormulaEngine {
     return false
   }
 
-  private static func parseDate(_ value: String) -> Date? {
-    let isoFormatter = ISO8601DateFormatter()
-    if let date = isoFormatter.date(from: value) { return date }
-
-    let formats = ["yyyy-MM-dd", "dd/MM/yyyy", "MM/dd/yyyy", "dd-MM-yyyy"]
-    for format in formats {
-      let formatter = DateFormatter()
-      formatter.locale = .current
-      formatter.calendar = .current
-      formatter.timeZone = .current
-      formatter.dateFormat = format
-      formatter.isLenient = false
-      if let date = formatter.date(from: value) { return date }
-    }
-    return nil
-  }
 }
