@@ -539,7 +539,7 @@ final class SpreadsheetGridView: NSView, NSTextFieldDelegate {
   ) -> Bool {
     switch commandSelector {
     case #selector(NSResponder.insertNewline(_:)),
-      Selector(("insertNewlineIgnoringFieldEditor:")):
+      #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)):
       finishEditing(commit: true, movement: (1, 0))
       return true
     case #selector(NSResponder.insertTab(_:)):

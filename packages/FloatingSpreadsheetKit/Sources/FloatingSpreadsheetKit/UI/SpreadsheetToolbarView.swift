@@ -7,6 +7,7 @@ protocol SpreadsheetToolbarViewDelegate: AnyObject {
   func spreadsheetToolbarDidRequestDate(_ toolbar: SpreadsheetToolbarView)
   func spreadsheetToolbarDidRequestPercent(_ toolbar: SpreadsheetToolbarView)
   func spreadsheetToolbarDidRequestCurrency(_ toolbar: SpreadsheetToolbarView)
+  func spreadsheetToolbarDidRequestSettings(_ toolbar: SpreadsheetToolbarView)
   func spreadsheetToolbarDidRequestImport(_ toolbar: SpreadsheetToolbarView)
   func spreadsheetToolbarDidRequestChart(_ toolbar: SpreadsheetToolbarView)
   func spreadsheetToolbarDidRequestClose(_ toolbar: SpreadsheetToolbarView)
@@ -22,6 +23,7 @@ final class SpreadsheetToolbarView: NSView, NSTextFieldDelegate {
   private let dateButton: NSButton
   private let percentButton: NSButton
   private let currencyButton: NSButton
+  private let settingsButton: NSButton
   private let importButton: NSButton
   private let chartButton: NSButton
   private let closeButton: NSButton
@@ -35,6 +37,10 @@ final class SpreadsheetToolbarView: NSView, NSTextFieldDelegate {
     currencyButton = Self.makeButton(
       symbol: "dollarsign.circle",
       tooltip: "Currency format"
+    )
+    settingsButton = Self.makeButton(
+      symbol: "gearshape",
+      tooltip: "Spreadsheet settings"
     )
     importButton = Self.makeButton(
       symbol: "square.and.arrow.down",
@@ -68,6 +74,8 @@ final class SpreadsheetToolbarView: NSView, NSTextFieldDelegate {
       currencyButton.state = .off
     }
   }
+
+  var settingsPositioningView: NSView { settingsButton }
 
   override func mouseDown(with event: NSEvent) {
     window?.performDrag(with: event)
@@ -107,10 +115,11 @@ final class SpreadsheetToolbarView: NSView, NSTextFieldDelegate {
     configureButton(dateButton, action: #selector(date))
     configureButton(percentButton, action: #selector(percent))
     configureButton(currencyButton, action: #selector(currency))
+    configureButton(settingsButton, action: #selector(settings))
     configureButton(importButton, action: #selector(importData))
     configureButton(chartButton, action: #selector(chart))
     configureButton(closeButton, action: #selector(close))
-    for button in [importButton, chartButton, closeButton] {
+    for button in [settingsButton, importButton, chartButton, closeButton] {
       button.setButtonType(.momentaryPushIn)
     }
 
@@ -126,6 +135,7 @@ final class SpreadsheetToolbarView: NSView, NSTextFieldDelegate {
       percentButton,
       currencyButton,
       Self.separator(),
+      settingsButton,
       importButton,
       chartButton,
     ])
@@ -169,6 +179,7 @@ final class SpreadsheetToolbarView: NSView, NSTextFieldDelegate {
       dateButton,
       percentButton,
       currencyButton,
+      settingsButton,
       importButton,
       chartButton,
       closeButton,
@@ -205,6 +216,10 @@ final class SpreadsheetToolbarView: NSView, NSTextFieldDelegate {
 
   @objc private func currency() {
     delegate?.spreadsheetToolbarDidRequestCurrency(self)
+  }
+
+  @objc private func settings() {
+    delegate?.spreadsheetToolbarDidRequestSettings(self)
   }
 
   @objc private func importData() {

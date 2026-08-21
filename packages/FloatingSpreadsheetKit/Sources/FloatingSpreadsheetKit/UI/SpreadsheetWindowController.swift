@@ -12,6 +12,8 @@ final class SpreadsheetWindowController: NSWindowController, NSWindowDelegate,
   private let gridContainer: SpreadsheetGridContainerView
   private var documentObserver: NSObjectProtocol?
   private var chartPopover: NSPopover?
+  private var settingsPopover: NSPopover?
+  private weak var settingsContent: SpreadsheetSettingsPopoverController?
   private var didClose = false
 
   init(document: SpreadsheetDocument) {
@@ -77,6 +79,7 @@ final class SpreadsheetWindowController: NSWindowController, NSWindowDelegate,
     guard !didClose else { return }
     didClose = true
     chartPopover?.close()
+    settingsPopover?.close()
     onClose?()
   }
 
@@ -122,6 +125,7 @@ final class SpreadsheetWindowController: NSWindowController, NSWindowDelegate,
       toolbar.updateTitle(spreadsheetDocument.name)
       gridContainer.reloadData()
       refreshToolbarSelection()
+      settingsContent?.update(spreadsheetDocument.settings)
     }
   }
 
@@ -188,8 +192,11 @@ final class SpreadsheetWindowController: NSWindowController, NSWindowDelegate,
   }
 
   func spreadsheetToolbarDidRequestCurrency(_ toolbar: SpreadsheetToolbarView) {
-    let code = Locale.current.currency?.identifier ?? "EUR"
-    toggleFormat(.currency(code: code))
+    toggleFormat(.currency(code: spreadsheetDocument.settings.currencyCode))
+  }
+
+  func spreadsheetToolbarDidRequestSettings(_ toolbar: SpreadsheetToolbarView) {
+    showSettingsPopover(relativeTo: toolbar.settingsPositioningView)
   }
 
   func spreadsheetToolbarDidRequestImport(_ toolbar: SpreadsheetToolbarView) {
@@ -276,6 +283,27 @@ final class SpreadsheetWindowController: NSWindowController, NSWindowDelegate,
       self?.onOpenChart?(chart)
     }
     chartPopover = popover
+    popover.show(
+      relativeTo: positioningView.bounds,
+      of: positioningView,
+      preferredEdge: .maxY
+    )
+  }
+
+  private func showSettingsPopover(relativeTo positioningView: NSView) {
+    settingsPopover?.close()
+    let content = SpreadsheetSettingsPopoverController(
+      settings: spreadsheetDocument.settings
+    )
+    content.onChange = { [weak self] settings in
+      self?.spreadsheetDocument.updateSettings(settings)
+    }
+    let popover = NSPopover()
+    popover.behavior = .transient
+    popover.contentSize = content.view.frame.size
+    popover.contentViewController = content
+    settingsContent = content
+    settingsPopover = popover
     popover.show(
       relativeTo: positioningView.bounds,
       of: positioningView,

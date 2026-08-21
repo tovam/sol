@@ -17,6 +17,7 @@ final class SpreadsheetDocument {
   private(set) var history: [SpreadsheetAction]
   private(set) var historyCursor: Int
   private(set) var columnWidths: [Int: Double]
+  private(set) var settings: SpreadsheetSettings
 
   var onChange: ((SpreadsheetDocument) -> Void)?
 
@@ -37,6 +38,7 @@ final class SpreadsheetDocument {
     columnWidths = payload.columnWidths.filter { column, width in
       column >= 0 && width.isFinite && width > 0
     }
+    settings = payload.settings
   }
 
   convenience init(id: UUID = UUID(), name: String, now: Date = Date()) {
@@ -74,7 +76,8 @@ final class SpreadsheetDocument {
       charts: charts,
       history: history,
       historyCursor: historyCursor,
-      columnWidths: columnWidths
+      columnWidths: columnWidths,
+      settings: settings
     )
   }
 
@@ -113,12 +116,12 @@ final class SpreadsheetDocument {
       return error.rawValue
     case .date(let date):
       let formatter = DateFormatter()
-      formatter.locale = .current
+      formatter.locale = settings.displayLocale.locale
       formatter.dateStyle = .short
       formatter.timeStyle = .none
       return formatter.string(from: date)
     case .number(let number):
-      return Self.format(number: number, as: format)
+      return formatNumber(number, as: format)
     }
   }
 
@@ -206,6 +209,25 @@ final class SpreadsheetDocument {
         kind: .layout,
         columnWidthsBefore: columnWidths,
         columnWidthsAfter: updated
+      )
+    )
+  }
+
+  func updateSettings(_ updated: SpreadsheetSettings) {
+    var normalized = updated
+    normalized.currencyCode = updated.currencyCode
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+      .uppercased()
+    if normalized.currencyCode.isEmpty {
+      normalized.currencyCode = "EUR"
+    }
+    guard normalized != settings else { return }
+    commit(
+      SpreadsheetAction(
+        label: "Change spreadsheet settings",
+        kind: .layout,
+        settingsBefore: settings,
+        settingsAfter: normalized
       )
     )
   }
@@ -586,6 +608,9 @@ final class SpreadsheetDocument {
     if let changedWidths = forward ? action.columnWidthsAfter : action.columnWidthsBefore {
       columnWidths = changedWidths
     }
+    if let changedSettings = forward ? action.settingsAfter : action.settingsBefore {
+      settings = changedSettings
+    }
   }
 
   private func finishChange() {
@@ -612,7 +637,7 @@ final class SpreadsheetDocument {
     return .automatic
   }
 
-  private static func format(number: Double, as format: CellDisplayFormat) -> String {
+  private func formatNumber(_ number: Double, as format: CellDisplayFormat) -> String {
     if format == .date {
       var components = DateComponents()
       components.calendar = Calendar(identifier: .gregorian)
@@ -623,7 +648,7 @@ final class SpreadsheetDocument {
       if let epoch = components.date {
         let date = epoch.addingTimeInterval(number * 86_400)
         let formatter = DateFormatter()
-        formatter.locale = .current
+        formatter.locale = settings.displayLocale.locale
         formatter.dateStyle = .short
         formatter.timeStyle = .none
         return formatter.string(from: date)
@@ -631,7 +656,7 @@ final class SpreadsheetDocument {
     }
 
     let formatter = NumberFormatter()
-    formatter.locale = .current
+    formatter.locale = settings.displayLocale.locale
     formatter.minimumFractionDigits = 0
     formatter.maximumFractionDigits = 10
     formatter.usesGroupingSeparator = true
@@ -639,9 +664,9 @@ final class SpreadsheetDocument {
     case .percent:
       formatter.numberStyle = .percent
       formatter.maximumFractionDigits = 4
-    case .currency(let code):
+    case .currency:
       formatter.numberStyle = .currency
-      formatter.currencyCode = code
+      formatter.currencyCode = settings.currencyCode
       formatter.maximumFractionDigits = 4
     default:
       formatter.numberStyle = .decimal

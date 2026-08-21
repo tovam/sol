@@ -73,9 +73,32 @@ final class FloatingSpreadsheetKitTests: XCTestCase {
       JSONSerialization.jsonObject(with: encoded) as? [String: Any]
     )
     object.removeValue(forKey: "columnWidths")
+    object.removeValue(forKey: "settings")
     let legacyData = try JSONSerialization.data(withJSONObject: object)
 
     let decoded = try JSONDecoder().decode(SpreadsheetPayload.self, from: legacyData)
     XCTAssertEqual(decoded.columnWidths, [:])
+    XCTAssertEqual(decoded.settings, .standard)
+  }
+
+  func testSpreadsheetLocaleAndCurrencySettingsPersistAndUndo() throws {
+    let address = CellAddress(row: 0, column: 0)
+    let document = SpreadsheetDocument(name: "Formatting")
+    document.setRawInput("1234.5", at: address)
+    document.setDisplayFormat(.currency(code: "EUR"), in: CellRange(address))
+    XCTAssertTrue(document.displayText(at: address).contains("€"))
+
+    document.updateSettings(
+      SpreadsheetSettings(displayLocale: .english, currencyCode: "USD")
+    )
+    XCTAssertTrue(document.displayText(at: address).contains("$"))
+
+    let data = try JSONEncoder().encode(document.payload)
+    let payload = try JSONDecoder().decode(SpreadsheetPayload.self, from: data)
+    let restored = SpreadsheetDocument(payload: payload)
+    XCTAssertEqual(restored.settings.displayLocale, .english)
+    XCTAssertEqual(restored.settings.currencyCode, "USD")
+    XCTAssertTrue(restored.undo())
+    XCTAssertEqual(restored.settings, .standard)
   }
 }

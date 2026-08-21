@@ -227,6 +227,32 @@ struct CellStyle: Codable, Equatable {
   static let plain = CellStyle()
 }
 
+enum SpreadsheetDisplayLocale: String, Codable, CaseIterable {
+  case french
+  case english
+
+  var locale: Locale {
+    switch self {
+    case .french: return Locale(identifier: "fr_FR")
+    case .english: return Locale(identifier: "en_US")
+    }
+  }
+
+  var shortLabel: String {
+    switch self {
+    case .french: return "FR"
+    case .english: return "EN"
+    }
+  }
+}
+
+struct SpreadsheetSettings: Codable, Equatable {
+  var displayLocale: SpreadsheetDisplayLocale = .french
+  var currencyCode = "EUR"
+
+  static let standard = SpreadsheetSettings()
+}
+
 struct CellRecord: Codable, Equatable {
   var rawInput: String
   var style: CellStyle = .plain
@@ -359,6 +385,8 @@ struct SpreadsheetAction: Codable, Equatable, Identifiable {
   var chartsAfter: [SpreadsheetChartDefinition]?
   var columnWidthsBefore: [Int: Double]?
   var columnWidthsAfter: [Int: Double]?
+  var settingsBefore: SpreadsheetSettings?
+  var settingsAfter: SpreadsheetSettings?
 }
 
 struct SpreadsheetPayload: Codable {
@@ -372,9 +400,10 @@ struct SpreadsheetPayload: Codable {
   var history: [SpreadsheetAction]
   var historyCursor: Int
   var columnWidths: [Int: Double]
+  var settings: SpreadsheetSettings
 
   init(
-    schemaVersion: Int = 2,
+    schemaVersion: Int = 3,
     id: UUID,
     name: String,
     createdAt: Date,
@@ -383,7 +412,8 @@ struct SpreadsheetPayload: Codable {
     charts: [SpreadsheetChartDefinition],
     history: [SpreadsheetAction],
     historyCursor: Int,
-    columnWidths: [Int: Double] = [:]
+    columnWidths: [Int: Double] = [:],
+    settings: SpreadsheetSettings = .standard
   ) {
     self.schemaVersion = schemaVersion
     self.id = id
@@ -395,6 +425,7 @@ struct SpreadsheetPayload: Codable {
     self.history = history
     self.historyCursor = historyCursor
     self.columnWidths = columnWidths
+    self.settings = settings
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -408,6 +439,7 @@ struct SpreadsheetPayload: Codable {
     case history
     case historyCursor
     case columnWidths
+    case settings
   }
 
   init(from decoder: Decoder) throws {
@@ -426,6 +458,8 @@ struct SpreadsheetPayload: Codable {
     historyCursor = try values.decodeIfPresent(Int.self, forKey: .historyCursor)
       ?? history.count
     columnWidths = try values.decodeIfPresent([Int: Double].self, forKey: .columnWidths) ?? [:]
+    settings = try values.decodeIfPresent(SpreadsheetSettings.self, forKey: .settings)
+      ?? .standard
   }
 }
 
