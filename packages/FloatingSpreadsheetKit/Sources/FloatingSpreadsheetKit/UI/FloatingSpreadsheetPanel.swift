@@ -18,6 +18,7 @@ final class FloatingSpreadsheetPanel: NSPanel {
     hasShadow = true
     isReleasedWhenClosed = false
     hidesOnDeactivate = false
+    isMovableByWindowBackground = true
     animationBehavior = .utilityWindow
   }
 }

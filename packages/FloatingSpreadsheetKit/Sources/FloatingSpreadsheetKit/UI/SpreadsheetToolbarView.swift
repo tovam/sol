@@ -15,7 +15,7 @@ protocol SpreadsheetToolbarViewDelegate: AnyObject {
 final class SpreadsheetToolbarView: NSView, NSTextFieldDelegate {
   weak var delegate: SpreadsheetToolbarViewDelegate?
 
-  private let titleField = NSTextField()
+  private let titleField = DraggableSpreadsheetTitleField()
   private let addressLabel = NSTextField(labelWithString: "A1")
   private let boldButton: NSButton
   private let italicButton: NSButton
@@ -73,8 +73,11 @@ final class SpreadsheetToolbarView: NSView, NSTextFieldDelegate {
     window?.performDrag(with: event)
   }
 
+  override var mouseDownCanMoveWindow: Bool { true }
+
   func controlTextDidEndEditing(_ notification: Notification) {
     delegate?.spreadsheetToolbar(self, renameTo: titleField.stringValue)
+    titleField.finishRenaming()
   }
 
   private func configure() {
@@ -91,6 +94,7 @@ final class SpreadsheetToolbarView: NSView, NSTextFieldDelegate {
     titleField.cell?.usesSingleLineMode = true
     titleField.cell?.lineBreakMode = .byTruncatingTail
     titleField.delegate = self
+    titleField.finishRenaming()
     titleField.setAccessibilityLabel("Spreadsheet name")
 
     addressLabel.font = .monospacedDigitSystemFont(ofSize: 10, weight: .medium)
@@ -237,5 +241,26 @@ final class SpreadsheetToolbarView: NSView, NSTextFieldDelegate {
       view.heightAnchor.constraint(equalToConstant: 17),
     ])
     return view
+  }
+}
+
+private final class DraggableSpreadsheetTitleField: NSTextField {
+  override var mouseDownCanMoveWindow: Bool { !isEditable }
+
+  override func mouseDown(with event: NSEvent) {
+    guard event.clickCount >= 2 else {
+      window?.performDrag(with: event)
+      return
+    }
+
+    isEditable = true
+    isSelectable = true
+    window?.makeFirstResponder(self)
+    selectText(nil)
+  }
+
+  func finishRenaming() {
+    isEditable = false
+    isSelectable = false
   }
 }
