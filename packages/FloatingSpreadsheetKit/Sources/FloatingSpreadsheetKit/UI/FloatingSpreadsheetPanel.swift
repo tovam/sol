@@ -5,11 +5,23 @@ final class FloatingSpreadsheetPanel: NSPanel {
   override var canBecomeMain: Bool { true }
 
   override func sendEvent(_ event: NSEvent) {
-    if event.type == .keyDown, event.keyCode == 53 {
+    if isEscape(event) {
       close()
       return
     }
     super.sendEvent(event)
+  }
+
+  override func performKeyEquivalent(with event: NSEvent) -> Bool {
+    guard !isEscape(event) else {
+      close()
+      return true
+    }
+    return super.performKeyEquivalent(with: event)
+  }
+
+  override func cancelOperation(_ sender: Any?) {
+    close()
   }
 
   convenience init(size: NSSize) {
@@ -39,6 +51,11 @@ final class FloatingSpreadsheetPanel: NSPanel {
     DispatchQueue.main.async { [weak self] in
       self?.invalidateShadow()
     }
+  }
+
+  private func isEscape(_ event: NSEvent) -> Bool {
+    event.type == .keyDown
+      && (event.keyCode == 53 || event.charactersIgnoringModifiers == "\u{1B}")
   }
 }
 
