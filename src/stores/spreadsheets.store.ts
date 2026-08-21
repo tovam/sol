@@ -91,7 +91,8 @@ export const createSpreadsheetsStore = (root: IRootStore) => {
 				runInAction(() => {
 					store.isLoading = false;
 				});
-			},
+			}
+		},
 
 		create: async () => {
 			try {
