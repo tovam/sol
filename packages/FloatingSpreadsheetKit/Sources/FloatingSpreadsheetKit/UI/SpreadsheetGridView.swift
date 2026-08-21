@@ -484,6 +484,8 @@ final class SpreadsheetGridView: NSView, NSTextFieldDelegate {
     field.cell?.usesSingleLineMode = true
     field.cell?.lineBreakMode = .byClipping
     field.delegate = self
+    field.target = self
+    field.action = #selector(commitEditorAndMoveDown)
     addSubview(field)
     editor = field
     updateEditingReferences(field.stringValue)
@@ -528,7 +530,8 @@ final class SpreadsheetGridView: NSView, NSTextFieldDelegate {
     doCommandBy commandSelector: Selector
   ) -> Bool {
     switch commandSelector {
-    case #selector(NSResponder.insertNewline(_:)):
+    case #selector(NSResponder.insertNewline(_:)),
+      Selector(("insertNewlineIgnoringFieldEditor:")):
       finishEditing(commit: true, movement: (1, 0))
       return true
     case #selector(NSResponder.insertTab(_:)):
@@ -543,6 +546,10 @@ final class SpreadsheetGridView: NSView, NSTextFieldDelegate {
     default:
       return false
     }
+  }
+
+  @objc private func commitEditorAndMoveDown() {
+    finishEditing(commit: true, movement: (1, 0))
   }
 
   private func updateEditingReferences(_ rawInput: String) {
