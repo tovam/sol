@@ -823,6 +823,13 @@ private struct SpreadsheetChartDatum: Identifiable {
   var valueIsTime: Bool
 }
 
+private struct SpreadsheetChartHoverSelection: Identifiable {
+  var id: String
+  var points: [SpreadsheetChartDatum]
+
+  var anchor: SpreadsheetChartDatum? { points.first }
+}
+
 private final class SpreadsheetChartViewModel: ObservableObject {
   @Published private(set) var chart: SpreadsheetChartDefinition?
   @Published private(set) var data: [SpreadsheetChartDatum] = []
@@ -918,6 +925,62 @@ private final class SpreadsheetChartViewModel: ObservableObject {
       }
     }
     return result.values.sorted { $0.series.localizedCaseInsensitiveCompare($1.series) == .orderedAscending }
+  }
+
+  func hoverSelection(
+    for definition: SpreadsheetChartDefinition,
+    nearest date: Date
+  ) -> SpreadsheetChartHoverSelection? {
+    let data = plottableData(for: definition)
+    guard let closest = data.min(by: {
+      abs(($0.xDate ?? .distantPast).timeIntervalSince(date))
+        < abs(($1.xDate ?? .distantPast).timeIntervalSince(date))
+    }), let selectedDate = closest.xDate
+    else {
+      return nil
+    }
+    return makeHoverSelection(
+      id: "date-\(selectedDate.timeIntervalSince1970)",
+      points: data.filter { $0.xDate == selectedDate }
+    )
+  }
+
+  func hoverSelection(
+    for definition: SpreadsheetChartDefinition,
+    nearest x: Double
+  ) -> SpreadsheetChartHoverSelection? {
+    let data = plottableData(for: definition)
+    guard let closest = data.min(by: { abs($0.x - x) < abs($1.x - x) }) else {
+      return nil
+    }
+    let tolerance = max(1e-9, abs(closest.x) * 1e-9)
+    return makeHoverSelection(
+      id: "number-\(closest.x)",
+      points: data.filter { abs($0.x - closest.x) <= tolerance }
+    )
+  }
+
+  func hoverSelection(
+    for definition: SpreadsheetChartDefinition,
+    category: String
+  ) -> SpreadsheetChartHoverSelection? {
+    makeHoverSelection(
+      id: "category-\(category)",
+      points: plottableData(for: definition).filter { $0.category == category }
+    )
+  }
+
+  private func makeHoverSelection(
+    id: String,
+    points: [SpreadsheetChartDatum]
+  ) -> SpreadsheetChartHoverSelection? {
+    guard !points.isEmpty else { return nil }
+    return SpreadsheetChartHoverSelection(
+      id: id,
+      points: points.sorted {
+        $0.series.localizedCaseInsensitiveCompare($1.series) == .orderedAscending
+      }
+    )
   }
 
   func xDomain(for definition: SpreadsheetChartDefinition) -> ClosedRange<Double>? {
@@ -1022,6 +1085,7 @@ private final class SpreadsheetChartViewModel: ObservableObject {
 
 private struct SpreadsheetChartView: View {
   @ObservedObject var model: SpreadsheetChartViewModel
+  @State private var hoverSelection: SpreadsheetChartHoverSelection? = nil
 
   var body: some View {
     VStack(alignment: .leading, spacing: 5) {
@@ -1208,6 +1272,58 @@ private struct SpreadsheetChartView: View {
           }
         }
       }
+      if definition.type != .pie,
+        let selection = hoverSelection,
+        let anchor = selection.anchor
+      {
+        if model.usesDateXAxis {
+          RuleMark(x: .value("Hovered date", anchor.xDate ?? .distantPast))
+            .foregroundStyle(Color.secondary.opacity(0.65))
+            .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+            .annotation(position: .top, spacing: 5) {
+              hoverCard(selection)
+            }
+        } else if model.usesNumericXAxis || definition.type == .scatter {
+          RuleMark(x: .value("Hovered X", anchor.x))
+            .foregroundStyle(Color.secondary.opacity(0.65))
+            .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+            .annotation(position: .top, spacing: 5) {
+              hoverCard(selection)
+            }
+        } else {
+          RuleMark(x: .value("Hovered category", anchor.category))
+            .foregroundStyle(Color.secondary.opacity(0.65))
+            .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+            .annotation(position: .top, spacing: 5) {
+              hoverCard(selection)
+            }
+        }
+
+        ForEach(selection.points) { datum in
+          if model.usesDateXAxis {
+            PointMark(
+              x: .value("Hovered date", datum.xDate ?? .distantPast),
+              y: .value("Hovered value", datum.value)
+            )
+            .foregroundStyle(by: .value("Series", datum.series))
+            .symbolSize(52)
+          } else if model.usesNumericXAxis || definition.type == .scatter {
+            PointMark(
+              x: .value("Hovered X", datum.x),
+              y: .value("Hovered value", datum.value)
+            )
+            .foregroundStyle(by: .value("Series", datum.series))
+            .symbolSize(52)
+          } else {
+            PointMark(
+              x: .value("Hovered category", datum.category),
+              y: .value("Hovered value", datum.value)
+            )
+            .foregroundStyle(by: .value("Series", datum.series))
+            .symbolSize(52)
+          }
+        }
+      }
     }
     .modifier(
       SpreadsheetChartScaleModifier(
@@ -1278,6 +1394,87 @@ private struct SpreadsheetChartView: View {
     }
     .chartXAxisLabel(definition.type == .pie ? "" : xAxis.title)
     .chartYAxisLabel(definition.type == .pie ? "" : yAxis.title)
+    .chartOverlay { proxy in
+      GeometryReader { geometry in
+        if definition.type != .pie {
+          Color.clear
+            .contentShape(Rectangle())
+            .onContinuousHover { phase in
+              switch phase {
+              case .active(let location):
+                guard let plotFrame = proxy.plotFrame else {
+                  hoverSelection = nil
+                  return
+                }
+                let frame = geometry[plotFrame]
+                guard frame.contains(location) else {
+                  hoverSelection = nil
+                  return
+                }
+                let xPosition = location.x - frame.minX
+                if model.usesDateXAxis {
+                  let date: Date? = proxy.value(atX: xPosition)
+                  hoverSelection = date.flatMap {
+                    model.hoverSelection(for: definition, nearest: $0)
+                  }
+                } else if model.usesNumericXAxis || definition.type == .scatter {
+                  let x: Double? = proxy.value(atX: xPosition)
+                  hoverSelection = x.flatMap {
+                    model.hoverSelection(for: definition, nearest: $0)
+                  }
+                } else {
+                  let category: String? = proxy.value(atX: xPosition)
+                  hoverSelection = category.flatMap {
+                    model.hoverSelection(for: definition, category: $0)
+                  }
+                }
+              case .ended:
+                hoverSelection = nil
+              }
+            }
+        }
+      }
+    }
+  }
+
+  private func hoverCard(_ selection: SpreadsheetChartHoverSelection) -> some View {
+    VStack(alignment: .leading, spacing: 3) {
+      Text(hoverTitle(selection))
+        .font(.system(size: 10, weight: .semibold))
+      ForEach(selection.points.prefix(8)) { datum in
+        HStack(spacing: 8) {
+          Text(datum.series)
+            .foregroundStyle(.secondary)
+          Spacer(minLength: 8)
+          Text(model.formattedValue(datum.value, isTime: model.usesTimeValueAxis))
+            .monospacedDigit()
+        }
+        .font(.system(size: 10))
+      }
+      if selection.points.count > 8 {
+        Text("+\(selection.points.count - 8) more")
+          .font(.system(size: 9))
+          .foregroundStyle(.secondary)
+      }
+    }
+    .padding(.horizontal, 7)
+    .padding(.vertical, 5)
+    .frame(minWidth: 120)
+    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+    .overlay {
+      RoundedRectangle(cornerRadius: 6)
+        .stroke(Color.secondary.opacity(0.2), lineWidth: 0.5)
+    }
+    .shadow(color: .black.opacity(0.16), radius: 4, y: 2)
+    .allowsHitTesting(false)
+  }
+
+  private func hoverTitle(_ selection: SpreadsheetChartHoverSelection) -> String {
+    guard let anchor = selection.anchor else { return "" }
+    if let date = anchor.xDate { return model.formattedDate(date) }
+    if model.usesTimeXAxis { return SpreadsheetTime.format(anchor.x) }
+    if model.usesNumericXAxis { return model.formattedValue(anchor.x, isTime: false) }
+    return anchor.category
   }
 
   private func lastValueLabel(_ datum: SpreadsheetChartDatum) -> some View {
