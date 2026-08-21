@@ -1,9 +1,13 @@
 import AppKit
 
-private final class SpreadsheetCellEditorField: NSTextField {
+private final class SpreadsheetCellEditorView: NSTextView {
   var onCommitAndMove: ((_ rowDelta: Int, _ columnDelta: Int) -> Void)?
 
   override func keyDown(with event: NSEvent) {
+    if hasMarkedText() {
+      super.keyDown(with: event)
+      return
+    }
     let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
     switch event.keyCode {
     case 36, 76:
@@ -146,7 +150,7 @@ final class SpreadsheetGridContainerView: NSView {
   }
 }
 
-final class SpreadsheetGridView: NSView, NSTextFieldDelegate {
+final class SpreadsheetGridView: NSView, NSTextViewDelegate {
   static let rowCount = 1_048_576
   static let columnCount = 16_384
   static let rowHeight: CGFloat = 25
@@ -162,7 +166,7 @@ final class SpreadsheetGridView: NSView, NSTextFieldDelegate {
   private(set) var selectedRange = CellRange(CellAddress(row: 0, column: 0))
   private(set) var activeCell = CellAddress(row: 0, column: 0)
   private var selectionAnchor = CellAddress(row: 0, column: 0)
-  private var editor: NSTextField?
+  private var editor: SpreadsheetCellEditorView?
   private var editingOriginalValue = ""
   private var editingReferenceRanges: [CellRange] = []
   private var isFinishingEdit = false
@@ -421,7 +425,11 @@ final class SpreadsheetGridView: NSView, NSTextFieldDelegate {
         extending: false
       )
     case 36, 76:
-      moveSelection(rowDelta: 1, columnDelta: 0, extending: false)
+      moveSelection(
+        rowDelta: modifiers.contains(.shift) ? -1 : 1,
+        columnDelta: 0,
+        extending: false
+      )
     case 51, 117:
       document.clear(selectedRange)
       reloadData()
@@ -500,19 +508,27 @@ final class SpreadsheetGridView: NSView, NSTextFieldDelegate {
     guard editor == nil else { return }
     let original = document.rawInput(at: activeCell)
     editingOriginalValue = original
-    let field = SpreadsheetCellEditorField(
+    let field = SpreadsheetCellEditorView(
       frame: cellRect(activeCell).insetBy(dx: 1, dy: 1)
     )
-    field.stringValue = replacement ?? original
+    field.string = replacement ?? original
     field.font = .systemFont(ofSize: 12)
-    field.isBordered = true
-    field.isBezeled = true
-    field.bezelStyle = .squareBezel
+    field.textColor = .labelColor
+    field.isRichText = false
+    field.importsGraphics = false
+    field.isHorizontallyResizable = false
+    field.isVerticallyResizable = false
     field.drawsBackground = true
     field.backgroundColor = .textBackgroundColor
-    field.focusRingType = .none
-    field.cell?.usesSingleLineMode = true
-    field.cell?.lineBreakMode = .byClipping
+    field.textContainerInset = NSSize(width: 4, height: 3)
+    field.textContainer?.lineFragmentPadding = 0
+    field.textContainer?.maximumNumberOfLines = 1
+    field.textContainer?.lineBreakMode = .byClipping
+    field.textContainer?.widthTracksTextView = true
+    field.textContainer?.heightTracksTextView = true
+    field.wantsLayer = true
+    field.layer?.borderWidth = 1
+    field.layer?.borderColor = NSColor.controlAccentColor.cgColor
     field.delegate = self
     field.onCommitAndMove = { [weak self] rowDelta, columnDelta in
       self?.finishEditing(
@@ -522,18 +538,18 @@ final class SpreadsheetGridView: NSView, NSTextFieldDelegate {
     }
     addSubview(field)
     editor = field
-    updateEditingReferences(field.stringValue)
+    updateEditingReferences(field.string)
     window?.makeFirstResponder(field)
-    field.currentEditor()?.selectedRange = NSRange(
-      location: (field.stringValue as NSString).length,
+    field.setSelectedRange(NSRange(
+      location: (field.string as NSString).length,
       length: 0
-    )
+    ))
   }
 
   private func finishEditing(commit: Bool, movement: (Int, Int)? = nil) {
     guard let field = editor, !isFinishingEdit else { return }
     isFinishingEdit = true
-    let value = field.stringValue
+    let value = field.string
     field.delegate = nil
     field.removeFromSuperview()
     editor = nil
@@ -549,43 +565,13 @@ final class SpreadsheetGridView: NSView, NSTextFieldDelegate {
     }
   }
 
-  func controlTextDidChange(_ notification: Notification) {
-    guard let field = notification.object as? NSTextField, field === editor else { return }
-    updateEditingReferences(field.stringValue)
+  func textDidChange(_ notification: Notification) {
+    guard let field = notification.object as? NSTextView, field === editor else { return }
+    updateEditingReferences(field.string)
   }
 
-  func controlTextDidEndEditing(_ notification: Notification) {
+  func textDidEndEditing(_ notification: Notification) {
     finishEditing(commit: true)
-  }
-
-  func control(
-    _ control: NSControl,
-    textView: NSTextView,
-    doCommandBy commandSelector: Selector
-  ) -> Bool {
-    switch commandSelector {
-    case #selector(NSResponder.insertNewline(_:)),
-      #selector(NSResponder.insertNewlineIgnoringFieldEditor(_:)):
-      finishEditing(commit: true, movement: (1, 0))
-      return true
-    case #selector(NSResponder.insertTab(_:)):
-      finishEditing(commit: true, movement: (0, 1))
-      return true
-    case #selector(NSResponder.insertBacktab(_:)):
-      finishEditing(commit: true, movement: (0, -1))
-      return true
-    case #selector(NSResponder.moveUp(_:)):
-      finishEditing(commit: true, movement: (-1, 0))
-      return true
-    case #selector(NSResponder.moveDown(_:)):
-      finishEditing(commit: true, movement: (1, 0))
-      return true
-    case #selector(NSResponder.cancelOperation(_:)):
-      finishEditing(commit: false)
-      return true
-    default:
-      return false
-    }
   }
 
   private func updateEditingReferences(_ rawInput: String) {
