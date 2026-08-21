@@ -1,0 +1,209 @@
+import AppKit
+
+protocol SpreadsheetToolbarViewDelegate: AnyObject {
+  func spreadsheetToolbar(_ toolbar: SpreadsheetToolbarView, renameTo name: String)
+  func spreadsheetToolbarDidRequestBold(_ toolbar: SpreadsheetToolbarView)
+  func spreadsheetToolbarDidRequestItalic(_ toolbar: SpreadsheetToolbarView)
+  func spreadsheetToolbarDidRequestDate(_ toolbar: SpreadsheetToolbarView)
+  func spreadsheetToolbarDidRequestPercent(_ toolbar: SpreadsheetToolbarView)
+  func spreadsheetToolbarDidRequestCurrency(_ toolbar: SpreadsheetToolbarView)
+  func spreadsheetToolbarDidRequestImport(_ toolbar: SpreadsheetToolbarView)
+  func spreadsheetToolbarDidRequestChart(_ toolbar: SpreadsheetToolbarView)
+  func spreadsheetToolbarDidRequestClose(_ toolbar: SpreadsheetToolbarView)
+}
+
+final class SpreadsheetToolbarView: NSView, NSTextFieldDelegate {
+  weak var delegate: SpreadsheetToolbarViewDelegate?
+
+  private let titleField = NSTextField()
+  private let addressLabel = NSTextField(labelWithString: "A1")
+  private let boldButton: NSButton
+  private let italicButton: NSButton
+  private let dateButton: NSButton
+  private let percentButton: NSButton
+  private let currencyButton: NSButton
+  private let importButton: NSButton
+  private let chartButton: NSButton
+  private let closeButton: NSButton
+
+  override init(frame frameRect: NSRect) {
+    boldButton = Self.makeButton(symbol: "bold", tooltip: "Bold (⌘B)")
+    italicButton = Self.makeButton(symbol: "italic", tooltip: "Italic (⌘I)")
+    dateButton = Self.makeButton(symbol: "calendar", tooltip: "Date format")
+    percentButton = Self.makeButton(symbol: "percent", tooltip: "Percent format")
+    currencyButton = Self.makeButton(
+      symbol: "dollarsign.circle",
+      tooltip: "Currency format"
+    )
+    importButton = Self.makeButton(
+      symbol: "square.and.arrow.down",
+      tooltip: "Import CSV or TSV"
+    )
+    chartButton = Self.makeButton(symbol: "chart.xyaxis.line", tooltip: "Charts")
+    closeButton = Self.makeButton(symbol: "xmark", tooltip: "Close spreadsheet")
+    super.init(frame: frameRect)
+    configure()
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) has not been implemented")
+  }
+
+  func updateTitle(_ title: String) {
+    guard titleField.currentEditor() == nil else { return }
+    titleField.stringValue = title
+  }
+
+  func updateSelection(address: String, style: CellStyle) {
+    addressLabel.stringValue = address
+    boldButton.state = style.isBold ? .on : .off
+    italicButton.state = style.isItalic ? .on : .off
+    dateButton.state = style.displayFormat == .date ? .on : .off
+    percentButton.state = style.displayFormat == .percent ? .on : .off
+    if case .currency = style.displayFormat {
+      currencyButton.state = .on
+    } else {
+      currencyButton.state = .off
+    }
+  }
+
+  override func mouseDown(with event: NSEvent) {
+    window?.performDrag(with: event)
+  }
+
+  func controlTextDidEndEditing(_ notification: Notification) {
+    delegate?.spreadsheetToolbar(self, renameTo: titleField.stringValue)
+  }
+
+  private func configure() {
+    wantsLayer = true
+    layer?.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.72).cgColor
+
+    titleField.stringValue = "Spreadsheet"
+    titleField.placeholderString = "Spreadsheet name"
+    titleField.font = .systemFont(ofSize: 12, weight: .semibold)
+    titleField.isBordered = false
+    titleField.isBezeled = false
+    titleField.drawsBackground = false
+    titleField.focusRingType = .none
+    titleField.cell?.usesSingleLineMode = true
+    titleField.cell?.lineBreakMode = .byTruncatingTail
+    titleField.delegate = self
+    titleField.setAccessibilityLabel("Spreadsheet name")
+
+    addressLabel.font = .monospacedDigitSystemFont(ofSize: 10, weight: .medium)
+    addressLabel.textColor = .secondaryLabelColor
+    addressLabel.alignment = .center
+    addressLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+    configureButton(boldButton, action: #selector(bold))
+    configureButton(italicButton, action: #selector(italic))
+    configureButton(dateButton, action: #selector(date))
+    configureButton(percentButton, action: #selector(percent))
+    configureButton(currencyButton, action: #selector(currency))
+    configureButton(importButton, action: #selector(importData))
+    configureButton(chartButton, action: #selector(chart))
+    configureButton(closeButton, action: #selector(close))
+    for button in [importButton, chartButton, closeButton] {
+      button.setButtonType(.momentaryPushIn)
+    }
+
+    let stack = NSStackView(views: [
+      closeButton,
+      Self.separator(),
+      titleField,
+      addressLabel,
+      Self.separator(),
+      boldButton,
+      italicButton,
+      dateButton,
+      percentButton,
+      currencyButton,
+      Self.separator(),
+      importButton,
+      chartButton,
+    ])
+    stack.orientation = .horizontal
+    stack.alignment = .centerY
+    stack.spacing = 2
+    stack.translatesAutoresizingMaskIntoConstraints = false
+    addSubview(stack)
+
+    NSLayoutConstraint.activate([
+      stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 5),
+      stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -5),
+      stack.topAnchor.constraint(equalTo: topAnchor, constant: 2),
+      stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -2),
+      titleField.widthAnchor.constraint(greaterThanOrEqualToConstant: 110),
+      addressLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: 42),
+    ])
+    titleField.setContentHuggingPriority(.defaultLow, for: .horizontal)
+  }
+
+  private func configureButton(_ button: NSButton, action: Selector) {
+    button.target = self
+    button.action = action
+    button.translatesAutoresizingMaskIntoConstraints = false
+    NSLayoutConstraint.activate([
+      button.widthAnchor.constraint(equalToConstant: 26),
+      button.heightAnchor.constraint(equalToConstant: 26),
+    ])
+  }
+
+  @objc private func bold() {
+    delegate?.spreadsheetToolbarDidRequestBold(self)
+  }
+
+  @objc private func italic() {
+    delegate?.spreadsheetToolbarDidRequestItalic(self)
+  }
+
+  @objc private func date() {
+    delegate?.spreadsheetToolbarDidRequestDate(self)
+  }
+
+  @objc private func percent() {
+    delegate?.spreadsheetToolbarDidRequestPercent(self)
+  }
+
+  @objc private func currency() {
+    delegate?.spreadsheetToolbarDidRequestCurrency(self)
+  }
+
+  @objc private func importData() {
+    delegate?.spreadsheetToolbarDidRequestImport(self)
+  }
+
+  @objc private func chart() {
+    delegate?.spreadsheetToolbarDidRequestChart(self)
+  }
+
+  @objc private func close() {
+    delegate?.spreadsheetToolbarDidRequestClose(self)
+  }
+
+  private static func makeButton(symbol: String, tooltip: String) -> NSButton {
+    let image = NSImage(systemSymbolName: symbol, accessibilityDescription: tooltip)
+      ?? NSImage(size: NSSize(width: 14, height: 14))
+    let button = NSButton(image: image, target: nil, action: nil)
+    button.bezelStyle = .accessoryBarAction
+    button.isBordered = false
+    button.imagePosition = .imageOnly
+    button.toolTip = tooltip
+    button.setButtonType(.toggle)
+    return button
+  }
+
+  private static func separator() -> NSView {
+    let view = NSView()
+    view.wantsLayer = true
+    view.layer?.backgroundColor = NSColor.separatorColor.cgColor
+    view.translatesAutoresizingMaskIntoConstraints = false
+    NSLayoutConstraint.activate([
+      view.widthAnchor.constraint(equalToConstant: 1),
+      view.heightAnchor.constraint(equalToConstant: 17),
+    ])
+    return view
+  }
+}

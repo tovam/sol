@@ -547,6 +547,23 @@ final class SpreadsheetDocument {
   }
 
   private static func format(number: Double, as format: CellDisplayFormat) -> String {
+    if format == .date {
+      var components = DateComponents()
+      components.calendar = Calendar(identifier: .gregorian)
+      components.timeZone = TimeZone(secondsFromGMT: 0)
+      components.year = 1899
+      components.month = 12
+      components.day = 30
+      if let epoch = components.date {
+        let date = epoch.addingTimeInterval(number * 86_400)
+        let formatter = DateFormatter()
+        formatter.locale = .current
+        formatter.dateStyle = .short
+        formatter.timeStyle = .none
+        return formatter.string(from: date)
+      }
+    }
+
     let formatter = NumberFormatter()
     formatter.locale = .current
     formatter.minimumFractionDigits = 0
