@@ -2,6 +2,7 @@ import AppKit
 
 final class SpreadsheetSettingsPopoverController: NSViewController {
   var onChange: ((SpreadsheetSettings) -> Void)?
+  var onDelete: (() -> Void)?
 
   private static let currencies: [(code: String, title: String)] = [
     ("EUR", "€  EUR"),
@@ -34,7 +35,7 @@ final class SpreadsheetSettingsPopoverController: NSViewController {
   }
 
   override func loadView() {
-    let root = NSView(frame: NSRect(x: 0, y: 0, width: 340, height: 132))
+    let root = NSView(frame: NSRect(x: 0, y: 0, width: 340, height: 178))
 
     localeControl.target = self
     localeControl.action = #selector(changeLocale)
@@ -90,6 +91,27 @@ final class SpreadsheetSettingsPopoverController: NSViewController {
     archiveExplanation.translatesAutoresizingMaskIntoConstraints = false
     root.addSubview(archiveExplanation)
 
+    let separator = NSBox()
+    separator.boxType = .separator
+    separator.translatesAutoresizingMaskIntoConstraints = false
+    root.addSubview(separator)
+
+    let deleteButton = NSButton(
+      title: "Delete this spreadsheet…",
+      target: self,
+      action: #selector(deleteSpreadsheet)
+    )
+    deleteButton.image = NSImage(
+      systemSymbolName: "trash",
+      accessibilityDescription: "Delete this spreadsheet"
+    )
+    deleteButton.imagePosition = .imageLeading
+    deleteButton.bezelStyle = .rounded
+    deleteButton.contentTintColor = .systemRed
+    deleteButton.setAccessibilityLabel("Delete this spreadsheet")
+    deleteButton.translatesAutoresizingMaskIntoConstraints = false
+    root.addSubview(deleteButton)
+
     NSLayoutConstraint.activate([
       grid.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 12),
       grid.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -12),
@@ -97,6 +119,13 @@ final class SpreadsheetSettingsPopoverController: NSViewController {
       archiveExplanation.leadingAnchor.constraint(equalTo: grid.leadingAnchor),
       archiveExplanation.trailingAnchor.constraint(equalTo: grid.trailingAnchor),
       archiveExplanation.topAnchor.constraint(equalTo: grid.bottomAnchor, constant: 6),
+      separator.leadingAnchor.constraint(equalTo: grid.leadingAnchor),
+      separator.trailingAnchor.constraint(equalTo: grid.trailingAnchor),
+      separator.topAnchor.constraint(equalTo: archiveExplanation.bottomAnchor, constant: 9),
+      deleteButton.leadingAnchor.constraint(equalTo: grid.leadingAnchor),
+      deleteButton.trailingAnchor.constraint(equalTo: grid.trailingAnchor),
+      deleteButton.topAnchor.constraint(equalTo: separator.bottomAnchor, constant: 7),
+      deleteButton.heightAnchor.constraint(equalToConstant: 26),
     ])
 
     view = root
@@ -157,5 +186,9 @@ final class SpreadsheetSettingsPopoverController: NSViewController {
     guard archiveCheckbox.state == .on else { return }
     settings.scheduledArchiveAt = archiveDatePicker.dateValue
     onChange?(settings)
+  }
+
+  @objc private func deleteSpreadsheet() {
+    onDelete?()
   }
 }

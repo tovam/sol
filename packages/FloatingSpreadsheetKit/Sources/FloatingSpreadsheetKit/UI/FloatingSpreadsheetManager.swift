@@ -205,6 +205,10 @@ public final class FloatingSpreadsheetManager {
     controller.onOpenChart = { [weak self] chart in
       self?.presentChart(chart, document: document)
     }
+    controller.onDelete = { [weak self] in
+      guard let self else { return }
+      try self.deleteSpreadsheet(id: document.id.uuidString)
+    }
     spreadsheetWindows[document.id] = controller
     controller.presentCentered()
   }

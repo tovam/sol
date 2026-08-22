@@ -7,6 +7,7 @@ final class SpreadsheetWindowController: NSWindowController, NSWindowDelegate,
 
   var onClose: (() -> Void)?
   var onOpenChart: ((SpreadsheetChartDefinition) -> Void)?
+  var onDelete: (() throws -> Void)?
 
   private let spreadsheetDocument: SpreadsheetDocument
   private let panel: FloatingSpreadsheetPanel
@@ -308,6 +309,9 @@ final class SpreadsheetWindowController: NSWindowController, NSWindowDelegate,
     content.onChange = { [weak self] settings in
       self?.spreadsheetDocument.updateSettings(settings)
     }
+    content.onDelete = { [weak self] in
+      self?.confirmDeleteSpreadsheet()
+    }
     let popover = NSPopover()
     popover.behavior = .transient
     popover.contentSize = content.view.frame.size
@@ -319,6 +323,32 @@ final class SpreadsheetWindowController: NSWindowController, NSWindowDelegate,
       of: positioningView,
       preferredEdge: .maxY
     )
+  }
+
+  private func confirmDeleteSpreadsheet() {
+    settingsPopover?.close()
+    let alert = NSAlert()
+    alert.alertStyle = .critical
+    alert.messageText = "Delete “\(spreadsheetDocument.name)”?"
+    alert.informativeText = "This permanently deletes the spreadsheet and its charts. This action cannot be undone."
+    alert.addButton(withTitle: "Delete")
+    alert.addButton(withTitle: "Cancel")
+    alert.buttons.first?.hasDestructiveAction = true
+    alert.beginSheetModal(for: panel) { [weak self] response in
+      guard response == .alertFirstButtonReturn, let self else { return }
+      do {
+        guard let onDelete else {
+          throw SpreadsheetWindowDeletionError.unavailable
+        }
+        try onDelete()
+      } catch {
+        let errorAlert = NSAlert()
+        errorAlert.alertStyle = .warning
+        errorAlert.messageText = "Could not delete spreadsheet"
+        errorAlert.informativeText = error.localizedDescription
+        errorAlert.runModal()
+      }
+    }
   }
 
   private func refreshToolbarSelection() {
@@ -334,5 +364,13 @@ final class SpreadsheetWindowController: NSWindowController, NSWindowDelegate,
   private func validateAlwaysOnTop() {
     guard panel.level != .floating else { return }
     panel.close()
+  }
+}
+
+private enum SpreadsheetWindowDeletionError: LocalizedError {
+  case unavailable
+
+  var errorDescription: String? {
+    "Spreadsheet deletion is unavailable."
   }
 }
