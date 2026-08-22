@@ -5,9 +5,19 @@ import SwiftUI
 public final class FloatingStopwatchManager {
   public static let shared = FloatingStopwatchManager()
 
+  public typealias SpreadsheetExporter = (_ name: String, _ rows: [[String]]) throws -> Void
+
   private var controller: FloatingStopwatchWindowController?
+  private var spreadsheetExporter: SpreadsheetExporter?
 
   private init() {}
+
+  public func configureSpreadsheetExporter(_ exporter: @escaping SpreadsheetExporter) {
+    onMain { [weak self] in
+      self?.spreadsheetExporter = exporter
+      self?.controller?.spreadsheetExporter = exporter
+    }
+  }
 
   public func presentStopwatch() {
     onMain { [self] in
@@ -16,7 +26,9 @@ public final class FloatingStopwatchManager {
         return
       }
 
-      let controller = FloatingStopwatchWindowController()
+      let controller = FloatingStopwatchWindowController(
+        spreadsheetExporter: spreadsheetExporter
+      )
       controller.onClose = { [weak self, weak controller] in
         guard self?.controller === controller else { return }
         self?.controller = nil
@@ -37,12 +49,14 @@ public final class FloatingStopwatchManager {
 
 private final class FloatingStopwatchWindowController: NSWindowController, NSWindowDelegate {
   var onClose: (() -> Void)?
+  var spreadsheetExporter: FloatingStopwatchManager.SpreadsheetExporter?
 
   private let panel = FloatingStopwatchPanel(surfaceSize: NSSize(width: 326, height: 252))
   private let model = FloatingStopwatchModel()
   private var didClose = false
 
-  init() {
+  init(spreadsheetExporter: FloatingStopwatchManager.SpreadsheetExporter?) {
+    self.spreadsheetExporter = spreadsheetExporter
     super.init(window: panel)
     panel.delegate = self
     panel.keyboardHandler = { [weak self] action in
@@ -96,6 +110,9 @@ private final class FloatingStopwatchWindowController: NSWindowController, NSWin
     let backdrop = panel.installRoundedContent()
     let rootView = FloatingStopwatchView(
       model: model,
+      onCreateSpreadsheet: { [weak self] in
+        self?.createSpreadsheet()
+      },
       onClose: { [weak panel] in panel?.close() }
     )
     let host = NSHostingView(rootView: rootView)
@@ -107,6 +124,26 @@ private final class FloatingStopwatchWindowController: NSWindowController, NSWin
       host.topAnchor.constraint(equalTo: backdrop.topAnchor),
       host.bottomAnchor.constraint(equalTo: backdrop.bottomAnchor),
     ])
+  }
+
+  private func createSpreadsheet() {
+    guard let spreadsheetExporter else {
+      showSpreadsheetExportError("Spreadsheet export is unavailable.")
+      return
+    }
+    do {
+      try spreadsheetExporter(model.spreadsheetName(), model.spreadsheetRows())
+    } catch {
+      showSpreadsheetExportError(error.localizedDescription)
+    }
+  }
+
+  private func showSpreadsheetExportError(_ message: String) {
+    let alert = NSAlert()
+    alert.alertStyle = .warning
+    alert.messageText = "Could not create spreadsheet"
+    alert.informativeText = message
+    alert.beginSheetModal(for: panel)
   }
 
   private func positionAtScreenCenter() {
@@ -374,6 +411,35 @@ private final class FloatingStopwatchModel: ObservableObject {
     refreshTimer = nil
   }
 
+  func spreadsheetName(now: Date = Date()) -> String {
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.dateFormat = "yyyy-MM-dd HH-mm-ss"
+    return "Stopwatch — \(formatter.string(from: now))"
+  }
+
+  func spreadsheetRows() -> [[String]] {
+    var result = [["Lap", "Split (s)", "Total (s)"]]
+    for lap in laps {
+      result.append([
+        String(lap.number),
+        Self.exportedSeconds(lap.split),
+        Self.exportedSeconds(lap.total),
+      ])
+    }
+
+    let previousTotal = laps.last?.total ?? 0
+    let finalSplit = max(0, elapsed - previousTotal)
+    if laps.isEmpty || finalSplit >= 0.005 {
+      result.append([
+        String(laps.count + 1),
+        Self.exportedSeconds(finalSplit),
+        Self.exportedSeconds(elapsed),
+      ])
+    }
+    return result
+  }
+
   private func startRefreshing() {
     stopRefreshing()
     let timer = Timer(timeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
@@ -390,10 +456,22 @@ private final class FloatingStopwatchModel: ObservableObject {
     }
     elapsed = accumulated + max(0, ProcessInfo.processInfo.systemUptime - startedAt)
   }
+
+  private static func exportedSeconds(_ interval: TimeInterval) -> String {
+    var formatted = String(
+      format: "%.3f",
+      locale: Locale(identifier: "en_US_POSIX"),
+      max(0, interval)
+    )
+    while formatted.last == "0" { formatted.removeLast() }
+    if formatted.last == "." { formatted.removeLast() }
+    return formatted
+  }
 }
 
 private struct FloatingStopwatchView: View {
   @ObservedObject var model: FloatingStopwatchModel
+  let onCreateSpreadsheet: () -> Void
   let onClose: () -> Void
 
   var body: some View {
@@ -420,6 +498,18 @@ private struct FloatingStopwatchView: View {
       Text(model.isRunning ? "RUNNING" : (model.elapsed > 0 ? "STOPPED" : "READY"))
         .font(.system(size: 9, weight: .semibold, design: .rounded))
         .foregroundStyle(model.isRunning ? Color.green : Color.secondary)
+      Button(action: onCreateSpreadsheet) {
+        Image(systemName: "tablecells")
+          .frame(width: 18, height: 18)
+      }
+      .buttonStyle(.plain)
+      .disabled(model.elapsed <= 0 && model.laps.isEmpty)
+      .foregroundStyle(
+        model.elapsed > 0 || !model.laps.isEmpty
+          ? Color.primary
+          : Color.secondary.opacity(0.4)
+      )
+      .help("Create spreadsheet from stopwatch data")
       Button(action: onClose) {
         Image(systemName: "xmark")
           .frame(width: 18, height: 18)

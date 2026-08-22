@@ -12,6 +12,12 @@ class SolNative: RCTEventEmitter {
 
   override init() {
     super.init()
+    FloatingStopwatchManager.shared.configureSpreadsheetExporter { name, rows in
+      _ = try FloatingSpreadsheetManager.shared.createSpreadsheet(
+        name: name,
+        rows: rows
+      )
+    }
     SolEmitter.sharedInstance.registerEmitter(emitter: self)
     ApplicationSearcher.shared.onApplicationsChanged = {
       self.sendEvent(

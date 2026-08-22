@@ -55,6 +55,34 @@ public final class FloatingSpreadsheetManager {
     }
   }
 
+  @discardableResult
+  public func createSpreadsheet(
+    name: String,
+    rows: [[String]]
+  ) throws -> FloatingSpreadsheetSummary {
+    try onMain {
+      let document = try repository.createDocument()
+      do {
+        document.rename(to: name)
+        if !rows.isEmpty {
+          document.replaceCells(
+            startingAt: CellAddress(row: 0, column: 0),
+            rows: rows,
+            firstRowIsHeader: true
+          )
+        }
+        try repository.saveImmediately(document)
+      } catch {
+        try? repository.deleteDocument(id: document.id)
+        throw error
+      }
+      documents[document.id] = document
+      presentSpreadsheet(document)
+      rescheduleArchiveTimer()
+      return document.summary
+    }
+  }
+
   public func savedSpreadsheets() throws -> [FloatingSpreadsheetSummary] {
     try onMain {
       try archiveDueSpreadsheets()
