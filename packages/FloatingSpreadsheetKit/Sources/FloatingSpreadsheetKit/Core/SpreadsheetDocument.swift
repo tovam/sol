@@ -432,8 +432,62 @@ final class SpreadsheetDocument {
     guard let chart = charts.first(where: { $0.id == id }) else { return }
     var changed = chart
     changed.isFrozen = frozen
-    changed.frozenSeries = frozen ? chartSeries(for: chart, ignoringFrozenState: true) : []
+    changed.frozenSeries = frozen ? chartSnapshotSeries(for: chart) : []
     updateChart(changed, label: frozen ? "Freeze chart" : "Unfreeze chart")
+  }
+
+  func chartSnapshotSeries(
+    for chart: SpreadsheetChartDefinition
+  ) -> [SpreadsheetChartSeries] {
+    guard chart.type == .histogram else {
+      return chartSeries(for: chart, ignoringFrozenState: true)
+    }
+    let points = histogramSamples(for: chart, ignoringFrozenState: true)
+      .enumerated()
+      .map { index, sample in
+        SpreadsheetChartPoint(
+          category: String(index + 1),
+          x: nil,
+          value: sample.value,
+          valueIsTime: sample.isDuration
+        )
+      }
+    return points.isEmpty ? [] : [SpreadsheetChartSeries(name: "Values", points: points)]
+  }
+
+  func histogramSamples(
+    for chart: SpreadsheetChartDefinition,
+    ignoringFrozenState: Bool = false
+  ) -> [SpreadsheetHistogramSample] {
+    if chart.isFrozen && !ignoringFrozenState {
+      return chart.frozenSeries.flatMap { series in
+        series.points.compactMap { point in
+          guard point.value.isFinite else { return nil }
+          return SpreadsheetHistogramSample(
+            value: point.value,
+            isDuration: point.valueIsTime == true
+          )
+        }
+      }
+    }
+
+    let range = chart.sourceRange
+    let startRow = range.start.row + (chart.firstRowContainsHeaders ? 1 : 0)
+    guard startRow <= range.end.row else { return [] }
+    var samples: [SpreadsheetHistogramSample] = []
+    for row in startRow...range.end.row {
+      for column in range.start.column...range.end.column {
+        switch value(at: CellAddress(row: row, column: column)) {
+        case .number(let number) where number.isFinite:
+          samples.append(SpreadsheetHistogramSample(value: number, isDuration: false))
+        case .time(let duration) where duration.isFinite:
+          samples.append(SpreadsheetHistogramSample(value: duration, isDuration: true))
+        default:
+          continue
+        }
+      }
+    }
+    return samples
   }
 
   func chartSeries(

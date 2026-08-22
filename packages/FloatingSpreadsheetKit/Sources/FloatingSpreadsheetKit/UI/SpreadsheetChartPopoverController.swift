@@ -41,9 +41,12 @@ final class SpreadsheetChartPopoverController: NSViewController {
     typePopup.addItems(withTitles: SpreadsheetChartType.allCases.map {
       $0.rawValue.capitalized
     })
+    typePopup.target = self
+    typePopup.action = #selector(chartTypeChanged)
     orientationPopup.addItems(withTitles: ["Series in columns", "Series in rows"])
     headerCheckbox.state = .on
     labelsCheckbox.state = .on
+    updateControlsForSelectedType()
 
     let grid = NSGridView(views: [
       [NSTextField(labelWithString: "Title"), titleField],
@@ -117,16 +120,39 @@ final class SpreadsheetChartPopoverController: NSViewController {
     }
     validationLabel.isHidden = true
     let types = SpreadsheetChartType.allCases
+    let type = types[max(0, typePopup.indexOfSelectedItem)]
     let title = titleField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
     let chart = SpreadsheetChartDefinition(
       title: title.isEmpty ? "Chart" : title,
-      type: types[max(0, typePopup.indexOfSelectedItem)],
+      type: type,
       sourceRange: range,
       firstRowContainsHeaders: headerCheckbox.state == .on,
-      firstColumnContainsLabels: labelsCheckbox.state == .on,
-      seriesOrientation: orientationPopup.indexOfSelectedItem == 1 ? .rows : .columns
+      firstColumnContainsLabels: type == .histogram ? false : labelsCheckbox.state == .on,
+      seriesOrientation: type == .histogram
+        ? .columns
+        : (orientationPopup.indexOfSelectedItem == 1 ? .rows : .columns)
     )
     onCreate?(chart)
+  }
+
+  @objc private func chartTypeChanged() {
+    updateControlsForSelectedType()
+  }
+
+  private func updateControlsForSelectedType() {
+    let types = SpreadsheetChartType.allCases
+    guard typePopup.indexOfSelectedItem >= 0,
+      typePopup.indexOfSelectedItem < types.count
+    else {
+      return
+    }
+    let isHistogram = types[typePopup.indexOfSelectedItem] == .histogram
+    labelsCheckbox.isEnabled = !isHistogram
+    orientationPopup.isEnabled = !isHistogram
+    labelsCheckbox.toolTip = isHistogram
+      ? "Histograms use every numeric cell in the range."
+      : nil
+    orientationPopup.toolTip = labelsCheckbox.toolTip
   }
 
   @objc private func openSavedChart() {

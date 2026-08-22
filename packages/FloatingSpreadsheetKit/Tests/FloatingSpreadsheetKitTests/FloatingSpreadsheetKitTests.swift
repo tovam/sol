@@ -218,6 +218,65 @@ final class FloatingSpreadsheetKitTests: XCTestCase {
     XCTAssertNil(point.x)
   }
 
+  func testHistogramUsesOptimalBinsAndPreservesEverySample() throws {
+    let samples = (1...100).map {
+      SpreadsheetHistogramSample(value: Double($0), isDuration: false)
+    }
+    let result = try XCTUnwrap(
+      SpreadsheetHistogramCalculator.calculate(samples: samples)
+    )
+
+    XCTAssertEqual(result.method, .freedmanDiaconis)
+    XCTAssertEqual(result.bins.reduce(0) { $0 + $1.count }, samples.count)
+    XCTAssertTrue((1...80).contains(result.bins.count))
+    XCTAssertEqual(
+      try XCTUnwrap(result.bins.last).cumulativePercentage,
+      1,
+      accuracy: 0.000_001
+    )
+  }
+
+  func testDurationHistogramUsesReadableDurationBoundariesAndBinStatistics() throws {
+    let minutes = [5, 10, 10, 15, 25, 30, 45, 60]
+    let samples = minutes.map {
+      SpreadsheetHistogramSample(
+        value: Double($0) / Double(24 * 60),
+        isDuration: true
+      )
+    }
+    let result = try XCTUnwrap(
+      SpreadsheetHistogramCalculator.calculate(samples: samples)
+    )
+
+    XCTAssertTrue(result.isDuration)
+    XCTAssertEqual(result.bins.reduce(0) { $0 + $1.count }, samples.count)
+    XCTAssertGreaterThan(result.binWidth, 0)
+    XCTAssertTrue(result.bins.contains { $0.count > 0 && $0.mean != nil })
+    XCTAssertEqual(
+      try XCTUnwrap(result.bins.last).cumulativePercentage,
+      1,
+      accuracy: 0.000_001
+    )
+  }
+
+  func testHistogramReadsSingleNumericColumnEvenWhenLabelOptionIsEnabled() {
+    let document = SpreadsheetDocument(name: "Histogram")
+    document.setRawInput("Duration", at: CellAddress(row: 0, column: 0))
+    document.setRawInput("0:05", at: CellAddress(row: 1, column: 0))
+    document.setRawInput("0:15", at: CellAddress(row: 2, column: 0))
+    let chart = SpreadsheetChartDefinition(
+      type: .histogram,
+      sourceRange: CellRange(
+        start: CellAddress(row: 0, column: 0),
+        end: CellAddress(row: 2, column: 0)
+      )
+    )
+
+    let samples = document.histogramSamples(for: chart)
+    XCTAssertEqual(samples.count, 2)
+    XCTAssertTrue(samples.allSatisfy(\.isDuration))
+  }
+
   func testChartAxisSettingsPersistAndLegacyChartsKeepAutomaticAxes() throws {
     let chart = SpreadsheetChartDefinition(
       sourceRange: CellRange(CellAddress(row: 0, column: 0)),

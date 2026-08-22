@@ -15,6 +15,7 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
   private let model: SpreadsheetChartViewModel
   private let chartHost: NSView
   private let toolbar = SpreadsheetChartToolbarView()
+  private var statisticsPopover: NSPopover?
   private var documentObserver: NSObjectProtocol?
   private var didClose = false
 
@@ -100,6 +101,7 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
     toolbar.onType = { [weak self] type in self?.changeType(type) }
     toolbar.onToggleFrozen = { [weak self] in self?.toggleFrozen() }
     toolbar.onOptions = { [weak self] in self?.showOptions() }
+    toolbar.onStatistics = { [weak self] in self?.showHistogramStatistics() }
     toolbar.onCopyPNG = { [weak self] in self?.copyAsPNG() }
     toolbar.onSavePNG = { [weak self] in self?.saveAsPNG() }
     toolbar.onReturnToSource = { [weak self] in self?.onReturnToSpreadsheet?() }
@@ -141,6 +143,9 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
   private func changeType(_ type: SpreadsheetChartType) {
     guard var chart = spreadsheetDocument.charts.first(where: { $0.id == chartID }) else { return }
     chart.type = type
+    if chart.isFrozen {
+      chart.frozenSeries = spreadsheetDocument.chartSnapshotSeries(for: chart)
+    }
     spreadsheetDocument.updateChart(chart, label: "Change chart type")
   }
 
@@ -184,6 +189,12 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
     let orientation = NSPopUpButton()
     orientation.addItems(withTitles: ["Series in columns", "Series in rows"])
     orientation.selectItem(at: chart.seriesOrientation == .columns ? 0 : 1)
+    if chart.type == .histogram {
+      labelsCheckbox.isEnabled = false
+      labelsCheckbox.toolTip = "Histograms use every numeric cell in the range."
+      orientation.isEnabled = false
+      orientation.toolTip = labelsCheckbox.toolTip
+    }
 
     let xTitleField = NSTextField(string: xAxis.title)
     xTitleField.placeholderString = "Optional"
@@ -247,7 +258,10 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
     xMaximumField.placeholderString = supportsXAxisDomain ? automaticPlaceholder : "Categorical axis"
     xMinimumField.isEnabled = supportsXAxisDomain
     xMaximumField.isEnabled = supportsXAxisDomain
-    xScalePopup.isEnabled = supportsXAxisDomain && !xUsesTime && !xUsesDate
+    xScalePopup.isEnabled = supportsXAxisDomain
+      && !xUsesTime
+      && !xUsesDate
+      && chart.type != .histogram
     if !xScalePopup.isEnabled { xScalePopup.selectItem(at: 0) }
 
     let yAutomaticPlaceholder = yUsesTime ? "Automatic or HH:mm" : "Automatic"
@@ -267,7 +281,7 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
     }
     referenceValueField.isEnabled = axisControlsEnabled
     referenceLabelField.isEnabled = axisControlsEnabled
-    lastValueLabelsCheckbox.isEnabled = axisControlsEnabled
+    lastValueLabelsCheckbox.isEnabled = axisControlsEnabled && chart.type != .histogram
 
     let generalGrid = NSGridView(views: [
       [NSTextField(labelWithString: "Title"), titleField],
@@ -430,10 +444,7 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
           }
         }
         if changed.isFrozen {
-          changed.frozenSeries = spreadsheetDocument.chartSeries(
-            for: changed,
-            ignoringFrozenState: true
-          )
+          changed.frozenSeries = spreadsheetDocument.chartSnapshotSeries(for: changed)
         }
         spreadsheetDocument.updateChart(changed, label: "Update chart settings")
       } catch {
@@ -570,6 +581,27 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
     toolbar.update(type: chart.type, isFrozen: chart.isFrozen)
   }
 
+  private func showHistogramStatistics() {
+    guard model.histogramResult != nil else {
+      NSSound.beep()
+      return
+    }
+    statisticsPopover?.close()
+    let popover = NSPopover()
+    popover.behavior = .transient
+    popover.animates = true
+    popover.contentSize = NSSize(width: 650, height: 380)
+    popover.contentViewController = NSHostingController(
+      rootView: SpreadsheetHistogramStatisticsView(model: model)
+    )
+    statisticsPopover = popover
+    popover.show(
+      relativeTo: toolbar.statisticsAnchor.bounds,
+      of: toolbar.statisticsAnchor,
+      preferredEdge: .minY
+    )
+  }
+
   private func copyAsPNG() {
     guard let data = SpreadsheetChartPNGExporter.pngData(for: chartHost) else {
       showExportError("The chart could not be rendered as a PNG image.")
@@ -653,6 +685,7 @@ private final class SpreadsheetChartToolbarView: NSView {
   var onType: ((SpreadsheetChartType) -> Void)?
   var onToggleFrozen: (() -> Void)?
   var onOptions: (() -> Void)?
+  var onStatistics: (() -> Void)?
   var onCopyPNG: (() -> Void)?
   var onSavePNG: (() -> Void)?
   var onReturnToSource: (() -> Void)?
@@ -670,6 +703,12 @@ private final class SpreadsheetChartToolbarView: NSView {
     symbol: "doc.on.doc",
     tooltip: "Copy chart as PNG"
   )
+  private let statisticsButton = SpreadsheetChartToolbarView.button(
+    symbol: "tablecells",
+    tooltip: "Histogram statistics"
+  )
+
+  var statisticsAnchor: NSView { statisticsButton }
 
   override init(frame frameRect: NSRect) {
     super.init(frame: frameRect)
@@ -694,11 +733,23 @@ private final class SpreadsheetChartToolbarView: NSView {
     freezeButton.action = #selector(toggleFrozen)
     copyButton.target = self
     copyButton.action = #selector(copyPNG)
+    statisticsButton.target = self
+    statisticsButton.action = #selector(showStatistics)
 
     let spacer = NSView()
     spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
     let stack = NSStackView(
-      views: [close, spacer, source, typeButton, freezeButton, copyButton, save, options]
+      views: [
+        close,
+        spacer,
+        source,
+        typeButton,
+        freezeButton,
+        statisticsButton,
+        copyButton,
+        save,
+        options,
+      ]
     )
     stack.orientation = .horizontal
     stack.alignment = .centerY
@@ -730,6 +781,7 @@ private final class SpreadsheetChartToolbarView: NSView {
       accessibilityDescription: isFrozen ? "Unfreeze data" : "Freeze live data"
     )
     freezeButton.contentTintColor = isFrozen ? .controlAccentColor : .secondaryLabelColor
+    statisticsButton.isHidden = type != .histogram
   }
 
   func showCopySucceeded() {
@@ -779,6 +831,7 @@ private final class SpreadsheetChartToolbarView: NSView {
 
   @objc private func toggleFrozen() { onToggleFrozen?() }
   @objc private func showOptions() { onOptions?() }
+  @objc private func showStatistics() { onStatistics?() }
   @objc private func copyPNG() { onCopyPNG?() }
   @objc private func savePNG() { onSavePNG?() }
   @objc private func returnToSource() { onReturnToSource?() }
@@ -807,6 +860,7 @@ private final class SpreadsheetChartToolbarView: NSView {
     case .area: return "chart.line.uptrend.xyaxis"
     case .scatter: return "chart.dots.scatter"
     case .pie: return "chart.pie"
+    case .histogram: return "chart.bar.xaxis"
     }
   }
 }
@@ -821,6 +875,8 @@ private struct SpreadsheetChartDatum: Identifiable {
   var value: Double
   var xIsTime: Bool
   var valueIsTime: Bool
+  var histogramLowerBound: Double?
+  var histogramUpperBound: Double?
 }
 
 private struct SpreadsheetChartHoverSelection: Identifiable {
@@ -833,6 +889,7 @@ private struct SpreadsheetChartHoverSelection: Identifiable {
 private final class SpreadsheetChartViewModel: ObservableObject {
   @Published private(set) var chart: SpreadsheetChartDefinition?
   @Published private(set) var data: [SpreadsheetChartDatum] = []
+  @Published private(set) var histogramResult: SpreadsheetHistogramResult? = nil
 
   private let document: SpreadsheetDocument
   private let chartID: UUID
@@ -863,9 +920,33 @@ private final class SpreadsheetChartViewModel: ObservableObject {
     guard let chart = document.charts.first(where: { $0.id == chartID }) else {
       self.chart = nil
       data = []
+      histogramResult = nil
       return
     }
     self.chart = chart
+    if chart.type == .histogram {
+      let result = SpreadsheetHistogramCalculator.calculate(
+        samples: document.histogramSamples(for: chart)
+      )
+      histogramResult = result
+      data = result?.bins.map { bin in
+        SpreadsheetChartDatum(
+          id: "histogram-\(bin.index)",
+          series: "Frequency",
+          category: histogramBinLabel(bin, isDuration: result?.isDuration == true),
+          x: bin.midpoint,
+          xDate: nil,
+          xIsNumeric: true,
+          value: Double(bin.count),
+          xIsTime: result?.isDuration == true,
+          valueIsTime: false,
+          histogramLowerBound: bin.lowerBound,
+          histogramUpperBound: bin.upperBound
+        )
+      } ?? []
+      return
+    }
+    histogramResult = nil
     data = document.chartSeries(for: chart).flatMap { series in
       series.points.enumerated().map { index, point in
         SpreadsheetChartDatum(
@@ -877,7 +958,9 @@ private final class SpreadsheetChartViewModel: ObservableObject {
           xIsNumeric: point.x != nil,
           value: point.value,
           xIsTime: point.xIsTime == true,
-          valueIsTime: point.valueIsTime == true
+          valueIsTime: point.valueIsTime == true,
+          histogramLowerBound: nil,
+          histogramUpperBound: nil
         )
       }
     }
@@ -885,7 +968,9 @@ private final class SpreadsheetChartViewModel: ObservableObject {
 
   func plottableData(for definition: SpreadsheetChartDefinition) -> [SpreadsheetChartDatum] {
     let hasNumericXAxis = definition.type == .scatter || usesNumericXAxis || usesTimeXAxis
-    let xScale = definition.effectiveXAxis.scale
+    let xScale = definition.type == .histogram
+      ? SpreadsheetChartAxisScale.linear
+      : definition.effectiveXAxis.scale
     let yScale = definition.effectiveYAxis.scale
     var result = data.filter { datum in
       let hasValidX = definition.type == .pie
@@ -908,6 +993,7 @@ private final class SpreadsheetChartViewModel: ObservableObject {
   }
 
   func lastDataBySeries(for definition: SpreadsheetChartDefinition) -> [SpreadsheetChartDatum] {
+    guard definition.type != .histogram else { return [] }
     var result: [String: SpreadsheetChartDatum] = [:]
     for datum in plottableData(for: definition) {
       guard let current = result[datum.series] else {
@@ -991,7 +1077,11 @@ private final class SpreadsheetChartViewModel: ObservableObject {
       return nil
     }
     return axisDomain(
-      values: plottableData(for: definition).map(\.x),
+      values: definition.type == .histogram
+        ? plottableData(for: definition).flatMap {
+          [$0.histogramLowerBound ?? $0.x, $0.histogramUpperBound ?? $0.x]
+        }
+        : plottableData(for: definition).map(\.x),
       configuration: definition.effectiveXAxis
     )
   }
@@ -1028,6 +1118,62 @@ private final class SpreadsheetChartViewModel: ObservableObject {
     formatter.numberStyle = .decimal
     formatter.maximumFractionDigits = 6
     return formatter.string(from: NSNumber(value: value)) ?? String(value)
+  }
+
+  func formattedXAxisValue(_ value: Double) -> String {
+    if chart?.type == .histogram, histogramResult?.isDuration == true {
+      return formattedDuration(value)
+    }
+    if usesTimeXAxis { return SpreadsheetTime.format(value) }
+    return formattedValue(value, isTime: false)
+  }
+
+  func histogramStatisticsText(_ result: SpreadsheetHistogramResult) -> String {
+    let format: (Double) -> String = { [weak self] value in
+      guard let self else { return String(value) }
+      return result.isDuration
+        ? self.formattedDuration(value)
+        : self.formattedValue(value, isTime: false)
+    }
+    let percentage: (Double) -> String = { value in
+      String(format: "%.1f%%", value * 100)
+    }
+    var lines = [
+      "Method\t\(result.method.rawValue)",
+      "Samples\t\(result.sampleCount)",
+      "Bin width\t\(format(result.binWidth))",
+      "Minimum\t\(format(result.minimum))",
+      "Maximum\t\(format(result.maximum))",
+      "Mean\t\(format(result.mean))",
+      "Median\t\(format(result.median))",
+      "Standard deviation\t\(format(result.standardDeviation))",
+      "",
+      "Bin\tn\t%\tCumulative %\tMean\tMedian\tStd. dev.\tObserved min\tObserved max",
+    ]
+    lines.append(contentsOf: result.bins.map { bin in
+      [
+        histogramBinLabel(bin, isDuration: result.isDuration),
+        String(bin.count),
+        percentage(bin.percentage),
+        percentage(bin.cumulativePercentage),
+        bin.mean.map(format) ?? "—",
+        bin.median.map(format) ?? "—",
+        bin.standardDeviation.map(format) ?? "—",
+        bin.minimum.map(format) ?? "—",
+        bin.maximum.map(format) ?? "—",
+      ].joined(separator: "\t")
+    })
+    return lines.joined(separator: "\n")
+  }
+
+  func formattedHistogramValue(_ value: Double, isDuration: Bool) -> String {
+    isDuration
+      ? formattedDuration(value)
+      : formattedValue(value, isTime: false)
+  }
+
+  func formattedHistogramPercentage(_ value: Double) -> String {
+    String(format: "%.1f%%", value * 100)
   }
 
   func yDomain(for definition: SpreadsheetChartDefinition) -> ClosedRange<Double>? {
@@ -1080,6 +1226,203 @@ private final class SpreadsheetChartViewModel: ObservableObject {
       }
     }
     return lower...upper
+  }
+
+  func histogramBinLabel(
+    _ bin: SpreadsheetHistogramBin,
+    isDuration: Bool
+  ) -> String {
+    let lower = isDuration
+      ? formattedDuration(bin.lowerBound)
+      : formattedValue(bin.lowerBound, isTime: false)
+    let upper = isDuration
+      ? formattedDuration(bin.upperBound)
+      : formattedValue(bin.upperBound, isTime: false)
+    return "[\(lower), \(upper)\(bin.includesUpperBound ? "]" : ")")"
+  }
+
+  private func formattedDuration(_ fractionOfDay: Double) -> String {
+    guard fractionOfDay.isFinite else { return "" }
+    let totalSeconds = Int((fractionOfDay * 86_400).rounded())
+    let sign = totalSeconds < 0 ? "−" : ""
+    let absoluteSeconds = abs(totalSeconds)
+    let hours = absoluteSeconds / 3_600
+    let minutes = (absoluteSeconds / 60) % 60
+    let seconds = absoluteSeconds % 60
+    if seconds == 0 {
+      return String(format: "%@%d:%02d", sign, hours, minutes)
+    }
+    return String(format: "%@%d:%02d:%02d", sign, hours, minutes, seconds)
+  }
+}
+
+private struct SpreadsheetHistogramStatisticsView: View {
+  @ObservedObject var model: SpreadsheetChartViewModel
+
+  var body: some View {
+    if let result = model.histogramResult {
+      VStack(alignment: .leading, spacing: 10) {
+        HStack(spacing: 8) {
+          Image(systemName: "chart.bar.xaxis")
+            .foregroundStyle(.secondary)
+          VStack(alignment: .leading, spacing: 1) {
+            Text("Histogram statistics")
+              .font(.system(size: 13, weight: .semibold))
+            Text("\(result.method.rawValue) bins · readable boundaries")
+              .font(.system(size: 10))
+              .foregroundStyle(.secondary)
+          }
+          Spacer()
+          Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(
+              model.histogramStatisticsText(result),
+              forType: .string
+            )
+          } label: {
+            Label("Copy", systemImage: "doc.on.doc")
+          }
+          .controlSize(.small)
+        }
+
+        HStack(spacing: 6) {
+          summaryValue("Samples", String(result.sampleCount))
+          summaryValue(
+            "Bin width",
+            model.formattedHistogramValue(result.binWidth, isDuration: result.isDuration)
+          )
+          summaryValue(
+            "Mean",
+            model.formattedHistogramValue(result.mean, isDuration: result.isDuration)
+          )
+          summaryValue(
+            "Median",
+            model.formattedHistogramValue(result.median, isDuration: result.isDuration)
+          )
+          summaryValue(
+            "Std. dev.",
+            model.formattedHistogramValue(
+              result.standardDeviation,
+              isDuration: result.isDuration
+            )
+          )
+        }
+
+        Divider()
+        histogramHeader
+        ScrollView {
+          LazyVStack(spacing: 0) {
+            ForEach(result.bins) { bin in
+              histogramRow(bin, result: result)
+            }
+          }
+        }
+        .background(Color.primary.opacity(0.025))
+        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .overlay {
+          RoundedRectangle(cornerRadius: 7, style: .continuous)
+            .stroke(Color.secondary.opacity(0.16), lineWidth: 0.5)
+        }
+      }
+      .padding(13)
+      .frame(width: 650, height: 380)
+    } else {
+      ContentUnavailableView("No histogram data", systemImage: "chart.bar.xaxis")
+        .frame(width: 650, height: 380)
+    }
+  }
+
+  private func summaryValue(_ title: String, _ value: String) -> some View {
+    VStack(alignment: .leading, spacing: 2) {
+      Text(title.uppercased())
+        .font(.system(size: 8, weight: .semibold))
+        .foregroundStyle(.secondary)
+      Text(value)
+        .font(.system(size: 11, weight: .medium, design: .monospaced))
+        .monospacedDigit()
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
+    }
+    .padding(.horizontal, 8)
+    .padding(.vertical, 6)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(Color.primary.opacity(0.045))
+    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+  }
+
+  private var histogramHeader: some View {
+    HStack(spacing: 6) {
+      columnHeader("BIN", width: 176, alignment: .leading)
+      columnHeader("N", width: 34)
+      columnHeader("%", width: 46)
+      columnHeader("CUM.", width: 54)
+      columnHeader("MEAN", width: 78)
+      columnHeader("MEDIAN", width: 78)
+      columnHeader("STD. DEV.", width: 82)
+    }
+    .padding(.horizontal, 7)
+  }
+
+  private func histogramRow(
+    _ bin: SpreadsheetHistogramBin,
+    result: SpreadsheetHistogramResult
+  ) -> some View {
+    HStack(spacing: 6) {
+      tableValue(
+        model.histogramBinLabel(bin, isDuration: result.isDuration),
+        width: 176,
+        alignment: .leading
+      )
+      tableValue(String(bin.count), width: 34)
+      tableValue(model.formattedHistogramPercentage(bin.percentage), width: 46)
+      tableValue(model.formattedHistogramPercentage(bin.cumulativePercentage), width: 54)
+      tableValue(
+        bin.mean.map {
+          model.formattedHistogramValue($0, isDuration: result.isDuration)
+        } ?? "—",
+        width: 78
+      )
+      tableValue(
+        bin.median.map {
+          model.formattedHistogramValue($0, isDuration: result.isDuration)
+        } ?? "—",
+        width: 78
+      )
+      tableValue(
+        bin.standardDeviation.map {
+          model.formattedHistogramValue($0, isDuration: result.isDuration)
+        } ?? "—",
+        width: 82
+      )
+    }
+    .padding(.horizontal, 7)
+    .frame(height: 24)
+    .background(bin.index.isMultiple(of: 2) ? Color.clear : Color.primary.opacity(0.025))
+  }
+
+  private func columnHeader(
+    _ value: String,
+    width: CGFloat,
+    alignment: Alignment = .trailing
+  ) -> some View {
+    Text(value)
+      .font(.system(size: 8, weight: .semibold))
+      .foregroundStyle(.secondary)
+      .frame(width: width, alignment: alignment)
+  }
+
+  private func tableValue(
+    _ value: String,
+    width: CGFloat,
+    alignment: Alignment = .trailing
+  ) -> some View {
+    Text(value)
+      .font(.system(size: 10, design: .monospaced))
+      .monospacedDigit()
+      .lineLimit(1)
+      .truncationMode(.middle)
+      .frame(width: width, alignment: alignment)
+      .help(value)
   }
 }
 
@@ -1208,13 +1551,24 @@ private struct SpreadsheetChartView: View {
           .foregroundStyle(by: .value("Series", datum.series))
           .symbolSize(42)
         }
-        case .pie:
+      case .pie:
           SectorMark(
             angle: .value("Value", abs(datum.value)),
             innerRadius: .ratio(0.48),
             angularInset: 1.2
           )
           .foregroundStyle(by: .value("Category", datum.category))
+      case .histogram:
+        if let lowerBound = datum.histogramLowerBound,
+          let upperBound = datum.histogramUpperBound
+        {
+          BarMark(
+            xStart: .value("Lower bound", lowerBound),
+            xEnd: .value("Upper bound", upperBound),
+            y: .value("Count", datum.value)
+          )
+          .foregroundStyle(Color.accentColor.gradient)
+        }
         }
       }
       if definition.type != .pie, let referenceLine = definition.referenceLine {
@@ -1330,7 +1684,7 @@ private struct SpreadsheetChartView: View {
         xDomain: model.xDomain(for: definition),
         xDateDomain: model.xDateDomain(for: definition),
         yDomain: model.yDomain(for: definition),
-        xScale: xAxis.scale,
+        xScale: definition.type == .histogram ? .linear : xAxis.scale,
         yScale: yAxis.scale
       )
     )
@@ -1355,7 +1709,19 @@ private struct SpreadsheetChartView: View {
             if xAxis.showsLabels {
               AxisValueLabel {
                 if let time = value.as(Double.self) {
-                  Text(SpreadsheetTime.format(time))
+                  Text(model.formattedXAxisValue(time))
+                }
+              }
+            }
+          }
+        } else if definition.type == .histogram {
+          AxisMarks(values: .automatic(desiredCount: 6)) { value in
+            if xAxis.showsGridLines { AxisGridLine() }
+            AxisTick()
+            if xAxis.showsLabels {
+              AxisValueLabel {
+                if let number = value.as(Double.self) {
+                  Text(model.formattedXAxisValue(number))
                 }
               }
             }
@@ -1371,7 +1737,19 @@ private struct SpreadsheetChartView: View {
     }
     .chartYAxis {
       if definition.type != .pie {
-        if model.usesTimeValueAxis {
+        if definition.type == .histogram {
+          AxisMarks(values: .automatic(desiredCount: 6)) { value in
+            if yAxis.showsGridLines { AxisGridLine() }
+            AxisTick()
+            if yAxis.showsLabels {
+              AxisValueLabel {
+                if let count = value.as(Double.self) {
+                  Text(String(Int(count.rounded())))
+                }
+              }
+            }
+          }
+        } else if model.usesTimeValueAxis {
           AxisMarks(values: .automatic(desiredCount: 6)) { value in
             if yAxis.showsGridLines { AxisGridLine() }
             AxisTick()
@@ -1471,8 +1849,9 @@ private struct SpreadsheetChartView: View {
 
   private func hoverTitle(_ selection: SpreadsheetChartHoverSelection) -> String {
     guard let anchor = selection.anchor else { return "" }
+    if model.chart?.type == .histogram { return anchor.category }
     if let date = anchor.xDate { return model.formattedDate(date) }
-    if model.usesTimeXAxis { return SpreadsheetTime.format(anchor.x) }
+    if model.usesTimeXAxis { return model.formattedXAxisValue(anchor.x) }
     if model.usesNumericXAxis { return model.formattedValue(anchor.x, isTime: false) }
     return anchor.category
   }

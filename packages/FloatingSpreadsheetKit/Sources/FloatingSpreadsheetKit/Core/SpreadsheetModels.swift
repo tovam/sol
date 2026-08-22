@@ -386,6 +386,7 @@ enum SpreadsheetChartType: String, Codable, CaseIterable {
   case area
   case scatter
   case pie
+  case histogram
 }
 
 enum SpreadsheetSeriesOrientation: String, Codable, CaseIterable {
