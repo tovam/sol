@@ -20,9 +20,6 @@ import type { IRootStore } from "store";
 import { getDefaultScriptsDirectoryPath } from "./config";
 import { ItemType } from "./ui.store";
 
-let folderWatchers: Array<
-	ReturnType<typeof solNative.createFolderWatcher>
-> = [];
 let scriptDirectoriesDisposer: IReactionDisposer | undefined;
 let onShowListener: EmitterSubscription | undefined;
 
@@ -205,38 +202,20 @@ export const createScriptsStore = (root: IRootStore) => {
 			onShowListener = undefined;
 			scriptDirectoriesDisposer?.();
 			scriptDirectoriesDisposer = undefined;
-			folderWatchers = [];
 		},
 	});
-
-	const refreshFolderWatchers = () => {
-		folderWatchers = [];
-		for (const scriptsDirectory of getScriptDirectories()) {
-			if (!solNative.exists(scriptsDirectory)) continue;
-			try {
-				folderWatchers.push(
-					solNative.createFolderWatcher(scriptsDirectory, () => {
-						store.loadScripts();
-					}),
-				);
-			} catch (error) {
-				console.error(
-					`Could not watch scripts directory ${scriptsDirectory}:`,
-					error,
-				);
-			}
-		}
-	};
 
 	scriptDirectoriesDisposer = reaction(
 		() => root.ui.scriptDirectories.slice(),
 		() => {
-			refreshFolderWatchers();
 			store.loadScripts();
 		},
 		{ fireImmediately: true },
 	);
 
+	// Scripts are consumed only while Sol is visible. Refreshing on each open
+	// keeps results current without a permanent recursive FSEvents stream that
+	// can flood the JS thread when a configured directory is busy.
 	onShowListener = solNative.addListener("onShow", () => {
 		store.loadScripts();
 	});
