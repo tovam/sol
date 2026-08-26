@@ -84,6 +84,16 @@ final class SolLaunchAgentController {
     } catch {
       NSLog("Could not notify the Sol watchdog of an intentional quit: \(error.localizedDescription)")
     }
+
+    // Stop the watchdog before Sol exits. Relying on the watchdog to notice
+    // the marker after the app has disappeared creates a race where it can
+    // relaunch Sol after a deliberate Quit. Keep the plist installed so
+    // launchd will load it again at the next login; opening Sol manually in
+    // the current session also bootstraps it again from setEnabled(true).
+    let status = launchctl(["bootout", serviceTarget])
+    if status != 0 {
+      NSLog("Could not stop the Sol watchdog after an intentional quit (\(status)); using the quit marker fallback.")
+    }
   }
 
   func prepareForApplicationRestart() {
@@ -222,6 +232,11 @@ final class SolLaunchAgentController {
     #!/bin/zsh
     set -u
 
+    integer has_zselect=0
+    if zmodload zsh/zselect 2>/dev/null; then
+      has_zselect=1
+    fi
+
     readonly app_bundle="$1"
     readonly pid_file="$2"
     readonly intentional_quit="$3"
@@ -229,13 +244,29 @@ final class SolLaunchAgentController {
 
     /bin/rm -f "$intentional_quit"
 
+    watchdog_sleep() {
+      local hundredths="$1"
+      local fallback_seconds="$2"
+      if (( has_zselect )); then
+        zselect -t "$hundredths" 2>/dev/null || true
+      else
+        /bin/sleep "$fallback_seconds"
+      fi
+    }
+
     valid_sol_pid() {
       local candidate="${1:-}"
       [[ "$candidate" == <-> ]] || return 1
-      /bin/kill -0 "$candidate" 2>/dev/null || return 1
+      kill -0 "$candidate" 2>/dev/null || return 1
       local command_line
       command_line="$(/bin/ps -p "$candidate" -o command= 2>/dev/null)"
       [[ "$command_line" == "$app_executable"* ]]
+    }
+
+    sol_pid_is_alive() {
+      local candidate="${1:-}"
+      [[ "$candidate" == <-> ]] || return 1
+      kill -0 "$candidate" 2>/dev/null
     }
 
     current_sol_pid() {
@@ -260,7 +291,7 @@ final class SolLaunchAgentController {
           print -r -- "$candidate"
           return 0
         fi
-        /bin/sleep 0.1
+        watchdog_sleep 10 0.1
       done
       return 1
     }
@@ -276,19 +307,19 @@ final class SolLaunchAgentController {
       if [[ -z "$pid" ]]; then
         pid="$(launch_sol "" 2>/dev/null || true)"
         if [[ -z "$pid" ]]; then
-          /bin/sleep "$retry_delay"
+          watchdog_sleep "$(( retry_delay * 100 ))" "$retry_delay"
           (( retry_delay = retry_delay < 30 ? retry_delay * 2 : 30 ))
           continue
         fi
       fi
 
       integer started_at="$(/bin/date +%s)"
-      while valid_sol_pid "$pid"; do
+      while sol_pid_is_alive "$pid"; do
         if [[ -f "$intentional_quit" ]]; then
           /bin/rm -f "$intentional_quit"
           exit 0
         fi
-        /bin/sleep 0.25
+        watchdog_sleep 200 2
       done
 
       if [[ -f "$intentional_quit" ]]; then
@@ -302,7 +333,7 @@ final class SolLaunchAgentController {
       else
         (( retry_delay = retry_delay < 30 ? retry_delay * 2 : 30 ))
       fi
-      /bin/sleep "$retry_delay"
+      watchdog_sleep "$(( retry_delay * 100 ))" "$retry_delay"
     done
     """#
   }
