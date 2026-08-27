@@ -299,11 +299,21 @@ const ItemRow = observer(({ item, index }: { item: Item; index: number }) => {
 				<View
 					accessible
 					accessibilityLabel="Calculating"
-					className={clsx("h-24 items-center justify-center rounded-xl", {
+					className={clsx("flex-row items-center rounded-xl py-5", {
 						highlight: isActive,
 					})}
 				>
-					<ActivityIndicator size="small" />
+					<View className="flex-1 px-4 items-center justify-center">
+						<Text
+							accessible={false}
+							className="text-4xl font-semibold opacity-0"
+						>
+							0
+						</Text>
+						<View className="absolute inset-0 items-center justify-center">
+							<ActivityIndicator size="small" />
+						</View>
+					</View>
 				</View>
 			);
 		}
