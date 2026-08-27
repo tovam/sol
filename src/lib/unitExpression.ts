@@ -38,6 +38,10 @@ export const CALCULATOR_CONSTANT_VALUES = {
 	e: Math.E,
 } as const;
 
+export function normalizeCalculatorExpression(input: string) {
+	return input.replace(/\*\*/g, "^");
+}
+
 const SPEED_OF_LIGHT_IN_METERS_PER_SECOND = 299_792_458;
 
 const derivedDimensions = (
@@ -226,7 +230,7 @@ const UNIT_ALIASES: Record<string, string> = {
 };
 
 function normalizeExpression(input: string) {
-	return input
+	return normalizeCalculatorExpression(input)
 		.trim()
 		.replace(/[×·]/g, "*")
 		.replace(/÷/g, "/")
