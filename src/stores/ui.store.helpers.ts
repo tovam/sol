@@ -1,7 +1,7 @@
 import axios from "axios";
 import * as chrono from "chrono-node";
 import convert from "convert-units";
-import { evaluateUnitExpression } from "lib/unitExpression";
+import { evaluateCalculatorExpression } from "lib/unitExpression";
 import { DateTime } from "luxon";
 
 export type TemporaryResult =
@@ -37,8 +37,6 @@ type BookmarkNode = {
 	url?: string;
 	children?: BookmarkNode[];
 };
-
-const EXPRESSION_RESULT_DECIMALS = 12;
 
 const TIMEZONE_ABBREVIATION_OFFSETS: Record<string, number> = {
 	UTC: 0,
@@ -308,10 +306,16 @@ export function parseTimezoneConversion(query: string): TemporaryResult | null {
 	};
 }
 
-export function parseUnitConversion(query: string): TemporaryResult | null {
+export function parseCalculation(query: string): TemporaryResult | null {
 	const normalized = query.trim().replace(/,/g, "").replace(/\s+/g, " ");
-	const expressionResult = evaluateUnitExpression(query);
+	const expressionResult = evaluateCalculatorExpression(query);
 	if (expressionResult != null) {
+		if (!expressionResult.hasUnits) {
+			return createTextTemporaryResult(
+				expressionResult.formattedValue,
+				expressionResult.expression,
+			);
+		}
 		const suffix = expressionResult.targetUnit
 			? ` ${expressionResult.targetUnit}`
 			: "";
@@ -368,6 +372,8 @@ export function parseUnitConversion(query: string): TemporaryResult | null {
 		return null;
 	}
 }
+
+export const parseUnitConversion = parseCalculation;
 
 export function parseFlightIdentifier(query: string) {
 	const normalized = query.trim().toUpperCase().replace(/\s+/g, "");
@@ -528,14 +534,4 @@ export function formatTemporaryResultForClipboard(result: TemporaryResult) {
 
 	const details = parts.join(" | ");
 	return details ? `${result.flight} | ${details}` : result.flight;
-}
-
-export function formatExpressionResult(value: number) {
-	if (!Number.isFinite(value)) {
-		return value.toString();
-	}
-
-	const scale = 10 ** EXPRESSION_RESULT_DECIMALS;
-	const rounded = Math.round((value + Number.EPSILON) * scale) / scale;
-	return rounded.toString();
 }

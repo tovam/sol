@@ -1,6 +1,5 @@
 import * as Sentry from "@sentry/react-native";
 import { Assets } from "assets";
-import { Parser } from "expr-eval";
 import { CONSTANTS } from "lib/constants";
 import {
 	type DailymotionStream,
@@ -36,10 +35,6 @@ import {
 	normalizeShortcutMap,
 } from "lib/shortcuts";
 import { googleTranslate } from "lib/translator";
-import {
-	CALCULATOR_CONSTANT_VALUES,
-	normalizeCalculatorExpression,
-} from "lib/unitExpression";
 import MiniSearch from "minisearch";
 import {
 	autorun,
@@ -71,16 +66,13 @@ import {
 import {
 	createTextTemporaryResult,
 	fetchFlightInfoFromWeb,
-	formatExpressionResult,
 	getInitials,
+	parseCalculation,
 	parseFlightIdentifier,
 	parseTimezoneConversion,
-	parseUnitConversion,
 	type TemporaryResult,
 	traverse,
 } from "./ui.store.helpers";
-
-const exprParser = new Parser();
 
 let onShowListener: EmitterSubscription | undefined;
 let onHideListener: EmitterSubscription | undefined;
@@ -1850,9 +1842,9 @@ export const createUIStore = (root: IRootStore) => {
 					return;
 				}
 
-				const unitResult = parseUnitConversion(store.query);
-				if (unitResult != null) {
-					store.temporaryResult = unitResult;
+				const calculationResult = parseCalculation(store.query);
+				if (calculationResult != null) {
+					store.temporaryResult = calculationResult;
 					return;
 				}
 
@@ -1879,22 +1871,7 @@ export const createUIStore = (root: IRootStore) => {
 						});
 				}
 
-				try {
-					const res = exprParser.evaluate(
-						normalizeCalculatorExpression(store.query),
-						CALCULATOR_CONSTANT_VALUES,
-					);
-					if (typeof res === "number" && !Number.isNaN(res)) {
-						store.temporaryResult = createTextTemporaryResult(
-							formatExpressionResult(res),
-							store.query,
-						);
-					} else {
-						store.temporaryResult = null;
-					}
-				} catch (_) {
-					store.temporaryResult = null;
-				}
+				store.temporaryResult = null;
 			}
 		},
 		updateApps: (

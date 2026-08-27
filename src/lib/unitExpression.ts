@@ -1,42 +1,57 @@
-type Dimensions = readonly [number, number, number, number];
+import Big from "big.js";
+
+type Dimensions = readonly [number, number, number, number, number];
 
 type Quantity = {
-	value: number;
+	value: Big;
 	dimensions: Dimensions;
+	hasUnit: boolean;
 };
 
 type Token =
-	| { type: "number"; value: number }
-	| { type: "unit"; value: string }
+	| { type: "number"; value: string }
+	| { type: "identifier"; value: string }
 	| {
 			type: "operator";
-			value: "+" | "-" | "*" | "/" | "^" | "implicitMultiply";
+			value: "+" | "-" | "*" | "/" | "%" | "^";
 	  }
 	| { type: "leftParen" }
-	| { type: "rightParen" };
+	| { type: "rightParen" }
+	| { type: "comma" };
 
-export type UnitExpressionResult = {
+export type CalculatorExpressionResult = {
 	expression: string;
 	targetUnit: string;
-	value: number;
+	value: string;
 	formattedValue: string;
+	hasUnits: boolean;
 };
 
-const DIMENSIONLESS: Dimensions = [0, 0, 0, 0];
-const MASS: Dimensions = [1, 0, 0, 0];
-const LENGTH: Dimensions = [0, 1, 0, 0];
-const TIME: Dimensions = [0, 0, 1, 0];
-const CURRENT: Dimensions = [0, 0, 0, 1];
+export type UnitExpressionResult = CalculatorExpressionResult;
 
-const quantity = (value: number, dimensions: Dimensions): Quantity => ({
-	value,
+const DIMENSIONLESS: Dimensions = [0, 0, 0, 0, 0];
+const MASS: Dimensions = [1, 0, 0, 0, 0];
+const LENGTH: Dimensions = [0, 1, 0, 0, 0];
+const TIME: Dimensions = [0, 0, 1, 0, 0];
+const CURRENT: Dimensions = [0, 0, 0, 1, 0];
+const ANGLE: Dimensions = [0, 0, 0, 0, 1];
+
+Big.DP = 40;
+Big.RM = Big.roundHalfEven;
+Big.strict = true;
+
+const quantity = (
+	value: string | Big,
+	dimensions: Dimensions,
+	hasUnit = false,
+): Quantity => ({
+	value: typeof value === "string" ? new Big(value) : value,
 	dimensions,
+	hasUnit,
 });
 
-export const CALCULATOR_CONSTANT_VALUES = {
-	pi: Math.PI,
-	e: Math.E,
-} as const;
+const unit = (value: string | Big, dimensions: Dimensions) =>
+	quantity(value, dimensions, true);
 
 export function normalizeCalculatorExpression(input: string) {
 	return input.replace(/\*\*/g, "^");
@@ -44,98 +59,102 @@ export function normalizeCalculatorExpression(input: string) {
 
 const SPEED_OF_LIGHT_IN_METERS_PER_SECOND = 299_792_458;
 
+const PI = "3.141592653589793238462643383279502884197";
+const E = "2.718281828459045235360287471352662497757";
+
 const derivedDimensions = (
 	mass: number,
 	length: number,
 	time: number,
 	current = 0,
-): Dimensions => [mass, length, time, current];
+	angle = 0,
+): Dimensions => [mass, length, time, current, angle];
 
 const UNITS: Record<string, Quantity> = {
 	// Length
-	m: quantity(1, LENGTH),
-	km: quantity(1_000, LENGTH),
-	cm: quantity(0.01, LENGTH),
-	mm: quantity(0.001, LENGTH),
-	um: quantity(0.000_001, LENGTH),
-	nm: quantity(0.000_000_001, LENGTH),
-	in: quantity(0.0254, LENGTH),
-	ft: quantity(0.3048, LENGTH),
-	yd: quantity(0.9144, LENGTH),
-	mi: quantity(1_609.344, LENGTH),
+	m: unit("1", LENGTH),
+	km: unit("1000", LENGTH),
+	cm: unit("0.01", LENGTH),
+	mm: unit("0.001", LENGTH),
+	um: unit("0.000001", LENGTH),
+	nm: unit("0.000000001", LENGTH),
+	in: unit("0.0254", LENGTH),
+	ft: unit("0.3048", LENGTH),
+	yd: unit("0.9144", LENGTH),
+	mi: unit("1609.344", LENGTH),
 
 	// Mass
-	kg: quantity(1, MASS),
-	g: quantity(0.001, MASS),
-	mg: quantity(0.000_001, MASS),
-	ug: quantity(0.000_000_001, MASS),
-	lb: quantity(0.45359237, MASS),
-	oz: quantity(0.028349523125, MASS),
-	t: quantity(1_000, MASS),
+	kg: unit("1", MASS),
+	g: unit("0.001", MASS),
+	mg: unit("0.000001", MASS),
+	ug: unit("0.000000001", MASS),
+	lb: unit("0.45359237", MASS),
+	oz: unit("0.028349523125", MASS),
+	t: unit("1000", MASS),
 
 	// Time
-	s: quantity(1, TIME),
-	ms: quantity(0.001, TIME),
-	min: quantity(60, TIME),
-	h: quantity(3_600, TIME),
-	d: quantity(86_400, TIME),
-	wk: quantity(604_800, TIME),
-	mo: quantity(2_629_800, TIME),
-	yr: quantity(31_557_600, TIME),
+	s: unit("1", TIME),
+	ms: unit("0.001", TIME),
+	min: unit("60", TIME),
+	h: unit("3600", TIME),
+	d: unit("86400", TIME),
+	wk: unit("604800", TIME),
+	mo: unit("2629800", TIME),
+	yr: unit("31557600", TIME),
 
 	// Electric current
-	A: quantity(1, CURRENT),
-	mA: quantity(0.001, CURRENT),
+	A: unit("1", CURRENT),
+	mA: unit("0.001", CURRENT),
 
 	// Volume
-	L: quantity(0.001, derivedDimensions(0, 3, 0)),
-	mL: quantity(0.000_001, derivedDimensions(0, 3, 0)),
+	L: unit("0.001", derivedDimensions(0, 3, 0)),
+	mL: unit("0.000001", derivedDimensions(0, 3, 0)),
 
-	// Angle (dimensionless in SI)
-	rad: quantity(1, DIMENSIONLESS),
-	deg: quantity(Math.PI / 180, DIMENSIONLESS),
+	// Angle (tracked separately so ratios such as m/m are not mistaken for radians)
+	rad: unit("1", ANGLE),
+	deg: unit(new Big(PI).div("180"), ANGLE),
 
 	// Speed
-	kph: quantity(1_000 / 3_600, derivedDimensions(0, 1, -1)),
-	mph: quantity(1_609.344 / 3_600, derivedDimensions(0, 1, -1)),
-	knot: quantity(1_852 / 3_600, derivedDimensions(0, 1, -1)),
+	kph: unit(new Big("1000").div("3600"), derivedDimensions(0, 1, -1)),
+	mph: unit(new Big("1609.344").div("3600"), derivedDimensions(0, 1, -1)),
+	knot: unit(new Big("1852").div("3600"), derivedDimensions(0, 1, -1)),
 
 	// Frequency
-	Hz: quantity(1, derivedDimensions(0, 0, -1)),
-	kHz: quantity(1_000, derivedDimensions(0, 0, -1)),
-	MHz: quantity(1_000_000, derivedDimensions(0, 0, -1)),
+	Hz: unit("1", derivedDimensions(0, 0, -1)),
+	kHz: unit("1000", derivedDimensions(0, 0, -1)),
+	MHz: unit("1000000", derivedDimensions(0, 0, -1)),
 
 	// Force
-	N: quantity(1, derivedDimensions(1, 1, -2)),
-	mN: quantity(0.001, derivedDimensions(1, 1, -2)),
-	kN: quantity(1_000, derivedDimensions(1, 1, -2)),
-	MN: quantity(1_000_000, derivedDimensions(1, 1, -2)),
+	N: unit("1", derivedDimensions(1, 1, -2)),
+	mN: unit("0.001", derivedDimensions(1, 1, -2)),
+	kN: unit("1000", derivedDimensions(1, 1, -2)),
+	MN: unit("1000000", derivedDimensions(1, 1, -2)),
 
 	// Pressure
-	Pa: quantity(1, derivedDimensions(1, -1, -2)),
-	kPa: quantity(1_000, derivedDimensions(1, -1, -2)),
-	MPa: quantity(1_000_000, derivedDimensions(1, -1, -2)),
-	bar: quantity(100_000, derivedDimensions(1, -1, -2)),
-	psi: quantity(6_894.757293168, derivedDimensions(1, -1, -2)),
+	Pa: unit("1", derivedDimensions(1, -1, -2)),
+	kPa: unit("1000", derivedDimensions(1, -1, -2)),
+	MPa: unit("1000000", derivedDimensions(1, -1, -2)),
+	bar: unit("100000", derivedDimensions(1, -1, -2)),
+	psi: unit("6894.757293168", derivedDimensions(1, -1, -2)),
 
 	// Energy
-	J: quantity(1, derivedDimensions(1, 2, -2)),
-	kJ: quantity(1_000, derivedDimensions(1, 2, -2)),
-	MJ: quantity(1_000_000, derivedDimensions(1, 2, -2)),
-	Wh: quantity(3_600, derivedDimensions(1, 2, -2)),
-	kWh: quantity(3_600_000, derivedDimensions(1, 2, -2)),
+	J: unit("1", derivedDimensions(1, 2, -2)),
+	kJ: unit("1000", derivedDimensions(1, 2, -2)),
+	MJ: unit("1000000", derivedDimensions(1, 2, -2)),
+	Wh: unit("3600", derivedDimensions(1, 2, -2)),
+	kWh: unit("3600000", derivedDimensions(1, 2, -2)),
 
 	// Power
-	W: quantity(1, derivedDimensions(1, 2, -3)),
-	kW: quantity(1_000, derivedDimensions(1, 2, -3)),
-	MW: quantity(1_000_000, derivedDimensions(1, 2, -3)),
+	W: unit("1", derivedDimensions(1, 2, -3)),
+	kW: unit("1000", derivedDimensions(1, 2, -3)),
+	MW: unit("1000000", derivedDimensions(1, 2, -3)),
 };
 
 const EXPRESSION_CONSTANTS: Record<string, Quantity> = {
-	pi: quantity(CALCULATOR_CONSTANT_VALUES.pi, DIMENSIONLESS),
-	e: quantity(CALCULATOR_CONSTANT_VALUES.e, DIMENSIONLESS),
-	c: quantity(
-		SPEED_OF_LIGHT_IN_METERS_PER_SECOND,
+	pi: quantity(PI, DIMENSIONLESS),
+	e: quantity(E, DIMENSIONLESS),
+	c: unit(
+		SPEED_OF_LIGHT_IN_METERS_PER_SECOND.toString(),
 		derivedDimensions(0, 1, -1),
 	),
 };
@@ -204,6 +223,7 @@ const UNIT_ALIASES: Record<string, string> = {
 	millilitres: "mL",
 	degree: "deg",
 	degrees: "deg",
+	"°": "deg",
 	hz: "Hz",
 	khz: "kHz",
 	mhz: "MHz",
@@ -232,21 +252,35 @@ const UNIT_ALIASES: Record<string, string> = {
 function normalizeExpression(input: string) {
 	return normalizeCalculatorExpression(input)
 		.trim()
+		.replace(/π/g, "pi")
 		.replace(/[×·]/g, "*")
 		.replace(/÷/g, "/")
 		.replace(/²/g, "^2")
 		.replace(/³/g, "^3")
 		.replace(/⁴/g, "^4")
 		.replace(/\bper\b/gi, "/")
+		.replace(/(\d),(?=\d{3}(?:\D|$))/g, "$1")
 		.replace(/\s+/g, " ");
 }
 
 function addDimensions(a: Dimensions, b: Dimensions): Dimensions {
-	return [a[0] + b[0], a[1] + b[1], a[2] + b[2], a[3] + b[3]];
+	return [
+		a[0] + b[0],
+		a[1] + b[1],
+		a[2] + b[2],
+		a[3] + b[3],
+		a[4] + b[4],
+	];
 }
 
 function subtractDimensions(a: Dimensions, b: Dimensions): Dimensions {
-	return [a[0] - b[0], a[1] - b[1], a[2] - b[2], a[3] - b[3]];
+	return [
+		a[0] - b[0],
+		a[1] - b[1],
+		a[2] - b[2],
+		a[3] - b[3],
+		a[4] - b[4],
+	];
 }
 
 function scaleDimensions(dimensions: Dimensions, power: number): Dimensions {
@@ -255,6 +289,7 @@ function scaleDimensions(dimensions: Dimensions, power: number): Dimensions {
 		dimensions[1] * power,
 		dimensions[2] * power,
 		dimensions[3] * power,
+		dimensions[4] * power,
 	];
 }
 
@@ -266,29 +301,29 @@ function isDimensionless(dimensions: Dimensions) {
 	return dimensionsMatch(dimensions, DIMENSIONLESS);
 }
 
-function resolveUnit(rawUnit: string): Quantity {
-	const constant = EXPRESSION_CONSTANTS[rawUnit];
+function resolveIdentifier(rawIdentifier: string): Quantity {
+	const constant = EXPRESSION_CONSTANTS[rawIdentifier.toLowerCase()];
 	if (constant) {
 		return constant;
 	}
 
-	const direct = UNITS[rawUnit];
+	const direct = UNITS[rawIdentifier];
 	if (direct) {
 		return direct;
 	}
 
-	const alias = UNIT_ALIASES[rawUnit.toLowerCase()];
+	const alias = UNIT_ALIASES[rawIdentifier.toLowerCase()];
 	if (alias && UNITS[alias]) {
 		return UNITS[alias];
 	}
 
-	throw new Error(`Unknown unit: ${rawUnit}`);
+	throw new Error(`Unknown identifier: ${rawIdentifier}`);
 }
 
 function tokenize(input: string): Token[] {
 	const tokens: Token[] = [];
 	const tokenPattern =
-		/\s*(?:(\d+(?:\.\d*)?|\.\d+)(?:[eE]([+-]?\d+))?|([A-Za-zµμ°]+)|([()+\-*/^]))/y;
+		/\s*(?:(\d+(?:\.\d*)?(?:[eE][+-]?\d+)?|\.\d+(?:[eE][+-]?\d+)?)|([A-Za-zµμ°]+)|([()+\-*/^%,]))/y;
 	let offset = 0;
 
 	while (offset < input.length) {
@@ -299,49 +334,308 @@ function tokenize(input: string): Token[] {
 		}
 
 		if (match[1]) {
-			const exponent = match[2] ? Number.parseInt(match[2], 10) : 0;
-			tokens.push({ type: "number", value: Number(match[1]) * 10 ** exponent });
-		} else if (match[3]) {
-			tokens.push({ type: "unit", value: match[3].replace(/[µμ]/g, "u") });
-		} else if (match[4] === "(") {
+			tokens.push({ type: "number", value: match[1] });
+		} else if (match[2]) {
+			tokens.push({
+				type: "identifier",
+				value: match[2].replace(/[µμ]/g, "u"),
+			});
+		} else if (match[3] === "(") {
 			tokens.push({ type: "leftParen" });
-		} else if (match[4] === ")") {
+		} else if (match[3] === ")") {
 			tokens.push({ type: "rightParen" });
+		} else if (match[3] === ",") {
+			tokens.push({ type: "comma" });
 		} else {
 			tokens.push({
 				type: "operator",
-				value: match[4] as "+" | "-" | "*" | "/" | "^",
+				value: match[3] as "+" | "-" | "*" | "/" | "%" | "^",
 			});
 		}
 
 		offset = tokenPattern.lastIndex;
 	}
 
-	const withImplicitMultiplication: Token[] = [];
-	for (const token of tokens) {
-		const previous =
-			withImplicitMultiplication[withImplicitMultiplication.length - 1];
-		const previousCanMultiply =
-			previous?.type === "number" ||
-			previous?.type === "unit" ||
-			previous?.type === "rightParen";
-		const currentCanMultiply =
-			token.type === "number" ||
-			token.type === "unit" ||
-			token.type === "leftParen";
-
-		if (previousCanMultiply && currentCanMultiply) {
-			withImplicitMultiplication.push({
-				type: "operator",
-				value: "implicitMultiply",
-			});
-		}
-		withImplicitMultiplication.push(token);
-	}
-
-	return withImplicitMultiplication;
+	return tokens;
 }
 
+const FUNCTION_NAMES = new Set([
+	"abs",
+	"acos",
+	"asin",
+	"atan",
+	"atan2",
+	"cbrt",
+	"ceil",
+	"cos",
+	"exp",
+	"floor",
+	"hypot",
+	"ln",
+	"log",
+	"log10",
+	"max",
+	"min",
+	"mod",
+	"pow",
+	"round",
+	"sign",
+	"sin",
+	"sqrt",
+	"tan",
+	"trunc",
+]);
+
+function assertArgumentCount(
+	name: string,
+	args: Quantity[],
+	minimum: number,
+	maximum = minimum,
+) {
+	if (args.length < minimum || args.length > maximum) {
+		throw new Error(`${name} expects ${minimum}-${maximum} arguments`);
+	}
+}
+
+function assertDimensionless(value: Quantity, operation: string) {
+	if (!isDimensionless(value.dimensions)) {
+		throw new Error(`${operation} expects a dimensionless value`);
+	}
+}
+
+function assertMatchingDimensions(values: Quantity[], operation: string) {
+	const first = values[0];
+	if (
+		first == null ||
+		values.some((value) => !dimensionsMatch(value.dimensions, first.dimensions))
+	) {
+		throw new Error(`${operation} expects compatible dimensions`);
+	}
+}
+
+function toFiniteNumber(value: Big, operation: string) {
+	const result = Number(value.toString());
+	if (!Number.isFinite(result)) {
+		throw new Error(`${operation} is outside the supported range`);
+	}
+	return result;
+}
+
+function approximate(
+	value: Quantity,
+	operation: string,
+	callback: (input: number) => number,
+	allowAngle = false,
+) {
+	if (
+		!isDimensionless(value.dimensions) &&
+		!(allowAngle && dimensionsMatch(value.dimensions, ANGLE))
+	) {
+		throw new Error(
+			allowAngle
+				? `${operation} expects an angle or dimensionless value`
+				: `${operation} expects a dimensionless value`,
+		);
+	}
+	const result = callback(toFiniteNumber(value.value, operation));
+	if (!Number.isFinite(result)) {
+		throw new Error(`${operation} has no finite result`);
+	}
+	return quantity(result.toString(), DIMENSIONLESS);
+}
+
+const MAX_INTEGER_EXPONENT = 10_000;
+
+function power(base: Quantity, exponent: Quantity): Quantity {
+	assertDimensionless(exponent, "Power");
+	const exponentAsNumber = toFiniteNumber(exponent.value, "Power");
+	const integerExponent =
+		exponent.value.round(0, Big.roundDown).eq(exponent.value) &&
+		Number.isSafeInteger(exponentAsNumber) &&
+		Math.abs(exponentAsNumber) <= MAX_INTEGER_EXPONENT;
+
+	if (!isDimensionless(base.dimensions) && !integerExponent) {
+		throw new Error("Dimensioned values require a small integer exponent");
+	}
+
+	const result = integerExponent
+		? base.value.pow(exponentAsNumber)
+		: new Big(
+				Math.pow(
+					toFiniteNumber(base.value, "Power"),
+					exponentAsNumber,
+				).toString(),
+			);
+	return quantity(
+		result,
+		integerExponent
+			? scaleDimensions(base.dimensions, exponentAsNumber)
+			: DIMENSIONLESS,
+		base.hasUnit,
+	);
+}
+
+function evaluateFunction(name: string, args: Quantity[]): Quantity {
+	switch (name) {
+		case "abs": {
+			assertArgumentCount(name, args, 1);
+			return quantity(args[0].value.abs(), args[0].dimensions, args[0].hasUnit);
+		}
+		case "sqrt": {
+			assertArgumentCount(name, args, 1);
+			return quantity(
+				args[0].value.sqrt(),
+				scaleDimensions(args[0].dimensions, 0.5),
+				args[0].hasUnit,
+			);
+		}
+		case "cbrt": {
+			assertArgumentCount(name, args, 1);
+			const numeric = Math.cbrt(toFiniteNumber(args[0].value, name));
+			return quantity(
+				numeric.toString(),
+				scaleDimensions(args[0].dimensions, 1 / 3),
+				args[0].hasUnit,
+			);
+		}
+		case "floor":
+		case "ceil":
+		case "trunc": {
+			assertArgumentCount(name, args, 1);
+			const input = args[0];
+			const mode =
+				name === "trunc"
+					? Big.roundDown
+					: name === "floor"
+						? input.value.lt("0")
+							? Big.roundUp
+							: Big.roundDown
+						: input.value.lt("0")
+							? Big.roundDown
+							: Big.roundUp;
+			return quantity(
+				input.value.round(0, mode),
+				input.dimensions,
+				input.hasUnit,
+			);
+		}
+		case "round": {
+			assertArgumentCount(name, args, 1, 2);
+			const decimalPlaces = args[1]
+				? toFiniteNumber(args[1].value, name)
+				: 0;
+			if (
+				!Number.isSafeInteger(decimalPlaces) ||
+				decimalPlaces < 0 ||
+				decimalPlaces > 100
+			) {
+				throw new Error("round precision must be an integer from 0 to 100");
+			}
+			if (args[1]) assertDimensionless(args[1], name);
+			return quantity(
+				args[0].value.round(decimalPlaces, Big.roundHalfUp),
+				args[0].dimensions,
+				args[0].hasUnit,
+			);
+		}
+		case "sign": {
+			assertArgumentCount(name, args, 1);
+			return quantity(
+				args[0].value.eq("0") ? "0" : args[0].value.lt("0") ? "-1" : "1",
+				DIMENSIONLESS,
+			);
+		}
+		case "min":
+		case "max": {
+			assertArgumentCount(name, args, 1, Number.MAX_SAFE_INTEGER);
+			assertMatchingDimensions(args, name);
+			return args.slice(1).reduce((selected, candidate) => {
+				const replace =
+					name === "min"
+						? candidate.value.lt(selected.value)
+						: candidate.value.gt(selected.value);
+				return replace ? candidate : selected;
+			}, args[0]);
+		}
+		case "hypot": {
+			assertArgumentCount(name, args, 1, Number.MAX_SAFE_INTEGER);
+			assertMatchingDimensions(args, name);
+			const sum = args.reduce(
+				(total, value) => total.plus(value.value.times(value.value)),
+				new Big("0"),
+			);
+			return quantity(sum.sqrt(), args[0].dimensions, args.some((arg) => arg.hasUnit));
+		}
+		case "pow": {
+			assertArgumentCount(name, args, 2);
+			return power(args[0], args[1]);
+		}
+		case "mod": {
+			assertArgumentCount(name, args, 2);
+			assertMatchingDimensions(args, name);
+			return quantity(
+				args[0].value.mod(args[1].value),
+				args[0].dimensions,
+				args.some((arg) => arg.hasUnit),
+			);
+		}
+		case "sin":
+			assertArgumentCount(name, args, 1);
+			return approximate(args[0], name, Math.sin, true);
+		case "cos":
+			assertArgumentCount(name, args, 1);
+			return approximate(args[0], name, Math.cos, true);
+		case "tan":
+			assertArgumentCount(name, args, 1);
+			return approximate(args[0], name, Math.tan, true);
+		case "asin":
+			assertArgumentCount(name, args, 1);
+			return quantity(
+				approximate(args[0], name, Math.asin).value,
+				ANGLE,
+				true,
+			);
+		case "acos":
+			assertArgumentCount(name, args, 1);
+			return quantity(
+				approximate(args[0], name, Math.acos).value,
+				ANGLE,
+				true,
+			);
+		case "atan":
+			assertArgumentCount(name, args, 1);
+			return quantity(
+				approximate(args[0], name, Math.atan).value,
+				ANGLE,
+				true,
+			);
+		case "atan2": {
+			assertArgumentCount(name, args, 2);
+			assertMatchingDimensions(args, name);
+			const result = Math.atan2(
+				toFiniteNumber(args[0].value, name),
+				toFiniteNumber(args[1].value, name),
+			);
+			return quantity(result.toString(), ANGLE, true);
+		}
+		case "exp":
+			assertArgumentCount(name, args, 1);
+			return approximate(args[0], name, Math.exp);
+		case "ln":
+		case "log":
+			assertArgumentCount(name, args, 1);
+			return approximate(args[0], name, Math.log);
+		case "log10":
+			assertArgumentCount(name, args, 1);
+			return approximate(args[0], name, Math.log10);
+		default:
+			throw new Error(`Unknown function: ${name}`);
+	}
+}
+
+// Precedence from lowest to highest: +/-, explicit */%, juxtaposition,
+// unary signs, then right-associative powers. Juxtaposition deliberately binds
+// tightly so `9m / 2h` means `(9 m) / (2 h)` and `2 pi` is one coefficient.
 class QuantityParser {
 	private index = 0;
 	private readonly tokens: Token[];
@@ -371,9 +665,10 @@ class QuantityParser {
 			}
 			result = quantity(
 				operator === "+"
-					? result.value + right.value
-					: result.value - right.value,
+					? result.value.plus(right.value)
+					: result.value.minus(right.value),
 				result.dimensions,
+				result.hasUnit || right.hasUnit,
 			);
 		}
 		return result;
@@ -381,34 +676,48 @@ class QuantityParser {
 
 	private parseMultiplicative(): Quantity {
 		let result = this.parseImplicitMultiplicative();
-		while (this.matchesOperator("*") || this.matchesOperator("/")) {
+		while (
+			this.matchesOperator("*") ||
+			this.matchesOperator("/") ||
+			this.matchesOperator("%")
+		) {
 			const operator = (
 				this.tokens[this.index] as Extract<Token, { type: "operator" }>
 			).value;
 			this.index += 1;
 			const right = this.parseImplicitMultiplicative();
-			result =
-				operator === "*"
-					? quantity(
-							result.value * right.value,
-							addDimensions(result.dimensions, right.dimensions),
-						)
-					: quantity(
-							result.value / right.value,
-							subtractDimensions(result.dimensions, right.dimensions),
-						);
+			if (operator === "%") {
+				assertMatchingDimensions([result, right], "Remainder");
+				result = quantity(
+					result.value.mod(right.value),
+					result.dimensions,
+					result.hasUnit || right.hasUnit,
+				);
+			} else if (operator === "*") {
+				result = quantity(
+					result.value.times(right.value),
+					addDimensions(result.dimensions, right.dimensions),
+					result.hasUnit || right.hasUnit,
+				);
+			} else {
+				result = quantity(
+					result.value.div(right.value),
+					subtractDimensions(result.dimensions, right.dimensions),
+					result.hasUnit || right.hasUnit,
+				);
+			}
 		}
 		return result;
 	}
 
 	private parseImplicitMultiplicative(): Quantity {
 		let result = this.parseUnary();
-		while (this.matchesOperator("implicitMultiply")) {
-			this.index += 1;
+		while (this.canStartPrimary(this.tokens[this.index])) {
 			const right = this.parseUnary();
 			result = quantity(
-				result.value * right.value,
+				result.value.times(right.value),
 				addDimensions(result.dimensions, right.dimensions),
+				result.hasUnit || right.hasUnit,
 			);
 		}
 		return result;
@@ -422,7 +731,7 @@ class QuantityParser {
 		if (this.matchesOperator("-")) {
 			this.index += 1;
 			const value = this.parseUnary();
-			return quantity(-value.value, value.dimensions);
+			return quantity(value.value.neg(), value.dimensions, value.hasUnit);
 		}
 		return this.parsePower();
 	}
@@ -434,15 +743,7 @@ class QuantityParser {
 		}
 
 		this.index += 1;
-		const exponent = this.parseUnary();
-		if (!isDimensionless(exponent.dimensions)) {
-			throw new Error("Unit exponents must be dimensionless");
-		}
-
-		return quantity(
-			base.value ** exponent.value,
-			scaleDimensions(base.dimensions, exponent.value),
-		);
+		return power(base, this.parseUnary());
 	}
 
 	private parsePrimary(): Quantity {
@@ -456,9 +757,16 @@ class QuantityParser {
 			return quantity(token.value, DIMENSIONLESS);
 		}
 
-		if (token.type === "unit") {
+		if (token.type === "identifier") {
 			this.index += 1;
-			return resolveUnit(token.value);
+			const normalizedName = token.value.toLowerCase();
+			if (
+				FUNCTION_NAMES.has(normalizedName) &&
+				this.tokens[this.index]?.type === "leftParen"
+			) {
+				return this.parseFunctionCall(normalizedName);
+			}
+			return resolveIdentifier(token.value);
 		}
 
 		if (token.type === "leftParen") {
@@ -474,6 +782,31 @@ class QuantityParser {
 		throw new Error("Unexpected expression token");
 	}
 
+	private parseFunctionCall(name: string) {
+		this.index += 1;
+		const args: Quantity[] = [];
+		if (this.tokens[this.index]?.type !== "rightParen") {
+			while (true) {
+				args.push(this.parseAdditive());
+				if (this.tokens[this.index]?.type !== "comma") break;
+				this.index += 1;
+			}
+		}
+		if (this.tokens[this.index]?.type !== "rightParen") {
+			throw new Error(`Missing closing parenthesis for ${name}`);
+		}
+		this.index += 1;
+		return evaluateFunction(name, args);
+	}
+
+	private canStartPrimary(token: Token | undefined) {
+		return (
+			token?.type === "number" ||
+			token?.type === "identifier" ||
+			token?.type === "leftParen"
+		);
+	}
+
 	private matchesOperator(
 		operator: Extract<Token, { type: "operator" }>["value"],
 	) {
@@ -484,13 +817,6 @@ class QuantityParser {
 
 function parseQuantity(input: string) {
 	return new QuantityParser(tokenize(input)).parse();
-}
-
-function containsExpressionConstant(input: string) {
-	return tokenize(input).some(
-		(token) =>
-			token.type === "unit" && EXPRESSION_CONSTANTS[token.value] != null,
-	);
 }
 
 type AutomaticUnitGroup = {
@@ -512,6 +838,7 @@ const AUTOMATIC_UNIT_GROUPS: AutomaticUnitGroup[] = [
 		fallback: "s",
 	},
 	{ dimensions: CURRENT, units: ["A", "mA"], fallback: "A" },
+	{ dimensions: ANGLE, units: ["rad", "deg"], fallback: "rad" },
 	{
 		dimensions: derivedDimensions(0, 3, 0),
 		units: ["m^3", "L", "mL"],
@@ -550,11 +877,13 @@ const AUTOMATIC_UNIT_GROUPS: AutomaticUnitGroup[] = [
 ];
 
 function formatExponent(value: number) {
-	return Number.isInteger(value) ? value.toString() : formatResult(value);
+	return Number.isInteger(value)
+		? value.toString()
+		: formatResult(new Big(value.toString()));
 }
 
 function formatBaseUnit(dimensions: Dimensions) {
-	const names = ["kg", "m", "s", "A"];
+	const names = ["kg", "m", "s", "A", "rad"];
 	const numerator: string[] = [];
 	const denominator: string[] = [];
 	for (let index = 0; index < dimensions.length; index += 1) {
@@ -568,7 +897,9 @@ function formatBaseUnit(dimensions: Dimensions) {
 		else denominator.push(formatted);
 	}
 	const top = numerator.length > 0 ? numerator.join("*") : "1";
-	return denominator.length > 0 ? `${top}/${denominator.join("*")}` : top;
+	if (denominator.length === 0) return top;
+	const bottom = denominator.join("*");
+	return denominator.length === 1 ? `${top}/${bottom}` : `${top}/(${bottom})`;
 }
 
 function inferTargetUnit(source: Quantity) {
@@ -578,67 +909,90 @@ function inferTargetUnit(source: Quantity) {
 	if (!group) {
 		return {
 			unit: formatBaseUnit(source.dimensions),
-			quantity: quantity(1, source.dimensions),
+			quantity: unit("1", source.dimensions),
 		};
 	}
 
-	if (source.value === 0) {
+	if (source.value.eq("0")) {
 		return { unit: group.fallback, quantity: parseQuantity(group.fallback) };
 	}
 
 	for (const unit of group.units) {
 		const target = parseQuantity(unit);
-		const converted = Math.abs(source.value / target.value);
-		if (converted >= 1 && converted < 1_000) {
+		const converted = source.value.div(target.value).abs();
+		if (converted.gte("1") && converted.lt("1000")) {
 			return { unit, quantity: target };
 		}
 	}
 
 	const edgeUnit =
-		Math.abs(source.value / parseQuantity(group.units[0]).value) >= 1_000
+		source.value
+			.div(parseQuantity(group.units[0]).value)
+			.abs()
+			.gte("1000")
 			? group.units[0]
 			: group.units[group.units.length - 1];
 	return { unit: edgeUnit, quantity: parseQuantity(edgeUnit) };
 }
 
-function formatResult(value: number) {
-	if (!Number.isFinite(value)) {
-		return value.toString();
+function formatResult(value: Big) {
+	if (value.eq("0")) return "0";
+
+	const absoluteValue = value.abs();
+	if (absoluteValue.gte("1e12") || absoluteValue.lt("1e-9")) {
+		return value
+			.toExponential(14, Big.roundHalfEven)
+			.replace(/(\.\d*?[1-9])0+(?=e)/, "$1")
+			.replace(/\.0+(?=e)/, "");
 	}
 
-	const absoluteValue = Math.abs(value);
-	if (absoluteValue !== 0 && (absoluteValue >= 1e12 || absoluteValue < 1e-9)) {
-		return value.toExponential(8).replace(/\.0+(?=e)/, "");
-	}
-
-	return Number.parseFloat(value.toPrecision(12)).toString();
+	return value.prec(15, Big.roundHalfEven).toFixed();
 }
 
-export function evaluateUnitExpression(
+function splitConversionExpression(normalized: string) {
+	let depth = 0;
+	let separatorIndex = -1;
+
+	for (let index = 0; index < normalized.length; index += 1) {
+		const character = normalized[index];
+		if (character === "(") depth += 1;
+		else if (character === ")") depth = Math.max(0, depth - 1);
+		else if (
+			depth === 0 &&
+			(normalized.slice(index, index + 4).toLowerCase() === " in " ||
+				normalized.slice(index, index + 4).toLowerCase() === " to ") &&
+			normalized.slice(index + 4).trim().length > 0
+		) {
+			separatorIndex = index;
+		}
+	}
+
+	return separatorIndex < 0
+		? { expression: normalized, targetUnit: "", hasExplicitTarget: false }
+		: {
+				expression: normalized.slice(0, separatorIndex).trim(),
+				targetUnit: normalized.slice(separatorIndex + 4).trim(),
+				hasExplicitTarget: true,
+			};
+}
+
+export function evaluateCalculatorExpression(
 	query: string,
-): UnitExpressionResult | null {
+): CalculatorExpressionResult | null {
 	const normalized = normalizeExpression(query);
-	const inIndex = normalized.toLowerCase().lastIndexOf(" in ");
-	const toIndex = normalized.toLowerCase().lastIndexOf(" to ");
-	const separatorIndex = Math.max(inIndex, toIndex);
-	const hasExplicitTarget = separatorIndex > 0;
-	const expression = hasExplicitTarget
-		? normalized.slice(0, separatorIndex).trim()
-		: normalized;
-	const targetUnit = hasExplicitTarget
-		? normalized.slice(separatorIndex + 4).trim()
-		: "";
+	const { expression, targetUnit, hasExplicitTarget } =
+		splitConversionExpression(normalized);
 	if (!expression || (hasExplicitTarget && !targetUnit)) return null;
 
 	try {
 		const source = parseQuantity(expression);
 		if (!hasExplicitTarget && isDimensionless(source.dimensions)) {
-			if (!containsExpressionConstant(expression)) return null;
 			return {
 				expression,
 				targetUnit: "",
-				value: source.value,
+				value: source.value.toString(),
 				formattedValue: formatResult(source.value),
+				hasUnits: false,
 			};
 		}
 		const inferredTarget = hasExplicitTarget ? null : inferTargetUnit(source);
@@ -646,19 +1000,22 @@ export function evaluateUnitExpression(
 		const target = inferredTarget?.quantity ?? parseQuantity(targetUnit);
 		if (
 			!dimensionsMatch(source.dimensions, target.dimensions) ||
-			target.value === 0
+			target.value.eq("0")
 		) {
 			return null;
 		}
 
-		const value = source.value / target.value;
+		const value = source.value.div(target.value);
 		return {
 			expression,
 			targetUnit: resolvedTargetUnit,
-			value,
+			value: value.toString(),
 			formattedValue: formatResult(value),
+			hasUnits: true,
 		};
 	} catch {
 		return null;
 	}
 }
+
+export const evaluateUnitExpression = evaluateCalculatorExpression;
