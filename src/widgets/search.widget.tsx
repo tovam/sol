@@ -12,6 +12,7 @@ import { renderToKeys } from "lib/shortcuts";
 import { observer } from "mobx-react-lite";
 import { type FC, useEffect, useRef, useState } from "react";
 import {
+	ActivityIndicator,
 	Image,
 	Platform,
 	StyleSheet,
@@ -293,7 +294,18 @@ const ItemRow = observer(({ item, index }: { item: Item; index: number }) => {
 	// this is used for things like calculator results
 	if (item.type === ItemType.TEMPORARY_RESULT) {
 		if (store.ui.temporaryResult == null) {
-			return null;
+			if (!store.ui.isCalculating) return null;
+			return (
+				<View
+					accessible
+					accessibilityLabel="Calculating"
+					className={clsx("h-24 items-center justify-center rounded-xl", {
+						highlight: isActive,
+					})}
+				>
+					<ActivityIndicator size="small" />
+				</View>
+			);
 		}
 
 		return (
@@ -402,8 +414,9 @@ export const SearchWidget: FC = observer(() => {
 	const showNetworkPanel =
 		(activeTab === SearchTab.ALL || activeTab === SearchTab.ACTIONS) &&
 		isNetworkQuery(store.ui.query);
-	const temporaryActionLabel =
-		store.ui.temporaryResult?.kind === "text"
+	const temporaryActionLabel = store.ui.isCalculating
+		? "Calculating…"
+		: store.ui.temporaryResult?.kind === "text"
 			? store.ui.temporaryResult.actionLabel
 			: undefined;
 	const fileCountLabel = store.ui.isLoading

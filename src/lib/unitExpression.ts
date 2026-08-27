@@ -976,6 +976,68 @@ function splitConversionExpression(normalized: string) {
 			};
 }
 
+function tokensFormCompleteCalculatorInput(tokens: Token[]) {
+	if (tokens.length === 0) return false;
+
+	let parenthesisDepth = 0;
+	for (let index = 0; index < tokens.length; index += 1) {
+		const token = tokens[index];
+		if (token.type === "leftParen") {
+			parenthesisDepth += 1;
+			continue;
+		}
+		if (token.type === "rightParen") {
+			parenthesisDepth -= 1;
+			if (parenthesisDepth < 0) return false;
+			continue;
+		}
+		if (token.type !== "identifier") continue;
+
+		const normalizedName = token.value.toLowerCase();
+		if (
+			FUNCTION_NAMES.has(normalizedName) &&
+			tokens[index + 1]?.type === "leftParen"
+		) {
+			continue;
+		}
+
+		try {
+			resolveIdentifier(token.value);
+		} catch {
+			return false;
+		}
+	}
+
+	const lastToken = tokens[tokens.length - 1];
+	return (
+		parenthesisDepth === 0 &&
+		lastToken.type !== "operator" &&
+		lastToken.type !== "leftParen" &&
+		lastToken.type !== "comma"
+	);
+}
+
+/**
+ * Cheaply recognizes complete calculator-shaped input without evaluating it.
+ * This lets the UI paint a loading state before an expensive calculation starts.
+ */
+export function isCalculatorExpressionCandidate(query: string) {
+	const normalized = normalizeExpression(query);
+	const { expression, targetUnit, hasExplicitTarget } =
+		splitConversionExpression(normalized);
+	if (!expression || (hasExplicitTarget && !targetUnit)) return false;
+
+	try {
+		if (!tokensFormCompleteCalculatorInput(tokenize(expression))) return false;
+		return (
+			!hasExplicitTarget ||
+			tokensFormCompleteCalculatorInput(tokenize(targetUnit))
+		);
+	} catch {
+		return false;
+	}
+}
+
 export function evaluateCalculatorExpression(
 	query: string,
 ): CalculatorExpressionResult | null {

@@ -459,6 +459,13 @@ export const createKeystrokeStore = (root: IRootStore) => {
 
 							if (
 								item.type === ItemType.TEMPORARY_RESULT &&
+								root.ui.isCalculating
+							) {
+								return;
+							}
+
+							if (
+								item.type === ItemType.TEMPORARY_RESULT &&
 								root.ui.temporaryResult
 							) {
 								if (

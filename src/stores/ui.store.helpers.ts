@@ -1,7 +1,10 @@
 import axios from "axios";
 import * as chrono from "chrono-node";
 import convert from "convert-units";
-import { evaluateCalculatorExpression } from "lib/unitExpression";
+import {
+	evaluateCalculatorExpression,
+	isCalculatorExpressionCandidate,
+} from "lib/unitExpression";
 import { DateTime } from "luxon";
 
 export type TemporaryResult =
@@ -306,6 +309,17 @@ export function parseTimezoneConversion(query: string): TemporaryResult | null {
 	};
 }
 
+const LEGACY_UNIT_CONVERSION_PATTERN =
+	/^(?<value>-?\d*\.?\d+)\s*(?<from>[a-zA-Z]+)\s*(?:to|in)\s*(?<to>[a-zA-Z]+)$/i;
+
+export function isCalculationCandidate(query: string) {
+	const normalized = query.trim().replace(/,/g, "").replace(/\s+/g, " ");
+	return (
+		isCalculatorExpressionCandidate(query) ||
+		LEGACY_UNIT_CONVERSION_PATTERN.test(normalized)
+	);
+}
+
 export function parseCalculation(query: string): TemporaryResult | null {
 	const normalized = query.trim().replace(/,/g, "").replace(/\s+/g, " ");
 	const expressionResult = evaluateCalculatorExpression(query);
@@ -335,9 +349,7 @@ export function parseCalculation(query: string): TemporaryResult | null {
 		};
 	}
 
-	const match = normalized.match(
-		/^(?<value>-?\d*\.?\d+)\s*(?<from>[a-zA-Z]+)\s*(?:to|in)\s*(?<to>[a-zA-Z]+)$/i,
-	);
+	const match = normalized.match(LEGACY_UNIT_CONVERSION_PATTERN);
 
 	if (!match?.groups) {
 		return null;

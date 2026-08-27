@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { evaluateCalculatorExpression } from "../src/lib/unitExpression.ts";
+import {
+	evaluateCalculatorExpression,
+	isCalculatorExpressionCandidate,
+} from "../src/lib/unitExpression.ts";
 
 function evaluate(expression) {
 	const result = evaluateCalculatorExpression(expression);
@@ -12,6 +15,14 @@ test("uses exact decimal arithmetic", () => {
 	assert.equal(evaluate("26**8").value, "208827064576");
 	assert.equal(evaluate("26^8").formattedValue, "208827064576");
 	assert.equal(evaluate("0.1 + 0.2").value, "0.3");
+});
+
+test("recognizes complete calculator input without evaluating it", () => {
+	assert.equal(isCalculatorExpressionCandidate("exp(40)"), true);
+	assert.equal(isCalculatorExpressionCandidate("26**8"), true);
+	assert.equal(isCalculatorExpressionCandidate("3 m / 4 s * 7 g"), true);
+	assert.equal(isCalculatorExpressionCandidate("26**"), false);
+	assert.equal(isCalculatorExpressionCandidate("calendar"), false);
 });
 
 test("applies conventional operator precedence", () => {

@@ -67,6 +67,7 @@ import {
 	createTextTemporaryResult,
 	fetchFlightInfoFromWeb,
 	getInitials,
+	isCalculationCandidate,
 	parseCalculation,
 	parseFlightIdentifier,
 	parseTimezoneConversion,
@@ -504,6 +505,8 @@ export const createUIStore = (root: IRootStore) => {
 	let isHydrating = false;
 	let initialPresentationReadySent = false;
 	let applicationSearchRequestId = 0;
+	let calculationRequestId = 0;
+	let calculationTimer: ReturnType<typeof setTimeout> | undefined;
 	let fileSearchRequestId = 0;
 	let fileSearchPrefetchTimer: ReturnType<typeof setTimeout> | undefined;
 	let fileSearchCacheEpoch = 0;
@@ -516,6 +519,16 @@ export const createUIStore = (root: IRootStore) => {
 	let dailymotionDVRIntentID = 0;
 	const FILE_SEARCH_CACHE_TTL = 15_000;
 	const FILE_SEARCH_CACHE_LIMIT = 8;
+	const CALCULATION_PAINT_DELAY_MS = 25;
+
+	const invalidatePendingCalculation = () => {
+		calculationRequestId += 1;
+		if (calculationTimer) {
+			clearTimeout(calculationTimer);
+			calculationTimer = undefined;
+		}
+		return calculationRequestId;
+	};
 
 	const fileSearchKey = (query: string, sort: FileSort) =>
 		`${sort}\u0000${normalizeFileSearchText(query)}`;
@@ -942,6 +955,7 @@ export const createUIStore = (root: IRootStore) => {
 		editingCustomItem: null as Item | null,
 		apps: [] as Item[],
 		isLoading: false,
+		isCalculating: false,
 		isIndexing: false,
 		indexedFileResults: [] as Item[],
 		fileSearchSelection: { start: 0, end: 0 } as TextSelection,
@@ -1257,8 +1271,16 @@ export const createUIStore = (root: IRootStore) => {
 
 			results.sort(compareRankedItems);
 
-			const temporaryResultItems = store.temporaryResult
-				? [{ id: "temporary", type: ItemType.TEMPORARY_RESULT, name: "" }]
+			const temporaryResultItems =
+				store.temporaryResult || store.isCalculating
+					? [
+							{
+								id: "temporary",
+								type: ItemType.TEMPORARY_RESULT,
+								name: "",
+								preventClose: true,
+							},
+						]
 				: [];
 
 			const finalResults: Item[] = [
@@ -1492,9 +1514,12 @@ export const createUIStore = (root: IRootStore) => {
 		},
 		setSearchTab: (tab: SearchTab) => {
 			if (store.searchTab === tab) return;
+			invalidatePendingCalculation();
 			fileSearchRequestId += 1;
 			store.searchTab = tab;
 			store.selectedIndex = 0;
+			store.isCalculating = false;
+			store.temporaryResult = null;
 			store.indexedFileResults = [];
 			store.isLoading = false;
 			displayedFileSearchKey = null;
@@ -1645,6 +1670,10 @@ export const createUIStore = (root: IRootStore) => {
 			solNative.setGlassAppearance(toJS(store.glassAppearance));
 		},
 		focusWidget: (widget: Widget) => {
+			if (widget !== Widget.SEARCH) {
+				invalidatePendingCalculation();
+				store.isCalculating = false;
+			}
 			if (
 				store.focusedWidget === Widget.DAILYMOTION &&
 				widget !== Widget.DAILYMOTION
@@ -1753,12 +1782,14 @@ export const createUIStore = (root: IRootStore) => {
 			return edit.nextSelection;
 		},
 		setQuery: (query: string) => {
+			const currentCalculationRequestId = invalidatePendingCalculation();
 			store.query = query.replace("\n", " ");
 			store.fileSearchSelection = {
 				start: store.query.length,
 				end: store.query.length,
 			};
 			store.selectedIndex = 0;
+			store.isCalculating = false;
 			store.temporaryResult = null;
 			if (resolveSpreadsheetCommand(store.query)?.kind === "list") {
 				void root.spreadsheets?.refresh();
@@ -1842,9 +1873,25 @@ export const createUIStore = (root: IRootStore) => {
 					return;
 				}
 
-				const calculationResult = parseCalculation(store.query);
-				if (calculationResult != null) {
-					store.temporaryResult = calculationResult;
+				if (isCalculationCandidate(store.query)) {
+					const querySnapshot = store.query;
+					store.isCalculating = true;
+					calculationTimer = setTimeout(() => {
+						calculationTimer = undefined;
+						const calculationResult = parseCalculation(querySnapshot);
+						if (
+							currentCalculationRequestId !== calculationRequestId ||
+							store.focusedWidget !== Widget.SEARCH ||
+							store.searchTab === SearchTab.FILES ||
+							store.query !== querySnapshot
+						) {
+							return;
+						}
+						runInAction(() => {
+							store.isCalculating = false;
+							store.temporaryResult = calculationResult;
+						});
+					}, CALCULATION_PAINT_DELAY_MS);
 					return;
 				}
 
@@ -2007,6 +2054,7 @@ export const createUIStore = (root: IRootStore) => {
 			});
 		},
 		onHide: () => {
+			invalidatePendingCalculation();
 			fileSearchRequestId += 1;
 			if (fileSearchPrefetchTimer) {
 				clearTimeout(fileSearchPrefetchTimer);
@@ -2017,6 +2065,7 @@ export const createUIStore = (root: IRootStore) => {
 			store.searchTab = SearchTab.ALL;
 			store.indexedFileResults = [];
 			store.isLoading = false;
+			store.isCalculating = false;
 			displayedFileSearchKey = null;
 			store.editingCustomItem = null;
 			store.dailymotionDVRIntent = null;
@@ -2027,6 +2076,7 @@ export const createUIStore = (root: IRootStore) => {
 			store.translationResults = [];
 		},
 		cleanUp: () => {
+			invalidatePendingCalculation();
 			if (fileSearchPrefetchTimer) {
 				clearTimeout(fileSearchPrefetchTimer);
 				fileSearchPrefetchTimer = undefined;
