@@ -8,7 +8,7 @@ type Quantity = {
 	hasUnit: boolean;
 };
 
-type Token =
+type Token = (
 	| { type: "number"; value: string }
 	| { type: "identifier"; value: string }
 	| {
@@ -17,7 +17,8 @@ type Token =
 	  }
 	| { type: "leftParen" }
 	| { type: "rightParen" }
-	| { type: "comma" };
+	| { type: "comma" }
+) & { joinedToPrevious: boolean };
 
 export type CalculatorExpressionResult = {
 	expression: string;
@@ -301,12 +302,7 @@ function isDimensionless(dimensions: Dimensions) {
 	return dimensionsMatch(dimensions, DIMENSIONLESS);
 }
 
-function resolveIdentifier(rawIdentifier: string): Quantity {
-	const constant = EXPRESSION_CONSTANTS[rawIdentifier.toLowerCase()];
-	if (constant) {
-		return constant;
-	}
-
+function resolveUnitIdentifier(rawIdentifier: string): Quantity | null {
 	const direct = UNITS[rawIdentifier];
 	if (direct) {
 		return direct;
@@ -316,6 +312,17 @@ function resolveIdentifier(rawIdentifier: string): Quantity {
 	if (alias && UNITS[alias]) {
 		return UNITS[alias];
 	}
+	return null;
+}
+
+function resolveIdentifier(rawIdentifier: string): Quantity {
+	const constant = EXPRESSION_CONSTANTS[rawIdentifier.toLowerCase()];
+	if (constant) {
+		return constant;
+	}
+
+	const resolvedUnit = resolveUnitIdentifier(rawIdentifier);
+	if (resolvedUnit) return resolvedUnit;
 
 	throw new Error(`Unknown identifier: ${rawIdentifier}`);
 }
@@ -332,24 +339,27 @@ function tokenize(input: string): Token[] {
 		if (!match) {
 			throw new Error(`Unexpected token at ${input.slice(offset)}`);
 		}
+		const joinedToPrevious = offset > 0 && !/^\s/.test(match[0]);
 
 		if (match[1]) {
-			tokens.push({ type: "number", value: match[1] });
+			tokens.push({ type: "number", value: match[1], joinedToPrevious });
 		} else if (match[2]) {
 			tokens.push({
 				type: "identifier",
 				value: match[2].replace(/[µμ]/g, "u"),
+				joinedToPrevious,
 			});
 		} else if (match[3] === "(") {
-			tokens.push({ type: "leftParen" });
+			tokens.push({ type: "leftParen", joinedToPrevious });
 		} else if (match[3] === ")") {
-			tokens.push({ type: "rightParen" });
+			tokens.push({ type: "rightParen", joinedToPrevious });
 		} else if (match[3] === ",") {
-			tokens.push({ type: "comma" });
+			tokens.push({ type: "comma", joinedToPrevious });
 		} else {
 			tokens.push({
 				type: "operator",
 				value: match[3] as "+" | "-" | "*" | "/" | "%" | "^",
+				joinedToPrevious,
 			});
 		}
 
@@ -633,9 +643,11 @@ function evaluateFunction(name: string, args: Quantity[]): Quantity {
 	}
 }
 
-// Precedence from lowest to highest: +/-, explicit */%, juxtaposition,
-// unary signs, then right-associative powers. Juxtaposition deliberately binds
-// tightly so `9m / 2h` means `(9 m) / (2 h)` and `2 pi` is one coefficient.
+// Precedence from lowest to highest: +/-, explicit */%, juxtaposition, compact
+// compound-unit operators, unary signs, then right-associative powers.
+// Juxtaposition deliberately binds tightly so `9m / 2h` means `(9 m) / (2 h)`.
+// A slash without surrounding spaces inside a unit, as in `900km/h`, binds the
+// complete unit to its coefficient; spaces retain ordinary left associativity.
 class QuantityParser {
 	private index = 0;
 	private readonly tokens: Token[];
@@ -711,13 +723,34 @@ class QuantityParser {
 	}
 
 	private parseImplicitMultiplicative(): Quantity {
-		let result = this.parseUnary();
+		let result = this.parseCompactUnitMultiplicative();
 		while (this.canStartPrimary(this.tokens[this.index])) {
-			const right = this.parseUnary();
+			const right = this.parseCompactUnitMultiplicative();
 			result = quantity(
 				result.value.times(right.value),
 				addDimensions(result.dimensions, right.dimensions),
 				result.hasUnit || right.hasUnit,
+			);
+		}
+		return result;
+	}
+
+	private parseCompactUnitMultiplicative(): Quantity {
+		let result = this.parseUnary();
+		while (this.matchesCompactUnitOperator(result)) {
+			const operator = (
+				this.tokens[this.index] as Extract<Token, { type: "operator" }>
+			).value;
+			this.index += 1;
+			const right = this.parseUnary();
+			result = quantity(
+				operator === "*"
+					? result.value.times(right.value)
+					: result.value.div(right.value),
+				operator === "*"
+					? addDimensions(result.dimensions, right.dimensions)
+					: subtractDimensions(result.dimensions, right.dimensions),
+				true,
 			);
 		}
 		return result;
@@ -804,6 +837,20 @@ class QuantityParser {
 			token?.type === "number" ||
 			token?.type === "identifier" ||
 			token?.type === "leftParen"
+		);
+	}
+
+	private matchesCompactUnitOperator(left: Quantity) {
+		const operator = this.tokens[this.index];
+		const right = this.tokens[this.index + 1];
+		return (
+			left.hasUnit &&
+			operator?.type === "operator" &&
+			(operator.value === "*" || operator.value === "/") &&
+			operator.joinedToPrevious &&
+			right?.type === "identifier" &&
+			right.joinedToPrevious &&
+			resolveUnitIdentifier(right.value) != null
 		);
 	}
 
