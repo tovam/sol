@@ -1094,6 +1094,7 @@ function formatBaseUnit(dimensions: Dimensions) {
 	const names = ["kg", "m", "s", "A", "rad"];
 	const numerator: string[] = [];
 	const denominator: string[] = [];
+	const negativePowers: string[] = [];
 	for (let index = 0; index < dimensions.length; index += 1) {
 		const exponent = dimensions[index];
 		if (exponent === 0) continue;
@@ -1102,9 +1103,17 @@ function formatBaseUnit(dimensions: Dimensions) {
 				? names[index]
 				: `${names[index]}^${formatExponent(Math.abs(exponent))}`;
 		if (exponent > 0) numerator.push(formatted);
-		else denominator.push(formatted);
+		else {
+			denominator.push(formatted);
+			negativePowers.push(
+				`${names[index]}^${formatExponent(exponent)}`,
+			);
+		}
 	}
-	const top = numerator.length > 0 ? numerator.join("*") : "1";
+	if (numerator.length === 0 && negativePowers.length > 0) {
+		return negativePowers.join("*");
+	}
+	const top = numerator.join("*");
 	if (denominator.length === 0) return top;
 	const bottom = denominator.join("*");
 	return denominator.length === 1 ? `${top}/${bottom}` : `${top}/(${bottom})`;

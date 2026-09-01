@@ -47,7 +47,7 @@ test("groups juxtaposed quantities before explicit multiplication and division",
 
 test("keeps compact compound units attached to their coefficient", () => {
 	const grouped = evaluate("1/(30s) / 900km/h");
-	assert.equal(grouped.targetUnit, "1/m");
+	assert.equal(grouped.targetUnit, "m^-1");
 	assert.equal(
 		grouped.interpretedExpression,
 		"(1 / (30 × s)) / (900 × (km / h))",
@@ -61,7 +61,13 @@ test("keeps compact compound units attached to their coefficient", () => {
 	);
 
 	const explicitlySpaced = evaluate("1/(30s) / 900km / h");
-	assert.equal(explicitlySpaced.targetUnit, "1/(m*s^2)");
+	assert.equal(explicitlySpaced.targetUnit, "m^-1*s^-2");
+});
+
+test("uses negative powers when a result has only inverse dimensions", () => {
+	assert.equal(evaluate("1/m").targetUnit, "m^-1");
+	assert.equal(evaluate("1/(kg*s)").targetUnit, "kg^-1*s^-1");
+	assert.equal(evaluate("m/(kg*s)").targetUnit, "m/(kg*s)");
 });
 
 test("shows the exact operator grouping used by the parser", () => {
