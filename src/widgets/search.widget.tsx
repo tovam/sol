@@ -1,5 +1,5 @@
 import { LegendList, type LegendListRef } from "@legendapp/list/react-native";
-import { Icons } from "assets";
+import { Assets, Icons } from "assets";
 import clsx from "clsx";
 import Favicon from "components/Favicon";
 import { FileIcon } from "components/FileIcon";
@@ -9,10 +9,12 @@ import { LoadingBar } from "components/LoadingBar";
 import { MainInput } from "components/MainInput";
 import { isNetworkQuery, NetworkPanel } from "components/NetworkPanel";
 import { renderToKeys } from "lib/shortcuts";
+import { solNative } from "lib/SolNative";
 import { observer } from "mobx-react-lite";
 import { type FC, useEffect, useRef, useState } from "react";
 import {
 	ActivityIndicator,
+	Clipboard,
 	Image,
 	Platform,
 	StyleSheet,
@@ -50,10 +52,52 @@ function getSearchItemFixedSize(item: Item) {
 function TemporaryResultView({
 	result,
 	isActive,
+	isDarkMode,
 }: {
 	result: TemporaryResult;
 	isActive: boolean;
+	isDarkMode: boolean;
 }) {
+	if (result.kind === "calculation") {
+		return (
+			<View className="flex-1 px-4 flex-row items-center gap-4">
+				<View className="flex-1 min-w-0">
+					<Text className="text-sm darker-text" numberOfLines={1}>
+						{result.expression} =
+					</Text>
+					<Text
+						className="mt-0.5 text-2xl font-medium"
+						numberOfLines={1}
+						adjustsFontSizeToFit
+						minimumFontScale={0.65}
+					>
+						{result.value}
+					</Text>
+				</View>
+				<TouchableOpacity
+					accessibilityRole="button"
+					accessibilityLabel="Copy calculation result"
+					onPress={() => {
+						Clipboard.setString(result.copyValue);
+						void solNative.showToast("Copied to clipboard", "success");
+					}}
+				>
+					<View className="w-9 h-9 rounded-full items-center justify-center bg-black/5 dark:bg-white/10">
+						<Image
+							source={Assets.DocumentIcon}
+							resizeMode="contain"
+							style={{
+								width: 18,
+								height: 18,
+								tintColor: isDarkMode ? "#d4d4d4" : "#525252",
+							}}
+						/>
+					</View>
+				</TouchableOpacity>
+			</View>
+		);
+	}
+
 	if (result.kind === "comparison") {
 		if (result.layout === "inline") {
 			return (
@@ -290,6 +334,19 @@ const ItemRow = observer(({ item, index }: { item: Item; index: number }) => {
 	const store = useStore();
 	const isActive = index === store.ui.selectedIndex;
 	const metadata = getItemMetadata(item, store.ui.username, store.ui.searchTab);
+	const isCalculationResult =
+		store.ui.isCalculating || store.ui.temporaryResult?.kind === "calculation";
+	const temporaryResultClassName = clsx(
+		"flex-row items-center",
+		isCalculationResult
+			? clsx(
+					"rounded-[22px] py-4 border-2",
+					isActive
+						? "bg-[#00000012] dark:bg-[#FFFFFF18] border-[#00000035] dark:border-[#FFFFFF30]"
+						: "bg-[#00000008] dark:bg-[#FFFFFF0D] border-[#00000018] dark:border-[#FFFFFF18]",
+				)
+			: clsx("rounded-xl py-5", { highlight: isActive }),
+	);
 
 	// this is used for things like calculator results
 	if (item.type === ItemType.TEMPORARY_RESULT) {
@@ -299,34 +356,35 @@ const ItemRow = observer(({ item, index }: { item: Item; index: number }) => {
 				<View
 					accessible
 					accessibilityLabel="Calculating"
-					className={clsx("flex-row items-center rounded-xl py-5", {
-						highlight: isActive,
-					})}
+					className={temporaryResultClassName}
 				>
-					<View className="flex-1 px-4 items-center justify-center">
-						<Text
-							accessible={false}
-							className="text-4xl font-semibold opacity-0"
-						>
-							0
-						</Text>
-						<View className="absolute inset-0 items-center justify-center">
-							<ActivityIndicator size="small" />
+					<View className="flex-1 px-4 flex-row items-center gap-4">
+						<View className="flex-1 min-w-0">
+							<Text accessible={false} className="text-sm opacity-0">
+								0 =
+							</Text>
+							<Text
+								accessible={false}
+								className="mt-0.5 text-2xl font-medium opacity-0"
+							>
+								0
+							</Text>
+							<View className="absolute inset-0 items-center justify-center">
+								<ActivityIndicator size="small" />
+							</View>
 						</View>
+						<View className="w-9 h-9" />
 					</View>
 				</View>
 			);
 		}
 
 		return (
-			<View
-				className={clsx("flex-row items-center rounded-xl py-5", {
-					highlight: isActive,
-				})}
-			>
+			<View className={temporaryResultClassName}>
 				<TemporaryResultView
 					result={store.ui.temporaryResult}
 					isActive={isActive}
+					isDarkMode={store.ui.isDarkMode}
 				/>
 			</View>
 		);

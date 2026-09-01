@@ -25,6 +25,12 @@ export type TemporaryResult =
 			layout?: "labeled" | "inline";
 	  }
 	| {
+			kind: "calculation";
+			expression: string;
+			value: string;
+			copyValue: string;
+	  }
+	| {
 			kind: "flight";
 			flight: string;
 			status?: string;
@@ -312,6 +318,31 @@ export function parseTimezoneConversion(query: string): TemporaryResult | null {
 const LEGACY_UNIT_CONVERSION_PATTERN =
 	/^(?<value>-?\d*\.?\d+)\s*(?<from>[a-zA-Z]+)\s*(?:to|in)\s*(?<to>[a-zA-Z]+)$/i;
 
+const SUPERSCRIPT_CHARACTERS: Record<string, string> = {
+	"-": "⁻",
+	"0": "⁰",
+	"1": "¹",
+	"2": "²",
+	"3": "³",
+	"4": "⁴",
+	"5": "⁵",
+	"6": "⁶",
+	"7": "⁷",
+	"8": "⁸",
+	"9": "⁹",
+};
+
+function formatCalculatorUnitForDisplay(unit: string) {
+	return unit
+		.replace(/\^(-?\d+)/g, (_match, exponent: string) =>
+			Array.from(
+				exponent,
+				(character) => SUPERSCRIPT_CHARACTERS[character] ?? character,
+			).join(""),
+		)
+		.replace(/\*/g, "·");
+}
+
 export function isCalculationCandidate(query: string) {
 	const normalized = query.trim().replace(/,/g, "").replace(/\s+/g, " ");
 	return (
@@ -324,28 +355,18 @@ export function parseCalculation(query: string): TemporaryResult | null {
 	const normalized = query.trim().replace(/,/g, "").replace(/\s+/g, " ");
 	const expressionResult = evaluateCalculatorExpression(query);
 	if (expressionResult != null) {
-		if (!expressionResult.hasUnits) {
-			return createTextTemporaryResult(
-				expressionResult.formattedValue,
-				expressionResult.expression,
-			);
-		}
-		const suffix = expressionResult.targetUnit
+		const canonicalSuffix = expressionResult.targetUnit
 			? ` ${expressionResult.targetUnit}`
 			: "";
-		const formattedResult = `${expressionResult.formattedValue}${suffix}`;
+		const displaySuffix = expressionResult.targetUnit
+			? ` ${formatCalculatorUnitForDisplay(expressionResult.targetUnit)}`
+			: "";
+		const canonicalResult = `${expressionResult.formattedValue}${canonicalSuffix}`;
 		return {
-			kind: "comparison",
-			left: {
-				label: "",
-				value: expressionResult.expression,
-			},
-			right: {
-				label: "",
-				value: formattedResult,
-			},
-			copyValue: formattedResult,
-			layout: "inline",
+			kind: "calculation",
+			expression: query.trim().replace(/\s+/g, " "),
+			value: `${expressionResult.formattedValue}${displaySuffix}`,
+			copyValue: canonicalResult,
 		};
 	}
 
@@ -367,18 +388,12 @@ export function parseCalculation(query: string): TemporaryResult | null {
 		const converted = convert(value)
 			.from(fromUnit as any)
 			.to(toUnit as any);
+		const formattedResult = `${formatConvertedValue(converted)} ${match.groups.to}`;
 		return {
-			kind: "comparison",
-			left: {
-				label: "",
-				value: `${formatConvertedValue(value)} ${match.groups.from}`,
-			},
-			right: {
-				label: "",
-				value: `${formatConvertedValue(converted)} ${match.groups.to}`,
-			},
-			copyValue: `${formatConvertedValue(converted)} ${match.groups.to}`,
-			layout: "inline",
+			kind: "calculation",
+			expression: query.trim().replace(/\s+/g, " "),
+			value: formattedResult,
+			copyValue: formattedResult,
 		};
 	} catch {
 		return null;
@@ -512,6 +527,8 @@ export async function fetchFlightInfoFromWeb(
 }
 
 export function formatTemporaryResultForClipboard(result: TemporaryResult) {
+	if (result.kind === "calculation") return result.copyValue;
+
 	if (result.kind === "text") {
 		if (result.copyValue != null) return result.copyValue;
 		return result.secondary
