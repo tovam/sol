@@ -20,8 +20,26 @@ type Token = (
 	| { type: "comma" }
 ) & { joinedToPrevious: boolean };
 
+type ParsedExpression =
+	| { type: "atom"; value: string }
+	| { type: "group"; value: ParsedExpression }
+	| { type: "unary"; operator: "+" | "-"; value: ParsedExpression }
+	| {
+			type: "binary";
+			operator: "+" | "-" | "*" | "/" | "%" | "^";
+			left: ParsedExpression;
+			right: ParsedExpression;
+	  }
+	| { type: "function"; name: string; args: ParsedExpression[] };
+
+type ParsedQuantity = {
+	quantity: Quantity;
+	expression: ParsedExpression;
+};
+
 export type CalculatorExpressionResult = {
 	expression: string;
+	interpretedExpression: string;
 	targetUnit: string;
 	value: string;
 	formattedValue: string;
@@ -53,6 +71,37 @@ const quantity = (
 
 const unit = (value: string | Big, dimensions: Dimensions) =>
 	quantity(value, dimensions, true);
+
+const parsedQuantity = (
+	value: Quantity,
+	expression: ParsedExpression,
+): ParsedQuantity => ({ quantity: value, expression });
+
+function renderParsedExpression(
+	expression: ParsedExpression,
+	isRoot = true,
+): string {
+	switch (expression.type) {
+		case "atom":
+			return expression.value;
+		case "group":
+			return `(${renderParsedExpression(expression.value)})`;
+		case "unary":
+			return `${expression.operator}${renderParsedExpression(expression.value, false)}`;
+		case "function":
+			return `${expression.name}(${expression.args
+				.map((argument) => renderParsedExpression(argument))
+				.join(", ")})`;
+		case "binary": {
+			const operator = expression.operator === "*" ? "×" : expression.operator;
+			const rendered = `${renderParsedExpression(
+				expression.left,
+				false,
+			)} ${operator} ${renderParsedExpression(expression.right, false)}`;
+			return isRoot ? rendered : `(${rendered})`;
+		}
+	}
+}
 
 export function normalizeCalculatorExpression(input: string) {
 	return input.replace(/\*\*/g, "^");
@@ -664,7 +713,7 @@ class QuantityParser {
 		return result;
 	}
 
-	private parseAdditive(): Quantity {
+	private parseAdditive(): ParsedQuantity {
 		let result = this.parseMultiplicative();
 		while (this.matchesOperator("+") || this.matchesOperator("-")) {
 			const operator = (
@@ -672,21 +721,34 @@ class QuantityParser {
 			).value;
 			this.index += 1;
 			const right = this.parseMultiplicative();
-			if (!dimensionsMatch(result.dimensions, right.dimensions)) {
+			if (
+				!dimensionsMatch(
+					result.quantity.dimensions,
+					right.quantity.dimensions,
+				)
+			) {
 				throw new Error("Cannot add quantities with different dimensions");
 			}
-			result = quantity(
-				operator === "+"
-					? result.value.plus(right.value)
-					: result.value.minus(right.value),
-				result.dimensions,
-				result.hasUnit || right.hasUnit,
+			result = parsedQuantity(
+				quantity(
+					operator === "+"
+						? result.quantity.value.plus(right.quantity.value)
+						: result.quantity.value.minus(right.quantity.value),
+					result.quantity.dimensions,
+					result.quantity.hasUnit || right.quantity.hasUnit,
+				),
+				{
+					type: "binary",
+					operator,
+					left: result.expression,
+					right: right.expression,
+				},
 			);
 		}
 		return result;
 	}
 
-	private parseMultiplicative(): Quantity {
+	private parseMultiplicative(): ParsedQuantity {
 		let result = this.parseImplicitMultiplicative();
 		while (
 			this.matchesOperator("*") ||
@@ -699,87 +761,163 @@ class QuantityParser {
 			this.index += 1;
 			const right = this.parseImplicitMultiplicative();
 			if (operator === "%") {
-				assertMatchingDimensions([result, right], "Remainder");
-				result = quantity(
-					result.value.mod(right.value),
-					result.dimensions,
-					result.hasUnit || right.hasUnit,
+				assertMatchingDimensions(
+					[result.quantity, right.quantity],
+					"Remainder",
+				);
+				result = parsedQuantity(
+					quantity(
+						result.quantity.value.mod(right.quantity.value),
+						result.quantity.dimensions,
+						result.quantity.hasUnit || right.quantity.hasUnit,
+					),
+					{
+						type: "binary",
+						operator,
+						left: result.expression,
+						right: right.expression,
+					},
 				);
 			} else if (operator === "*") {
-				result = quantity(
-					result.value.times(right.value),
-					addDimensions(result.dimensions, right.dimensions),
-					result.hasUnit || right.hasUnit,
+				result = parsedQuantity(
+					quantity(
+						result.quantity.value.times(right.quantity.value),
+						addDimensions(
+							result.quantity.dimensions,
+							right.quantity.dimensions,
+						),
+						result.quantity.hasUnit || right.quantity.hasUnit,
+					),
+					{
+						type: "binary",
+						operator,
+						left: result.expression,
+						right: right.expression,
+					},
 				);
 			} else {
-				result = quantity(
-					result.value.div(right.value),
-					subtractDimensions(result.dimensions, right.dimensions),
-					result.hasUnit || right.hasUnit,
+				result = parsedQuantity(
+					quantity(
+						result.quantity.value.div(right.quantity.value),
+						subtractDimensions(
+							result.quantity.dimensions,
+							right.quantity.dimensions,
+						),
+						result.quantity.hasUnit || right.quantity.hasUnit,
+					),
+					{
+						type: "binary",
+						operator,
+						left: result.expression,
+						right: right.expression,
+					},
 				);
 			}
 		}
 		return result;
 	}
 
-	private parseImplicitMultiplicative(): Quantity {
+	private parseImplicitMultiplicative(): ParsedQuantity {
 		let result = this.parseCompactUnitMultiplicative();
 		while (this.canStartPrimary(this.tokens[this.index])) {
 			const right = this.parseCompactUnitMultiplicative();
-			result = quantity(
-				result.value.times(right.value),
-				addDimensions(result.dimensions, right.dimensions),
-				result.hasUnit || right.hasUnit,
+			result = parsedQuantity(
+				quantity(
+					result.quantity.value.times(right.quantity.value),
+					addDimensions(
+						result.quantity.dimensions,
+						right.quantity.dimensions,
+					),
+					result.quantity.hasUnit || right.quantity.hasUnit,
+				),
+				{
+					type: "binary",
+					operator: "*",
+					left: result.expression,
+					right: right.expression,
+				},
 			);
 		}
 		return result;
 	}
 
-	private parseCompactUnitMultiplicative(): Quantity {
+	private parseCompactUnitMultiplicative(): ParsedQuantity {
 		let result = this.parseUnary();
-		while (this.matchesCompactUnitOperator(result)) {
+		while (this.matchesCompactUnitOperator(result.quantity)) {
 			const operator = (
 				this.tokens[this.index] as Extract<Token, { type: "operator" }>
 			).value;
 			this.index += 1;
 			const right = this.parseUnary();
-			result = quantity(
-				operator === "*"
-					? result.value.times(right.value)
-					: result.value.div(right.value),
-				operator === "*"
-					? addDimensions(result.dimensions, right.dimensions)
-					: subtractDimensions(result.dimensions, right.dimensions),
-				true,
+			result = parsedQuantity(
+				quantity(
+					operator === "*"
+						? result.quantity.value.times(right.quantity.value)
+						: result.quantity.value.div(right.quantity.value),
+					operator === "*"
+						? addDimensions(
+								result.quantity.dimensions,
+								right.quantity.dimensions,
+							)
+						: subtractDimensions(
+								result.quantity.dimensions,
+								right.quantity.dimensions,
+							),
+					true,
+				),
+				{
+					type: "binary",
+					operator,
+					left: result.expression,
+					right: right.expression,
+				},
 			);
 		}
 		return result;
 	}
 
-	private parseUnary(): Quantity {
+	private parseUnary(): ParsedQuantity {
 		if (this.matchesOperator("+")) {
 			this.index += 1;
-			return this.parseUnary();
+			const value = this.parseUnary();
+			return parsedQuantity(value.quantity, {
+				type: "unary",
+				operator: "+",
+				value: value.expression,
+			});
 		}
 		if (this.matchesOperator("-")) {
 			this.index += 1;
 			const value = this.parseUnary();
-			return quantity(value.value.neg(), value.dimensions, value.hasUnit);
+			return parsedQuantity(
+				quantity(
+					value.quantity.value.neg(),
+					value.quantity.dimensions,
+					value.quantity.hasUnit,
+				),
+				{ type: "unary", operator: "-", value: value.expression },
+			);
 		}
 		return this.parsePower();
 	}
 
-	private parsePower(): Quantity {
+	private parsePower(): ParsedQuantity {
 		const base = this.parsePrimary();
 		if (!this.matchesOperator("^")) {
 			return base;
 		}
 
 		this.index += 1;
-		return power(base, this.parseUnary());
+		const exponent = this.parseUnary();
+		return parsedQuantity(power(base.quantity, exponent.quantity), {
+			type: "binary",
+			operator: "^",
+			left: base.expression,
+			right: exponent.expression,
+		});
 	}
 
-	private parsePrimary(): Quantity {
+	private parsePrimary(): ParsedQuantity {
 		const token = this.tokens[this.index];
 		if (!token) {
 			throw new Error("Unexpected end of expression");
@@ -787,7 +925,10 @@ class QuantityParser {
 
 		if (token.type === "number") {
 			this.index += 1;
-			return quantity(token.value, DIMENSIONLESS);
+			return parsedQuantity(quantity(token.value, DIMENSIONLESS), {
+				type: "atom",
+				value: token.value,
+			});
 		}
 
 		if (token.type === "identifier") {
@@ -799,7 +940,10 @@ class QuantityParser {
 			) {
 				return this.parseFunctionCall(normalizedName);
 			}
-			return resolveIdentifier(token.value);
+			return parsedQuantity(resolveIdentifier(token.value), {
+				type: "atom",
+				value: token.value,
+			});
 		}
 
 		if (token.type === "leftParen") {
@@ -809,7 +953,10 @@ class QuantityParser {
 				throw new Error("Missing closing parenthesis");
 			}
 			this.index += 1;
-			return value;
+			return parsedQuantity(value.quantity, {
+				type: "group",
+				value: value.expression,
+			});
 		}
 
 		throw new Error("Unexpected expression token");
@@ -817,7 +964,7 @@ class QuantityParser {
 
 	private parseFunctionCall(name: string) {
 		this.index += 1;
-		const args: Quantity[] = [];
+		const args: ParsedQuantity[] = [];
 		if (this.tokens[this.index]?.type !== "rightParen") {
 			while (true) {
 				args.push(this.parseAdditive());
@@ -829,7 +976,17 @@ class QuantityParser {
 			throw new Error(`Missing closing parenthesis for ${name}`);
 		}
 		this.index += 1;
-		return evaluateFunction(name, args);
+		return parsedQuantity(
+			evaluateFunction(
+				name,
+				args.map((argument) => argument.quantity),
+			),
+			{
+				type: "function",
+				name,
+				args: args.map((argument) => argument.expression),
+			},
+		);
 	}
 
 	private canStartPrimary(token: Token | undefined) {
@@ -863,6 +1020,10 @@ class QuantityParser {
 }
 
 function parseQuantity(input: string) {
+	return new QuantityParser(tokenize(input)).parse().quantity;
+}
+
+function parseQuantityWithInterpretation(input: string) {
 	return new QuantityParser(tokenize(input)).parse();
 }
 
@@ -1094,20 +1255,27 @@ export function evaluateCalculatorExpression(
 	if (!expression || (hasExplicitTarget && !targetUnit)) return null;
 
 	try {
-		const source = parseQuantity(expression);
+		const parsedSource = parseQuantityWithInterpretation(expression);
+		const source = parsedSource.quantity;
+		const interpretedSource = renderParsedExpression(parsedSource.expression);
 		if (!hasExplicitTarget && isDimensionless(source.dimensions)) {
 			return {
 				expression,
+				interpretedExpression: interpretedSource,
 				targetUnit: "",
 				value: source.value.toString(),
 				formattedValue: formatResult(source.value),
 				hasUnits: false,
 			};
 		}
+		const parsedTarget = hasExplicitTarget
+			? parseQuantityWithInterpretation(targetUnit)
+			: null;
 		const inferredTarget = hasExplicitTarget ? null : inferTargetUnit(source);
 		const resolvedTargetUnit = inferredTarget?.unit ?? targetUnit;
-		const target = inferredTarget?.quantity ?? parseQuantity(targetUnit);
+		const target = inferredTarget?.quantity ?? parsedTarget?.quantity;
 		if (
+			target == null ||
 			!dimensionsMatch(source.dimensions, target.dimensions) ||
 			target.value.eq("0")
 		) {
@@ -1117,6 +1285,9 @@ export function evaluateCalculatorExpression(
 		const value = source.value.div(target.value);
 		return {
 			expression,
+			interpretedExpression: parsedTarget
+				? `${interpretedSource} → ${renderParsedExpression(parsedTarget.expression)}`
+				: interpretedSource,
 			targetUnit: resolvedTargetUnit,
 			value: value.toString(),
 			formattedValue: formatResult(value),

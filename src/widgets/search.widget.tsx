@@ -62,8 +62,13 @@ function TemporaryResultView({
 		return (
 			<View className="flex-1 px-4 flex-row items-center gap-4">
 				<View className="flex-1 min-w-0">
-					<Text className="text-sm darker-text" numberOfLines={1}>
-						{result.expression} =
+					<Text
+						className="text-sm darker-text"
+						numberOfLines={1}
+						adjustsFontSizeToFit
+						minimumFontScale={0.75}
+					>
+						{result.interpretedExpression ?? result.expression} =
 					</Text>
 					<Text
 						className="mt-0.5 text-2xl font-medium"

@@ -48,6 +48,10 @@ test("groups juxtaposed quantities before explicit multiplication and division",
 test("keeps compact compound units attached to their coefficient", () => {
 	const grouped = evaluate("1/(30s) / 900km/h");
 	assert.equal(grouped.targetUnit, "1/m");
+	assert.equal(
+		grouped.interpretedExpression,
+		"(1 / (30 × s)) / (900 × (km / h))",
+	);
 	assert.ok(Math.abs(Number(grouped.value) - 1 / 7500) < 1e-18);
 
 	const groupedWithCoefficientSpace = evaluate("1/(30s) / 900 km/h");
@@ -58,6 +62,16 @@ test("keeps compact compound units attached to their coefficient", () => {
 
 	const explicitlySpaced = evaluate("1/(30s) / 900km / h");
 	assert.equal(explicitlySpaced.targetUnit, "1/(m*s^2)");
+});
+
+test("shows the exact operator grouping used by the parser", () => {
+	assert.equal(evaluate("2 + 3 * 4").interpretedExpression, "2 + (3 × 4)");
+	assert.equal(evaluate("-2^2").interpretedExpression, "-(2 ^ 2)");
+	assert.equal(evaluate("(-2)^2").interpretedExpression, "(-2) ^ 2");
+	assert.equal(
+		evaluate("3 m to cm").interpretedExpression,
+		"3 × m → cm",
+	);
 });
 
 test("parses slashes and powers identically inside and outside units", () => {

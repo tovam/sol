@@ -27,6 +27,7 @@ export type TemporaryResult =
 	| {
 			kind: "calculation";
 			expression: string;
+			interpretedExpression?: string;
 			value: string;
 			copyValue: string;
 	  }
@@ -365,6 +366,7 @@ export function parseCalculation(query: string): TemporaryResult | null {
 		return {
 			kind: "calculation",
 			expression: query.trim().replace(/\s+/g, " "),
+			interpretedExpression: expressionResult.interpretedExpression,
 			value: `${expressionResult.formattedValue}${displaySuffix}`,
 			copyValue: canonicalResult,
 		};
