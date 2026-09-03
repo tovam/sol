@@ -24,20 +24,36 @@ private final class FloatingVideoPanel: NSPanel {
   override var canBecomeMain: Bool { true }
 }
 
-private final class NonInteractiveDailymotionWebView: WKWebView {
+private final class ProtectedDailymotionWebView: WKWebView {
+  var protectsVideoSurface = true {
+    didSet {
+      guard oldValue != protectsVideoSurface else { return }
+      window?.invalidateCursorRects(for: self)
+    }
+  }
+
   override func hitTest(_ point: NSPoint) -> NSView? {
-    frame.contains(point) ? self : nil
+    protectsVideoSurface
+      ? (bounds.contains(point) ? self : nil)
+      : super.hitTest(point)
   }
 
   override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
-    true
+    protectsVideoSurface ? true : super.acceptsFirstMouse(for: event)
   }
 
   override func resetCursorRects() {
-    addCursorRect(bounds, cursor: .openHand)
+    super.resetCursorRects()
+    if protectsVideoSurface {
+      addCursorRect(bounds, cursor: .openHand)
+    }
   }
 
   override func mouseDown(with event: NSEvent) {
+    guard protectsVideoSurface else {
+      super.mouseDown(with: event)
+      return
+    }
     guard
       let window,
       !window.styleMask.contains(.fullScreen)
@@ -50,18 +66,44 @@ private final class NonInteractiveDailymotionWebView: WKWebView {
     window.performDrag(with: event)
   }
 
-  override func mouseDragged(with event: NSEvent) {}
-  override func mouseUp(with event: NSEvent) {}
-  override func rightMouseDown(with event: NSEvent) {}
-  override func rightMouseDragged(with event: NSEvent) {}
-  override func rightMouseUp(with event: NSEvent) {}
-  override func otherMouseDown(with event: NSEvent) {}
-  override func otherMouseDragged(with event: NSEvent) {}
-  override func otherMouseUp(with event: NSEvent) {}
-  override func scrollWheel(with event: NSEvent) {}
+  override func mouseDragged(with event: NSEvent) {
+    if !protectsVideoSurface { super.mouseDragged(with: event) }
+  }
+
+  override func mouseUp(with event: NSEvent) {
+    if !protectsVideoSurface { super.mouseUp(with: event) }
+  }
+
+  override func rightMouseDown(with event: NSEvent) {
+    if !protectsVideoSurface { super.rightMouseDown(with: event) }
+  }
+
+  override func rightMouseDragged(with event: NSEvent) {
+    if !protectsVideoSurface { super.rightMouseDragged(with: event) }
+  }
+
+  override func rightMouseUp(with event: NSEvent) {
+    if !protectsVideoSurface { super.rightMouseUp(with: event) }
+  }
+
+  override func otherMouseDown(with event: NSEvent) {
+    if !protectsVideoSurface { super.otherMouseDown(with: event) }
+  }
+
+  override func otherMouseDragged(with event: NSEvent) {
+    if !protectsVideoSurface { super.otherMouseDragged(with: event) }
+  }
+
+  override func otherMouseUp(with event: NSEvent) {
+    if !protectsVideoSurface { super.otherMouseUp(with: event) }
+  }
+
+  override func scrollWheel(with event: NSEvent) {
+    if !protectsVideoSurface { super.scrollWheel(with: event) }
+  }
 
   override func menu(for event: NSEvent) -> NSMenu? {
-    nil
+    protectsVideoSurface ? nil : super.menu(for: event)
   }
 }
 
@@ -276,6 +318,10 @@ private protocol DailymotionControlsViewDelegate: AnyObject {
   )
   func controlsDidToggleMute(_ controls: DailymotionControlsView)
   func controls(_ controls: DailymotionControlsView, didSetVolume volume: Double)
+  func controls(
+    _ controls: DailymotionControlsView,
+    didSetVideoInteractionEnabled isEnabled: Bool
+  )
   func controlsDidToggleFullscreen(_ controls: DailymotionControlsView)
   func controlsDidChangeToolbarHeight(_ controls: DailymotionControlsView)
 }
@@ -510,6 +556,7 @@ private final class DailymotionControlsView: NSVisualEffectView,
     target: nil,
     action: nil
   )
+  private let videoInteractionButton = NSButton()
   private let fullscreenButton = NSButton()
   private let playbackGroup = NSStackView()
   private let timelineGroup = NSStackView()
@@ -524,17 +571,19 @@ private final class DailymotionControlsView: NSVisualEffectView,
   private let rateSeparator = NSBox()
   private let qualitySeparator = NSBox()
   private let audioSeparator = NSBox()
+  private let videoInteractionSeparator = NSBox()
   private let compactSpacer = NSView()
   private let primaryRow = NSStackView()
   private let secondaryRow = NSStackView()
   private let rowsStack = NSStackView()
   private var toolbarHeightConstraint: NSLayoutConstraint?
   private var usesTwoRows = false
+  private var isVideoInteractionEnabled = false
   private var displayedQualityValues: [String] = []
   private let rates = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]
 
-  private static let liveTwoRowBreakpoint: CGFloat = 640
-  private static let regularTwoRowBreakpoint: CGFloat = 528
+  private static let liveTwoRowBreakpoint: CGFloat = 676
+  private static let regularTwoRowBreakpoint: CGFloat = 564
   private static let rowModeHysteresis: CGFloat = 32
   fileprivate static let singleRowHeight: CGFloat = 36
   fileprivate static let twoRowHeight: CGFloat = 68
@@ -590,6 +639,13 @@ private final class DailymotionControlsView: NSVisualEffectView,
       "…",
       toolTip: "Waiting for Dailymotion video quality information"
     )
+
+    configureButton(
+      videoInteractionButton,
+      action: #selector(toggleVideoInteraction),
+      toolTip: "Enable interaction with the video"
+    )
+    setVideoInteractionEnabled(false)
 
     configureButton(
       fullscreenButton,
@@ -663,6 +719,7 @@ private final class DailymotionControlsView: NSVisualEffectView,
       rateSeparator,
       qualitySeparator,
       audioSeparator,
+      videoInteractionSeparator,
     ].forEach { configureSeparator($0) }
     configureHorizontalStack(
       primaryRow,
@@ -679,6 +736,8 @@ private final class DailymotionControlsView: NSVisualEffectView,
         qualitySeparator,
         audioGroup,
         audioSeparator,
+        videoInteractionButton,
+        videoInteractionSeparator,
         fullscreenButton,
       ]
     )
@@ -742,6 +801,7 @@ private final class DailymotionControlsView: NSVisualEffectView,
       volumeButton.widthAnchor.constraint(equalToConstant: 32),
       volumeSlider.widthAnchor.constraint(greaterThanOrEqualToConstant: 40),
       volumeSlider.widthAnchor.constraint(lessThanOrEqualToConstant: 96),
+      videoInteractionButton.widthAnchor.constraint(equalToConstant: 32),
       fullscreenButton.widthAnchor.constraint(equalToConstant: 32),
       playButton.heightAnchor.constraint(equalToConstant: 28),
       backwardButton.heightAnchor.constraint(equalToConstant: 28),
@@ -751,6 +811,7 @@ private final class DailymotionControlsView: NSVisualEffectView,
       ratePopUp.heightAnchor.constraint(equalToConstant: 28),
       qualityPopUp.heightAnchor.constraint(equalToConstant: 28),
       volumeButton.heightAnchor.constraint(equalToConstant: 28),
+      videoInteractionButton.heightAnchor.constraint(equalToConstant: 28),
       fullscreenButton.heightAnchor.constraint(equalToConstant: 28),
     ])
 
@@ -830,6 +891,8 @@ private final class DailymotionControlsView: NSVisualEffectView,
       rateSeparator,
       qualitySeparator,
       audioSeparator,
+      videoInteractionButton,
+      videoInteractionSeparator,
       fullscreenButton,
     ]
     for view in movableViews {
@@ -855,6 +918,8 @@ private final class DailymotionControlsView: NSVisualEffectView,
       secondaryRow.addArrangedSubview(compactSpacer)
       secondaryRow.addArrangedSubview(audioGroup)
       secondaryRow.addArrangedSubview(audioSeparator)
+      secondaryRow.addArrangedSubview(videoInteractionButton)
+      secondaryRow.addArrangedSubview(videoInteractionSeparator)
       secondaryRow.addArrangedSubview(fullscreenButton)
       secondaryRow.isHidden = false
       toolbarHeightConstraint?.constant = Self.twoRowHeight
@@ -871,6 +936,8 @@ private final class DailymotionControlsView: NSVisualEffectView,
       primaryRow.addArrangedSubview(qualitySeparator)
       primaryRow.addArrangedSubview(audioGroup)
       primaryRow.addArrangedSubview(audioSeparator)
+      primaryRow.addArrangedSubview(videoInteractionButton)
+      primaryRow.addArrangedSubview(videoInteractionSeparator)
       primaryRow.addArrangedSubview(fullscreenButton)
       secondaryRow.isHidden = true
       toolbarHeightConstraint?.constant = Self.singleRowHeight
@@ -1186,6 +1253,29 @@ private final class DailymotionControlsView: NSVisualEffectView,
       : "Enter full screen"
   }
 
+  private func setVideoInteractionEnabled(_ isEnabled: Bool) {
+    isVideoInteractionEnabled = isEnabled
+    let symbolName = isEnabled ? "hand.tap.fill" : "lock.fill"
+    let label = isEnabled
+      ? "Protect video surface"
+      : "Enable interaction with the video"
+    videoInteractionButton.image = NSImage(
+      systemSymbolName: symbolName,
+      accessibilityDescription: label
+    )
+    videoInteractionButton.title = videoInteractionButton.image == nil
+      ? (isEnabled ? "Use" : "Lock")
+      : ""
+    videoInteractionButton.contentTintColor = isEnabled
+      ? .systemOrange
+      : .secondaryLabelColor
+    videoInteractionButton.toolTip = isEnabled
+      ? "Video interaction enabled — click to protect it again"
+      : "Enable interaction with the video"
+    videoInteractionButton.setAccessibilityLabel(label)
+    videoInteractionButton.state = isEnabled ? .on : .off
+  }
+
   private func renderQualityControl(
     _ state: DailymotionBridgeState,
     ready: Bool
@@ -1367,6 +1457,15 @@ private final class DailymotionControlsView: NSVisualEffectView,
     delegate?.controlsDidToggleMute(self)
   }
 
+  @objc private func toggleVideoInteraction() {
+    let isEnabled = !isVideoInteractionEnabled
+    setVideoInteractionEnabled(isEnabled)
+    delegate?.controls(
+      self,
+      didSetVideoInteractionEnabled: isEnabled
+    )
+  }
+
   @objc private func toggleFullscreen() {
     delegate?.controlsDidToggleFullscreen(self)
   }
@@ -1385,7 +1484,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
 
   private var panel: FloatingVideoPanel?
   private var keyboardMonitor: Any?
-  private var webView: WKWebView?
+  private var webView: ProtectedDailymotionWebView?
   private var controlsView: DailymotionControlsView?
   private var userContentController: WKUserContentController?
   private var source: DailymotionPlayerSource?
@@ -1915,7 +2014,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
     configuration.allowsAirPlayForMediaPlayback = true
     configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
 
-    let webView = NonInteractiveDailymotionWebView(
+    let webView = ProtectedDailymotionWebView(
       frame: panel.contentView?.bounds ?? .zero,
       configuration: configuration
     )
@@ -3696,6 +3795,13 @@ extension DailymotionPlayerController: DailymotionControlsViewDelegate {
     _ controls: DailymotionControlsView
   ) {
     panel?.toggleFullScreen(nil)
+  }
+
+  fileprivate func controls(
+    _ controls: DailymotionControlsView,
+    didSetVideoInteractionEnabled isEnabled: Bool
+  ) {
+    webView?.protectsVideoSurface = !isEnabled
   }
 
   fileprivate func controlsDidChangeToolbarHeight(
