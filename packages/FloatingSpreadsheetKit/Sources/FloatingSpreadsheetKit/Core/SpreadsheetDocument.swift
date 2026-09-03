@@ -269,7 +269,7 @@ final class SpreadsheetDocument {
     guard updated != settings else { return }
     commit(
       SpreadsheetAction(
-        label: "Set column (CellAddress.columnName(column)) type",
+        label: "Set column \(CellAddress.columnName(column)) type",
         kind: .layout,
         settingsBefore: settings,
         settingsAfter: updated
