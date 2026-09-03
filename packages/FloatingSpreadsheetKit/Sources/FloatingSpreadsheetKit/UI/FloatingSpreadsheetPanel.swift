@@ -43,7 +43,10 @@ final class FloatingSpreadsheetPanel: NSPanel {
     hasShadow = false
     isReleasedWhenClosed = false
     hidesOnDeactivate = false
-    isMovableByWindowBackground = true
+    // Window movement is deliberately owned by SpreadsheetToolbarView.
+    // Treating every background view as a drag handle conflicts with precise
+    // interactions such as resizing a column from its header.
+    isMovableByWindowBackground = false
     animationBehavior = .utilityWindow
   }
 

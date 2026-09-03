@@ -874,6 +874,7 @@ private final class SpreadsheetColumnHeaderView: NSView {
   required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
   override var isFlipped: Bool { true }
+  override var mouseDownCanMoveWindow: Bool { false }
 
   override func draw(_ dirtyRect: NSRect) {
     let clippedDirtyRect = dirtyRect.intersection(bounds)
