@@ -492,7 +492,9 @@ final class SpreadsheetDocument {
           valueIsTime: sample.isDuration
         )
       }
-    return points.isEmpty ? [] : [SpreadsheetChartSeries(name: "Values", points: points)]
+    return points.isEmpty
+      ? []
+      : [SpreadsheetChartSeries(id: "histogram", name: "Values", points: points)]
   }
 
   func histogramSamples(
@@ -582,7 +584,11 @@ final class SpreadsheetDocument {
           valueIsTime: pointValue.isTime
         )
       }
-      return SpreadsheetChartSeries(name: seriesName, points: points)
+      return SpreadsheetChartSeries(
+        id: "column:\(column - range.start.column)",
+        name: seriesName,
+        points: points
+      )
     }
   }
 
@@ -626,7 +632,11 @@ final class SpreadsheetDocument {
           valueIsTime: pointValue.isTime
         )
       }
-      return SpreadsheetChartSeries(name: seriesName, points: points)
+      return SpreadsheetChartSeries(
+        id: "row:\(row - range.start.row)",
+        name: seriesName,
+        points: points
+      )
     }
   }
 

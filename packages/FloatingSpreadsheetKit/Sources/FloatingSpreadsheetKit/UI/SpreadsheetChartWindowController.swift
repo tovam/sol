@@ -249,6 +249,14 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
     let referenceLabelField = NSTextField(string: chart.referenceLine?.label ?? "")
     referenceLabelField.placeholderString = "Optional label"
 
+    let seriesOptions = SpreadsheetChartSeriesOptionsView(
+      series: spreadsheetDocument.chartSeries(for: chart),
+      chart: chart,
+      showsLineControls: chart.type == .line,
+      xPlaceholder: xUsesDate ? "Date" : (xUsesTime ? "HH:mm" : "X"),
+      yPlaceholder: yUsesTime ? "HH:mm" : "Y"
+    )
+
     let automaticPlaceholder = xUsesDate
       ? "Automatic or YYYY-MM-DD"
       : (xUsesTime ? "Automatic or HH:mm" : "Automatic")
@@ -324,12 +332,17 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
     secondSeparator.boxType = .separator
     let thirdSeparator = NSBox()
     thirdSeparator.boxType = .separator
+    let fourthSeparator = NSBox()
+    fourthSeparator.boxType = .separator
 
     let stack = NSStackView(views: [
       generalGrid,
       headerCheckbox,
       lastValueLabelsCheckbox,
       firstSeparator,
+      optionsHeading("Series shown in this chart"),
+      seriesOptions,
+      fourthSeparator,
       xHeading,
       xGrid,
       xChecks,
@@ -344,10 +357,12 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
     stack.orientation = .vertical
     stack.alignment = .leading
     stack.spacing = 6
-    stack.frame = NSRect(x: 0, y: 0, width: 440, height: 500)
+    stack.frame = NSRect(x: 0, y: 0, width: 440, height: 690)
     for view in [
       generalGrid,
       firstSeparator,
+      seriesOptions,
+      fourthSeparator,
       xGrid,
       secondSeparator,
       yGrid,
@@ -420,6 +435,18 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
         )
         changed.xAxis = changedXAxis == .standard ? nil : changedXAxis
         changed.yAxis = changedYAxis == .standard ? nil : changedYAxis
+        let configurations = seriesOptions.configurations()
+        if changed.type == .line {
+          try validateSeriesConfigurations(
+            configurations,
+            xIsTime: xUsesTime,
+            xIsDate: xUsesDate,
+            yIsTime: yUsesTime,
+            xScale: changedXAxis.scale,
+            yScale: changedYAxis.scale
+          )
+        }
+        changed.seriesConfigurations = configurations.isEmpty ? nil : configurations
         if referenceValueField.isEnabled {
           let referenceValue = try parseAxisBound(
             referenceValueField.stringValue,
@@ -474,7 +501,11 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
   private func axisBoundText(_ value: Double?, isTime: Bool, isDate: Bool) -> String {
     guard let value else { return "" }
     if isDate {
-      return SpreadsheetDate.format(Date(timeIntervalSince1970: value))
+      return SpreadsheetDate.format(
+        Date(timeIntervalSince1970: value),
+        locale: spreadsheetDocument.settings.displayLocale.locale,
+        timeZone: spreadsheetDocument.settings.timeZone
+      )
     }
     if isTime { return SpreadsheetTime.format(value) }
     let formatter = NumberFormatter()
@@ -548,7 +579,11 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
     let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !value.isEmpty else { return nil }
     if isDate {
-      guard let date = SpreadsheetDate.parse(value) else {
+      guard let date = SpreadsheetDate.parse(
+        value,
+        displayLocale: spreadsheetDocument.settings.displayLocale,
+        timeZone: spreadsheetDocument.settings.timeZone
+      ) else {
         throw SpreadsheetChartSettingsError.invalidBound(
           name,
           isTime: false,
@@ -558,11 +593,79 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
       return date.timeIntervalSince1970
     }
     if isTime, let time = SpreadsheetTime.parse(value) { return time }
-    let normalized = value.replacingOccurrences(of: ",", with: ".")
-    guard let number = Double(normalized), number.isFinite else {
+    guard let number = FlexibleNumberParser.parse(
+      value,
+      locale: spreadsheetDocument.settings.displayLocale.locale
+    ), number.isFinite else {
       throw SpreadsheetChartSettingsError.invalidBound(name, isTime: isTime, isDate: false)
     }
     return number
+  }
+
+  private func validateSeriesConfigurations(
+    _ configurations: [SpreadsheetChartSeriesConfiguration],
+    xIsTime: Bool,
+    xIsDate: Bool,
+    yIsTime: Bool,
+    xScale: SpreadsheetChartAxisScale,
+    yScale: SpreadsheetChartAxisScale
+  ) throws {
+    for configuration in configurations {
+      guard let target = configuration.target else { continue }
+      let coordinates = [
+        try requiredTargetValue(
+          target.startX,
+          isTime: xIsTime,
+          isDate: xIsDate,
+          name: "Target A X"
+        ),
+        try requiredTargetValue(
+          target.endX,
+          isTime: xIsTime,
+          isDate: xIsDate,
+          name: "Target B X"
+        ),
+        try requiredTargetValue(
+          target.startY,
+          isTime: yIsTime,
+          isDate: false,
+          name: "Target A Y"
+        ),
+        try requiredTargetValue(
+          target.endY,
+          isTime: yIsTime,
+          isDate: false,
+          name: "Target B Y"
+        ),
+      ]
+      if xScale == .logarithmic,
+        coordinates[0] <= 0 || coordinates[1] <= 0
+      {
+        throw SpreadsheetChartSettingsError.nonPositiveLogarithmicBound("target X")
+      }
+      if yScale == .logarithmic,
+        coordinates[2] <= 0 || coordinates[3] <= 0
+      {
+        throw SpreadsheetChartSettingsError.nonPositiveLogarithmicBound("target Y")
+      }
+    }
+  }
+
+  private func requiredTargetValue(
+    _ rawValue: String,
+    isTime: Bool,
+    isDate: Bool,
+    name: String
+  ) throws -> Double {
+    guard let value = try parseAxisBound(
+      rawValue,
+      isTime: isTime,
+      isDate: isDate,
+      name: name
+    ) else {
+      throw SpreadsheetChartSettingsError.incompleteTarget(name)
+    }
+    return value
   }
 
   private func showChartSettingsError(_ message: String) {
@@ -663,6 +766,7 @@ private enum SpreadsheetChartSettingsError: LocalizedError {
   case invalidBound(String, isTime: Bool, isDate: Bool)
   case invalidRange(String)
   case nonPositiveLogarithmicBound(String)
+  case incompleteTarget(String)
 
   var errorDescription: String? {
     switch self {
@@ -675,6 +779,8 @@ private enum SpreadsheetChartSettingsError: LocalizedError {
       return "The \(axis) axis minimum must be lower than its maximum."
     case .nonPositiveLogarithmicBound(let axis):
       return "The \(axis) axis bounds must be greater than zero for a logarithmic scale."
+    case .incompleteTarget(let field):
+      return "\(field) is required while the target segment is enabled."
     }
   }
 }
@@ -865,6 +971,7 @@ private final class SpreadsheetChartToolbarView: NSView {
 
 private struct SpreadsheetChartDatum: Identifiable {
   var id: String
+  var seriesID: String
   var series: String
   var category: String
   var x: Double
@@ -875,6 +982,16 @@ private struct SpreadsheetChartDatum: Identifiable {
   var valueIsTime: Bool
   var histogramLowerBound: Double?
   var histogramUpperBound: Double?
+}
+
+private struct SpreadsheetChartTargetDatum: Identifiable {
+  var id: String
+  var segmentID: String
+  var seriesID: String
+  var x: Double
+  var xDate: Date?
+  var value: Double
+  var includesInScale: Bool
 }
 
 private struct SpreadsheetChartHoverSelection: Identifiable {
@@ -908,6 +1025,119 @@ private final class SpreadsheetChartViewModel: ObservableObject {
     !data.isEmpty && data.allSatisfy(\.valueIsTime)
   }
 
+  func seriesIDs(for definition: SpreadsheetChartDefinition) -> [String] {
+    data.reduce(into: [String]()) { result, datum in
+      guard !result.contains(datum.seriesID),
+        definition.configuration(for: datum.seriesID).isVisible
+      else {
+        return
+      }
+      result.append(datum.seriesID)
+    }
+  }
+
+  func seriesNames(for definition: SpreadsheetChartDefinition) -> [String] {
+    seriesIDs(for: definition).compactMap { seriesID in
+      data.first(where: { $0.seriesID == seriesID })?.series
+    }
+  }
+
+  func seriesColors(for definition: SpreadsheetChartDefinition) -> [Color] {
+    seriesIDs(for: definition).map { seriesColor(for: $0, definition: definition) }
+  }
+
+  func seriesColor(
+    for seriesID: String,
+    definition: SpreadsheetChartDefinition
+  ) -> Color {
+    let allIDs = data.reduce(into: [String]()) { result, datum in
+      if !result.contains(datum.seriesID) { result.append(datum.seriesID) }
+    }
+    let index = allIDs.firstIndex(of: seriesID) ?? 0
+    let configured = definition.configuration(for: seriesID).colorHex
+    let hex = configured ?? SpreadsheetChartPalette.defaultHex(at: index)
+    return Color(nsColor: SpreadsheetChartPalette.color(from: hex))
+  }
+
+  func showsPoints(
+    for seriesID: String,
+    definition: SpreadsheetChartDefinition
+  ) -> Bool {
+    definition.configuration(for: seriesID).showsPoints
+  }
+
+  func targetData(
+    for definition: SpreadsheetChartDefinition
+  ) -> [SpreadsheetChartTargetDatum] {
+    guard definition.type == .line else { return [] }
+    return seriesIDs(for: definition).flatMap { seriesID -> [SpreadsheetChartTargetDatum] in
+      let configuration = definition.configuration(for: seriesID)
+      guard configuration.isVisible,
+        let target = configuration.target,
+        let startX = parsedTargetX(target.startX),
+        let endX = parsedTargetX(target.endX),
+        let startY = parsedTargetY(target.startY),
+        let endY = parsedTargetY(target.endY)
+      else {
+        return []
+      }
+      let segmentID = "target:\(seriesID)"
+      return [
+        SpreadsheetChartTargetDatum(
+          id: "\(segmentID):start",
+          segmentID: segmentID,
+          seriesID: seriesID,
+          x: startX.number,
+          xDate: startX.date,
+          value: startY,
+          includesInScale: target.includesInScale
+        ),
+        SpreadsheetChartTargetDatum(
+          id: "\(segmentID):end",
+          segmentID: segmentID,
+          seriesID: seriesID,
+          x: endX.number,
+          xDate: endX.date,
+          value: endY,
+          includesInScale: target.includesInScale
+        ),
+      ]
+    }
+  }
+
+  private func parsedTargetX(_ rawValue: String) -> (number: Double, date: Date?)? {
+    if usesDateXAxis {
+      guard let date = SpreadsheetDate.parse(
+        rawValue,
+        displayLocale: document.settings.displayLocale,
+        timeZone: document.settings.timeZone
+      ) else {
+        return nil
+      }
+      return (date.timeIntervalSince1970, date)
+    }
+    if usesTimeXAxis, let time = SpreadsheetTime.parse(rawValue) {
+      return (time, nil)
+    }
+    guard let number = FlexibleNumberParser.parse(
+      rawValue,
+      locale: document.settings.displayLocale.locale
+    ) else {
+      return nil
+    }
+    return (number, nil)
+  }
+
+  private func parsedTargetY(_ rawValue: String) -> Double? {
+    if usesTimeValueAxis, let time = SpreadsheetTime.parse(rawValue) {
+      return time
+    }
+    return FlexibleNumberParser.parse(
+      rawValue,
+      locale: document.settings.displayLocale.locale
+    )
+  }
+
   init(document: SpreadsheetDocument, chartID: UUID) {
     self.document = document
     self.chartID = chartID
@@ -930,6 +1160,7 @@ private final class SpreadsheetChartViewModel: ObservableObject {
       data = result?.bins.map { bin in
         SpreadsheetChartDatum(
           id: "histogram-\(bin.index)",
+          seriesID: "histogram",
           series: "Frequency",
           category: histogramBinLabel(bin, isDuration: result?.isDuration == true),
           x: bin.midpoint,
@@ -949,6 +1180,7 @@ private final class SpreadsheetChartViewModel: ObservableObject {
       series.points.enumerated().map { index, point in
         SpreadsheetChartDatum(
           id: "\(series.name)-\(index)-\(point.category)",
+          seriesID: series.stableID,
           series: series.name,
           category: point.category,
           x: point.x ?? Double(index),
@@ -971,6 +1203,9 @@ private final class SpreadsheetChartViewModel: ObservableObject {
       : definition.effectiveXAxis.scale
     let yScale = definition.effectiveYAxis.scale
     var result = data.filter { datum in
+      guard definition.configuration(for: datum.seriesID).isVisible else {
+        return false
+      }
       let hasValidX = definition.type == .pie
         || usesDateXAxis
         || !hasNumericXAxis
@@ -1074,21 +1309,31 @@ private final class SpreadsheetChartViewModel: ObservableObject {
     else {
       return nil
     }
+    let targets = targetData(for: definition)
+    let includedTargets = targets.filter(\.includesInScale)
     return axisDomain(
       values: definition.type == .histogram
         ? plottableData(for: definition).flatMap {
           [$0.histogramLowerBound ?? $0.x, $0.histogramUpperBound ?? $0.x]
         }
-        : plottableData(for: definition).map(\.x),
-      configuration: definition.effectiveXAxis
+        : plottableData(for: definition).map(\.x) + includedTargets.map(\.x),
+      configuration: definition.effectiveXAxis,
+      forceDomain: !targets.isEmpty
     )
   }
 
   func xDateDomain(for definition: SpreadsheetChartDefinition) -> ClosedRange<Date>? {
     guard definition.type != .pie, usesDateXAxis else { return nil }
     let configuration = definition.effectiveXAxis
-    guard configuration.minimum != nil || configuration.maximum != nil else { return nil }
+    let targets = targetData(for: definition)
+    guard configuration.minimum != nil
+      || configuration.maximum != nil
+      || !targets.isEmpty
+    else {
+      return nil
+    }
     let dates = plottableData(for: definition).compactMap(\.xDate)
+      + targets.filter(\.includesInScale).compactMap(\.xDate)
     var lower = configuration.minimum.map { Date(timeIntervalSince1970: $0) }
       ?? dates.min()
       ?? Date(timeIntervalSince1970: 0)
@@ -1102,11 +1347,23 @@ private final class SpreadsheetChartViewModel: ObservableObject {
         lower = upper.addingTimeInterval(-86_400)
       }
     }
+    if !targets.isEmpty,
+      configuration.minimum == nil,
+      configuration.maximum == nil
+    {
+      let padding = max(60, upper.timeIntervalSince(lower) * 0.04)
+      lower = lower.addingTimeInterval(-padding)
+      upper = upper.addingTimeInterval(padding)
+    }
     return lower...upper
   }
 
   func formattedDate(_ date: Date) -> String {
-    SpreadsheetDate.format(date, locale: document.settings.displayLocale.locale)
+    SpreadsheetDate.format(
+      date,
+      locale: document.settings.displayLocale.locale,
+      timeZone: document.settings.timeZone
+    )
   }
 
   func formattedValue(_ value: Double, isTime: Bool) -> String {
@@ -1176,19 +1433,24 @@ private final class SpreadsheetChartViewModel: ObservableObject {
 
   func yDomain(for definition: SpreadsheetChartDefinition) -> ClosedRange<Double>? {
     guard definition.type != .pie else { return nil }
+    let targets = targetData(for: definition)
     return axisDomain(
-      values: plottableData(for: definition).map(\.value),
-      configuration: definition.effectiveYAxis
+      values: plottableData(for: definition).map(\.value)
+        + targets.filter(\.includesInScale).map(\.value),
+      configuration: definition.effectiveYAxis,
+      forceDomain: !targets.isEmpty
     )
   }
 
   private func axisDomain(
     values: [Double],
-    configuration: SpreadsheetChartAxisConfiguration
+    configuration: SpreadsheetChartAxisConfiguration,
+    forceDomain: Bool = false
   ) -> ClosedRange<Double>? {
     guard configuration.scale == .logarithmic
       || configuration.minimum != nil
       || configuration.maximum != nil
+      || forceDomain
     else {
       return nil
     }
@@ -1222,6 +1484,15 @@ private final class SpreadsheetChartViewModel: ObservableObject {
         lower -= padding
         upper += padding
       }
+    }
+    if forceDomain,
+      configuration.scale == .linear,
+      configuration.minimum == nil,
+      configuration.maximum == nil
+    {
+      let padding = max(abs(upper - lower) * 0.04, 1e-9)
+      lower -= padding
+      upper += padding
     }
     return lower...upper
   }
@@ -1474,21 +1745,48 @@ private struct SpreadsheetChartView: View {
             y: .value("Value", datum.value)
           )
           .foregroundStyle(by: .value("Series", datum.series))
-          .symbol(by: .value("Series", datum.series))
+          .interpolationMethod(.linear)
+          if model.showsPoints(for: datum.seriesID, definition: definition) {
+            PointMark(
+              x: .value("Date", datum.xDate ?? .distantPast),
+              y: .value("Value", datum.value)
+            )
+            .foregroundStyle(by: .value("Series", datum.series))
+            .symbol(by: .value("Series", datum.series))
+            .symbolSize(28)
+          }
         } else if model.usesNumericXAxis {
           LineMark(
             x: .value(model.usesTimeXAxis ? "Time" : "X", datum.x),
             y: .value("Value", datum.value)
           )
           .foregroundStyle(by: .value("Series", datum.series))
-          .symbol(by: .value("Series", datum.series))
+          .interpolationMethod(.linear)
+          if model.showsPoints(for: datum.seriesID, definition: definition) {
+            PointMark(
+              x: .value(model.usesTimeXAxis ? "Time" : "X", datum.x),
+              y: .value("Value", datum.value)
+            )
+            .foregroundStyle(by: .value("Series", datum.series))
+            .symbol(by: .value("Series", datum.series))
+            .symbolSize(28)
+          }
         } else {
           LineMark(
             x: .value("Category", datum.category),
             y: .value("Value", datum.value)
           )
           .foregroundStyle(by: .value("Series", datum.series))
-          .symbol(by: .value("Series", datum.series))
+          .interpolationMethod(.linear)
+          if model.showsPoints(for: datum.seriesID, definition: definition) {
+            PointMark(
+              x: .value("Category", datum.category),
+              y: .value("Value", datum.value)
+            )
+            .foregroundStyle(by: .value("Series", datum.series))
+            .symbol(by: .value("Series", datum.series))
+            .symbolSize(28)
+          }
         }
       case .bar:
         if model.usesDateXAxis {
@@ -1567,6 +1865,49 @@ private struct SpreadsheetChartView: View {
           )
           .foregroundStyle(Color.accentColor.gradient)
         }
+        }
+      }
+      if definition.type == .line {
+        ForEach(model.targetData(for: definition)) { target in
+          if model.usesDateXAxis {
+            LineMark(
+              x: .value("Target date", target.xDate ?? .distantPast),
+              y: .value("Target value", target.value),
+              series: .value("Target", target.segmentID)
+            )
+            .foregroundStyle(
+              model.seriesColor(for: target.seriesID, definition: definition).opacity(0.78)
+            )
+            .lineStyle(StrokeStyle(lineWidth: 1.4, dash: [6, 4]))
+            .interpolationMethod(.linear)
+            PointMark(
+              x: .value("Target date", target.xDate ?? .distantPast),
+              y: .value("Target value", target.value)
+            )
+            .foregroundStyle(
+              model.seriesColor(for: target.seriesID, definition: definition).opacity(0.72)
+            )
+            .symbolSize(22)
+          } else {
+            LineMark(
+              x: .value("Target X", target.x),
+              y: .value("Target value", target.value),
+              series: .value("Target", target.segmentID)
+            )
+            .foregroundStyle(
+              model.seriesColor(for: target.seriesID, definition: definition).opacity(0.78)
+            )
+            .lineStyle(StrokeStyle(lineWidth: 1.4, dash: [6, 4]))
+            .interpolationMethod(.linear)
+            PointMark(
+              x: .value("Target X", target.x),
+              y: .value("Target value", target.value)
+            )
+            .foregroundStyle(
+              model.seriesColor(for: target.seriesID, definition: definition).opacity(0.72)
+            )
+            .symbolSize(22)
+          }
         }
       }
       if definition.type != .pie, let referenceLine = definition.referenceLine {
@@ -1677,6 +2018,13 @@ private struct SpreadsheetChartView: View {
         }
       }
     }
+    .modifier(
+      SpreadsheetChartSeriesPaletteModifier(
+        domain: model.seriesNames(for: definition),
+        range: model.seriesColors(for: definition),
+        isEnabled: definition.type != .pie && definition.type != .histogram
+      )
+    )
     .modifier(
       SpreadsheetChartScaleModifier(
         xDomain: model.xDomain(for: definition),
@@ -1863,6 +2211,21 @@ private struct SpreadsheetChartView: View {
     .padding(.horizontal, 4)
     .padding(.vertical, 2)
     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 4))
+  }
+}
+
+private struct SpreadsheetChartSeriesPaletteModifier: ViewModifier {
+  let domain: [String]
+  let range: [Color]
+  let isEnabled: Bool
+
+  @ViewBuilder
+  func body(content: Content) -> some View {
+    if isEnabled, !domain.isEmpty, domain.count == range.count {
+      content.chartForegroundStyleScale(domain: domain, range: range)
+    } else {
+      content
+    }
   }
 }
 

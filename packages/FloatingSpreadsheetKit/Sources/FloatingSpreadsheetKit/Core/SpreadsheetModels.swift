@@ -457,8 +457,49 @@ struct SpreadsheetChartPoint: Codable, Equatable {
 }
 
 struct SpreadsheetChartSeries: Codable, Equatable {
+  var id: String?
   var name: String
   var points: [SpreadsheetChartPoint]
+
+  init(id: String? = nil, name: String, points: [SpreadsheetChartPoint]) {
+    self.id = id
+    self.name = name
+    self.points = points
+  }
+
+  var stableID: String { id ?? name }
+}
+
+struct SpreadsheetChartTargetSegment: Codable, Equatable {
+  var startX: String
+  var startY: String
+  var endX: String
+  var endY: String
+  var includesInScale: Bool
+}
+
+struct SpreadsheetChartSeriesConfiguration: Codable, Equatable, Identifiable {
+  var seriesID: String
+  var isVisible: Bool
+  var colorHex: String?
+  var showsPoints: Bool
+  var target: SpreadsheetChartTargetSegment?
+
+  var id: String { seriesID }
+
+  init(
+    seriesID: String,
+    isVisible: Bool = true,
+    colorHex: String? = nil,
+    showsPoints: Bool = true,
+    target: SpreadsheetChartTargetSegment? = nil
+  ) {
+    self.seriesID = seriesID
+    self.isVisible = isVisible
+    self.colorHex = colorHex
+    self.showsPoints = showsPoints
+    self.target = target
+  }
 }
 
 struct SpreadsheetChartReferenceLine: Codable, Equatable {
@@ -485,6 +526,7 @@ struct SpreadsheetChartDefinition: Codable, Equatable, Identifiable {
   var yAxis: SpreadsheetChartAxisConfiguration?
   var referenceLine: SpreadsheetChartReferenceLine?
   var showsLastValueLabels: Bool?
+  var seriesConfigurations: [SpreadsheetChartSeriesConfiguration]?
 
   var effectiveXAxis: SpreadsheetChartAxisConfiguration {
     xAxis ?? .standard
@@ -511,7 +553,8 @@ struct SpreadsheetChartDefinition: Codable, Equatable, Identifiable {
     xAxis: SpreadsheetChartAxisConfiguration? = nil,
     yAxis: SpreadsheetChartAxisConfiguration? = nil,
     referenceLine: SpreadsheetChartReferenceLine? = nil,
-    showsLastValueLabels: Bool? = nil
+    showsLastValueLabels: Bool? = nil,
+    seriesConfigurations: [SpreadsheetChartSeriesConfiguration]? = nil
   ) {
     self.id = id
     self.title = title
@@ -526,6 +569,12 @@ struct SpreadsheetChartDefinition: Codable, Equatable, Identifiable {
     self.yAxis = yAxis
     self.referenceLine = referenceLine
     self.showsLastValueLabels = showsLastValueLabels
+    self.seriesConfigurations = seriesConfigurations
+  }
+
+  func configuration(for seriesID: String) -> SpreadsheetChartSeriesConfiguration {
+    seriesConfigurations?.first(where: { $0.seriesID == seriesID })
+      ?? SpreadsheetChartSeriesConfiguration(seriesID: seriesID)
   }
 }
 

@@ -454,4 +454,70 @@ final class FloatingSpreadsheetKitTests: XCTestCase {
     let legacy = try JSONDecoder().decode(SpreadsheetChartDefinition.self, from: legacyData)
     XCTAssertFalse(legacy.displaysLastValueLabels)
   }
+
+  func testChartSeriesConfigurationAndTargetPersist() throws {
+    let target = SpreadsheetChartTargetSegment(
+      startX: "2026-09-03 18:31",
+      startY: "37",
+      endX: "2026-09-07 11:21",
+      endY: "2",
+      includesInScale: false
+    )
+    let configuration = SpreadsheetChartSeriesConfiguration(
+      seriesID: "column:1",
+      isVisible: true,
+      colorHex: "#4F7CF7",
+      showsPoints: false,
+      target: target
+    )
+    let chart = SpreadsheetChartDefinition(
+      sourceRange: CellRange(CellAddress(row: 0, column: 0)),
+      seriesConfigurations: [configuration]
+    )
+
+    let encoded = try JSONEncoder().encode(chart)
+    let restored = try JSONDecoder().decode(SpreadsheetChartDefinition.self, from: encoded)
+    XCTAssertEqual(restored.configuration(for: "column:1"), configuration)
+    XCTAssertEqual(restored.configuration(for: "column:1").target, target)
+  }
+
+  func testLegacyChartDefaultsToVisibleSeriesWithPoints() throws {
+    let chart = SpreadsheetChartDefinition(
+      sourceRange: CellRange(CellAddress(row: 0, column: 0))
+    )
+    let encoded = try JSONEncoder().encode(chart)
+    var legacyObject = try XCTUnwrap(
+      JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+    )
+    legacyObject.removeValue(forKey: "seriesConfigurations")
+    let legacyData = try JSONSerialization.data(withJSONObject: legacyObject)
+
+    let legacy = try JSONDecoder().decode(SpreadsheetChartDefinition.self, from: legacyData)
+    let configuration = legacy.configuration(for: "column:1")
+    XCTAssertTrue(configuration.isVisible)
+    XCTAssertTrue(configuration.showsPoints)
+    XCTAssertNil(configuration.colorHex)
+    XCTAssertNil(configuration.target)
+  }
+
+  func testChartSeriesHaveStableColumnIdentifiers() {
+    let document = SpreadsheetDocument(name: "Series identifiers")
+    document.setRawInput("Date", at: CellAddress(row: 0, column: 0))
+    document.setRawInput("Left", at: CellAddress(row: 0, column: 1))
+    document.setRawInput("Right", at: CellAddress(row: 0, column: 2))
+    document.setRawInput("2026-09-03", at: CellAddress(row: 1, column: 0))
+    document.setRawInput("37", at: CellAddress(row: 1, column: 1))
+    document.setRawInput("12", at: CellAddress(row: 1, column: 2))
+    let chart = SpreadsheetChartDefinition(
+      sourceRange: CellRange(
+        start: CellAddress(row: 0, column: 0),
+        end: CellAddress(row: 1, column: 2)
+      )
+    )
+
+    XCTAssertEqual(
+      document.chartSeries(for: chart).map(\.stableID),
+      ["column:1", "column:2"]
+    )
+  }
 }
