@@ -1022,7 +1022,11 @@ private final class DailymotionControlsView: NSVisualEffectView,
     backwardButton.isEnabled = state.hasReliableAdState
     forwardButton.isEnabled = state.hasReliableAdState
     liveButton.isHidden = false
-    liveButton.isEnabled = state.hasReliableAdState && edgeDelay > 3
+    // Keep LIVE actionable while playback is stopped, even if the reported
+    // position is already at the edge. Dailymotion can now leave the player on
+    // a start screen at the live edge; in that state LIVE must also start it.
+    liveButton.isEnabled = state.hasReliableAdState
+      && (edgeDelay > 3 || !state.isPlaying)
     clockTimeField.isEnabled = state.hasReliableAdState
     ratePopUp.isEnabled = state.hasReliableAdState
     timeLabel.textColor = edgeDelay <= 3 ? .systemRed : .secondaryLabelColor
@@ -3227,7 +3231,10 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
                       );
                       break;
                     }
-                    case "goLive": await player.seek(numericValue); break;
+                    case "goLive":
+                      await player.seek(numericValue);
+                      await player.play();
+                      break;
                     case "rate": await player.setPlaybackSpeed(numericValue); break;
                     case "quality": await player.setQuality(String(rawValue)); break;
                     case "volume": await player.setVolume(numericValue); break;
@@ -3249,6 +3256,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
               player = createdPlayer;
               const eventNames = [
                 "PLAYER_CRITICALPATHREADY", "PLAYER_VIDEOCHANGE",
+                "PLAYER_START", "PLAYER_PLAYBACKPERMISSION",
                 "VIDEO_DURATIONCHANGE", "VIDEO_TIMECHANGE", "VIDEO_PLAY",
                 "VIDEO_PLAYING", "VIDEO_PAUSE", "VIDEO_END",
                 "VIDEO_SEEKSTART", "VIDEO_SEEKEND", "VIDEO_BUFFERING",
@@ -3405,8 +3413,7 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
             case "play": await video.play(); break;
             case "pause": video.pause(); break;
             case "seek":
-            case "seekBy":
-            case "goLive": {
+            case "seekBy": {
               const [rangeStart, rangeEnd] = seekableRange(video);
               let target = command === "seekBy"
                 ? video.currentTime + value
@@ -3419,6 +3426,16 @@ final class DailymotionPlayerController: NSObject, NSWindowDelegate {
                 return false;
               }
               video.currentTime = target;
+              break;
+            }
+            case "goLive": {
+              // Resolve the live edge from the current TimeRanges sample in
+              // this exact frame. The value received from Swift is only a
+              // fallback for the public SDK and may already be stale.
+              const [rangeStart, rangeEnd] = seekableRange(video);
+              if (rangeStart === null || rangeEnd === null) return false;
+              video.currentTime = Math.max(rangeStart, rangeEnd - 0.05);
+              await video.play();
               break;
             }
             case "rate": video.playbackRate = value; break;
@@ -3597,21 +3614,19 @@ extension DailymotionPlayerController: DailymotionControlsViewDelegate {
       return
     }
     resetLiveDVRRateTracking()
+    guard let liveEdge = state.seekableEnd else { return }
+    let target = max(state.seekableStart ?? 0, liveEdge - 0.25)
     let expectedSessionID = sessionID
-    sendCommand("rate", value: 1) { [weak self] _ in
+    sendCommand("goLive", value: target) { [weak self] _ in
       guard
         let self,
-        self.sessionID == expectedSessionID,
-        !self.state.isAdPlaying,
-        self.state.contentMode == .live,
-        self.state.isOnAir != false,
-        self.controlsCanSeek,
-        let liveEdge = self.state.seekableEnd
+        self.sessionID == expectedSessionID
       else {
         return
       }
-      let target = max(self.state.seekableStart ?? 0, liveEdge - 0.25)
-      self.sendCommand("goLive", value: target)
+      // A rate reset failure must never prevent the jump to live. It is a
+      // follow-up normalization only, after the essential command ran.
+      self.sendCommand("rate", value: 1)
     }
   }
 
