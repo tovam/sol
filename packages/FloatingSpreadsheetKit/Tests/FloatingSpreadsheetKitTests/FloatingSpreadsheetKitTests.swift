@@ -218,6 +218,86 @@ final class FloatingSpreadsheetKitTests: XCTestCase {
     XCTAssertNil(point.x)
   }
 
+  func testMixedDateTimeColumnUsesColumnWideYearInference() throws {
+    let document = SpreadsheetDocument(name: "Mixed dates")
+    var settings = document.settings
+    settings.displayLocale = .french
+    settings.timeZoneIdentifier = "UTC"
+    document.updateSettings(settings)
+    document.setColumnType(.dateTime, at: 0)
+
+    let values = [
+      "3/09 18:31",
+      "04/9 19h14",
+      "5/9 3h",
+      "2026-09-06 9pm",
+      "09-07 11:21am",
+    ]
+    for (row, value) in values.enumerated() {
+      document.setRawInput(value, at: CellAddress(row: row, column: 0))
+    }
+
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "UTC"))
+    let parsed = try values.indices.map { row in
+      try XCTUnwrap(document.value(at: CellAddress(row: row, column: 0)).dateValue)
+    }
+    let components = parsed.map {
+      calendar.dateComponents([.year, .month, .day, .hour, .minute], from: $0)
+    }
+    XCTAssertEqual(components.map(\.year), [2026, 2026, 2026, 2026, 2026])
+    XCTAssertEqual(components.map(\.month), [9, 9, 9, 9, 9])
+    XCTAssertEqual(components.map(\.day), [3, 4, 5, 6, 7])
+    XCTAssertEqual(components.map(\.hour), [18, 19, 3, 21, 11])
+    XCTAssertEqual(components.map(\.minute), [31, 14, 0, 0, 21])
+  }
+
+  func testMissingDateYearsUseCurrentYearAndHandleNewYearBoundary() throws {
+    let document = SpreadsheetDocument(name: "Year boundary")
+    var settings = document.settings
+    settings.timeZoneIdentifier = "UTC"
+    document.updateSettings(settings)
+    document.setRawInput("31/12 23h", at: CellAddress(row: 0, column: 0))
+    document.setRawInput("1/1 1h", at: CellAddress(row: 1, column: 0))
+
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "UTC"))
+    let first = try XCTUnwrap(document.value(at: CellAddress(row: 0, column: 0)).dateValue)
+    let second = try XCTUnwrap(document.value(at: CellAddress(row: 1, column: 0)).dateValue)
+    let currentYear = calendar.component(.year, from: Date())
+    XCTAssertEqual(calendar.component(.year, from: first), currentYear)
+    XCTAssertEqual(calendar.component(.year, from: second), currentYear + 1)
+  }
+
+  func testNowIsMaterializedAsAStaticTimestamp() throws {
+    let address = CellAddress(row: 0, column: 0)
+    let document = SpreadsheetDocument(name: "Now")
+    var settings = document.settings
+    settings.timeZoneIdentifier = "UTC"
+    document.updateSettings(settings)
+    document.setRawInput("=NoW", at: address)
+
+    let stored = document.rawInput(at: address)
+    XCTAssertNotEqual(stored.lowercased(), "=now")
+    XCTAssertTrue(SpreadsheetDate.isTimestamp(stored))
+    XCTAssertNotNil(document.value(at: address).dateValue)
+    XCTAssertEqual(document.displayText(at: address), stored)
+  }
+
+  func testColumnTypeCanForceTextAndPersists() throws {
+    let address = CellAddress(row: 0, column: 2)
+    let document = SpreadsheetDocument(name: "Typed column")
+    document.setColumnType(.text, at: address.column)
+    document.setRawInput("2026-09-06 9pm", at: address)
+    XCTAssertEqual(document.value(at: address), .text("2026-09-06 9pm"))
+
+    let data = try JSONEncoder().encode(document.payload)
+    let payload = try JSONDecoder().decode(SpreadsheetPayload.self, from: data)
+    let restored = SpreadsheetDocument(payload: payload)
+    XCTAssertEqual(restored.columnType(at: address.column), .text)
+    XCTAssertEqual(restored.value(at: address), .text("2026-09-06 9pm"))
+  }
+
   func testHistogramUsesOptimalBinsAndPreservesEverySample() throws {
     let samples = (1...100).map {
       SpreadsheetHistogramSample(value: Double($0), isDuration: false)

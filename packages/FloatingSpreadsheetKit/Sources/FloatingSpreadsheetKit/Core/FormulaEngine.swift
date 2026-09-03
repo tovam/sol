@@ -394,6 +394,8 @@ struct FlexibleNumberParser {
 }
 
 final class SpreadsheetFormulaEngine {
+  var literalValueProvider: ((CellAddress, CellRecord) -> SpreadsheetValue)?
+
   private var parsedCache: [String: Result<ParsedFormula, SpreadsheetFormulaError>] = [:]
   private var valueCache: [CellAddress: SpreadsheetValue] = [:]
 
@@ -453,7 +455,7 @@ final class SpreadsheetFormulaEngine {
     guard let record = cells[address] else { return .blank }
     let trimmed = record.rawInput.trimmingCharacters(in: .whitespacesAndNewlines)
     guard trimmed.hasPrefix("=") else {
-      let value = literalValue(for: record)
+      let value = literalValueProvider?(address, record) ?? literalValue(for: record)
       valueCache[address] = value
       return value
     }

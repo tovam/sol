@@ -24,6 +24,7 @@ final class SpreadsheetDocument {
 
   private var cells: [CellAddress: CellRecord]
   private let formulaEngine = SpreadsheetFormulaEngine()
+  private var inferredDateYearsByColumn: [Int: [Int: Int]] = [:]
 
   init(payload: SpreadsheetPayload) {
     id = payload.id
@@ -41,6 +42,9 @@ final class SpreadsheetDocument {
     }
     settings = payload.settings
     archivedAt = payload.archivedAt
+    formulaEngine.literalValueProvider = { [weak self] address, record in
+      self?.literalValue(for: record, at: address) ?? .text(record.rawInput)
+    }
   }
 
   convenience init(id: UUID = UUID(), name: String, now: Date = Date()) {
@@ -96,6 +100,10 @@ final class SpreadsheetDocument {
     formulaEngine.value(at: address, cells: cells)
   }
 
+  func columnType(at column: Int) -> SpreadsheetColumnType {
+    settings.columnType(at: column)
+  }
+
   func referenceRanges(at address: CellAddress) -> [CellRange] {
     formulaEngine.referenceRanges(in: rawInput(at: address))
   }
@@ -118,11 +126,21 @@ final class SpreadsheetDocument {
     case .error(let error):
       return error.rawValue
     case .date(let date):
-      let formatter = DateFormatter()
-      formatter.locale = settings.displayLocale.locale
-      formatter.dateStyle = .short
-      formatter.timeStyle = .none
-      return formatter.string(from: date)
+      if let rawInput = record?.rawInput, SpreadsheetDate.isTimestamp(rawInput) {
+        return rawInput
+      }
+      let includesTime = record.flatMap {
+        SpreadsheetDate.components(
+          $0.rawInput,
+          displayLocale: settings.displayLocale
+        )?.includesTime
+      }
+      return SpreadsheetDate.format(
+        date,
+        locale: settings.displayLocale.locale,
+        timeZone: settings.timeZone,
+        includesTime: includesTime
+      )
     case .time(let fractionOfDay):
       return SpreadsheetTime.format(fractionOfDay)
     case .number(let number):
@@ -133,7 +151,7 @@ final class SpreadsheetDocument {
   func setRawInput(_ rawInput: String, at address: CellAddress, label: String = "Edit cell") {
     let old = cells[address]
     var new = old ?? CellRecord(rawInput: "")
-    new.rawInput = rawInput
+    new.rawInput = materializedInput(rawInput)
     commitCellChanges(
       [SpreadsheetCellChange(address: address, before: old, after: normalized(new))],
       label: label
@@ -146,6 +164,7 @@ final class SpreadsheetDocument {
     firstRowIsHeader: Bool,
     label: String = "Paste cells"
   ) {
+    let now = Date()
     var changes: [SpreadsheetCellChange] = []
     for (rowOffset, row) in rows.enumerated() {
       for (columnOffset, rawInput) in row.enumerated() {
@@ -155,7 +174,7 @@ final class SpreadsheetDocument {
         )
         let before = cells[address]
         var after = before ?? CellRecord(rawInput: "")
-        after.rawInput = rawInput
+        after.rawInput = materializedInput(rawInput, now: now)
         if firstRowIsHeader && rowOffset == 0 {
           after.style.isBold = true
         }
@@ -233,6 +252,27 @@ final class SpreadsheetDocument {
         kind: .layout,
         settingsBefore: settings,
         settingsAfter: normalized
+      )
+    )
+  }
+
+  func setColumnType(_ type: SpreadsheetColumnType, at column: Int) {
+    guard column >= 0 else { return }
+    var updated = settings
+    var types = updated.columnTypes ?? [:]
+    if type == .automatic {
+      types.removeValue(forKey: column)
+    } else {
+      types[column] = type
+    }
+    updated.columnTypes = types.isEmpty ? nil : types
+    guard updated != settings else { return }
+    commit(
+      SpreadsheetAction(
+        label: "Set column (CellAddress.columnName(column)) type",
+        kind: .layout,
+        settingsBefore: settings,
+        settingsAfter: updated
       )
     )
   }
@@ -710,6 +750,7 @@ final class SpreadsheetDocument {
 
   private func finishChange(at date: Date = Date()) {
     updatedAt = date
+    inferredDateYearsByColumn.removeAll(keepingCapacity: true)
     formulaEngine.invalidate()
     onChange?(self)
     NotificationCenter.default.post(name: .floatingSpreadsheetDidChange, object: self)
@@ -717,6 +758,156 @@ final class SpreadsheetDocument {
 
   private func normalized(_ record: CellRecord) -> CellRecord? {
     record.shouldPersist ? record : nil
+  }
+
+  private func materializedInput(_ rawInput: String, now: Date = Date()) -> String {
+    let trimmed = rawInput.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard trimmed.caseInsensitiveCompare("=now") == .orderedSame else {
+      return rawInput
+    }
+    return SpreadsheetDate.timestamp(now, timeZone: settings.timeZone)
+  }
+
+  private func literalValue(
+    for record: CellRecord,
+    at address: CellAddress
+  ) -> SpreadsheetValue {
+    switch columnType(at: address.column) {
+    case .text:
+      return record.rawInput.isEmpty ? .blank : .text(record.rawInput)
+    case .number:
+      let trimmed = record.rawInput.trimmingCharacters(in: .whitespacesAndNewlines)
+      if trimmed.hasSuffix("%"),
+        let number = FlexibleNumberParser.parse(
+          String(trimmed.dropLast()),
+          locale: settings.displayLocale.locale
+        )
+      {
+        return .number(number / 100)
+      }
+      return FlexibleNumberParser.parse(
+        trimmed,
+        locale: settings.displayLocale.locale
+      ).map(SpreadsheetValue.number) ?? .text(record.rawInput)
+    case .dateTime:
+      return contextualDateValue(for: record.rawInput, at: address)
+        ?? .text(record.rawInput)
+    case .automatic:
+      if let date = contextualDateValue(for: record.rawInput, at: address) {
+        return date
+      }
+      return formulaEngine.literalValue(for: record)
+    }
+  }
+
+  private func contextualDateValue(
+    for rawInput: String,
+    at address: CellAddress
+  ) -> SpreadsheetValue? {
+    let parsedComponents = SpreadsheetDate.components(
+      rawInput,
+      displayLocale: settings.displayLocale
+    )
+    if let parsedComponents {
+      let inferredYear = parsedComponents.year
+        ?? inferredDateYears(for: address.column)[address.row]
+      guard let inferredYear,
+        let date = SpreadsheetDate.date(
+          from: parsedComponents,
+          year: inferredYear,
+          timeZone: settings.timeZone
+        )
+      else {
+        return nil
+      }
+      return .date(date)
+    }
+    return SpreadsheetDate.parse(
+      rawInput,
+      displayLocale: settings.displayLocale,
+      timeZone: settings.timeZone
+    ).map(SpreadsheetValue.date)
+  }
+
+  private func inferredDateYears(for column: Int) -> [Int: Int] {
+    if let cached = inferredDateYearsByColumn[column] { return cached }
+    let entries = cells.compactMap { address, record -> (
+      row: Int,
+      components: SpreadsheetDateComponents
+    )? in
+      guard address.column == column,
+        !record.rawInput.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("="),
+        let components = SpreadsheetDate.components(
+          record.rawInput,
+          displayLocale: settings.displayLocale
+        )
+      else {
+        return nil
+      }
+      return (address.row, components)
+    }.sorted { $0.row < $1.row }
+
+    guard !entries.isEmpty else {
+      inferredDateYearsByColumn[column] = [:]
+      return [:]
+    }
+
+    let currentYear = Calendar(identifier: .gregorian).dateComponents(
+      in: settings.timeZone,
+      from: Date()
+    ).year ?? 1970
+    var result: [Int: Int] = [:]
+
+    if let firstAnchor = entries.firstIndex(where: { $0.components.year != nil }),
+      let anchorYear = entries[firstAnchor].components.year
+    {
+      result[entries[firstAnchor].row] = anchorYear
+      var year = anchorYear
+      if firstAnchor > 0 {
+        for index in stride(from: firstAnchor - 1, through: 0, by: -1) {
+          let newer = entries[index + 1].components
+          let older = entries[index].components
+          year += yearChange(from: newer, to: older)
+          if let explicitYear = older.year { year = explicitYear }
+          result[entries[index].row] = year
+        }
+      }
+
+      year = anchorYear
+      if firstAnchor + 1 < entries.count {
+        for index in (firstAnchor + 1)..<entries.count {
+          let previous = entries[index - 1].components
+          let current = entries[index].components
+          year += yearChange(from: previous, to: current)
+          if let explicitYear = current.year { year = explicitYear }
+          result[entries[index].row] = year
+        }
+      }
+    } else {
+      var year = currentYear
+      result[entries[0].row] = year
+      if entries.count > 1 {
+        for index in 1..<entries.count {
+          year += yearChange(
+            from: entries[index - 1].components,
+            to: entries[index].components
+          )
+          result[entries[index].row] = year
+        }
+      }
+    }
+
+    inferredDateYearsByColumn[column] = result
+    return result
+  }
+
+  private func yearChange(
+    from previous: SpreadsheetDateComponents,
+    to current: SpreadsheetDateComponents
+  ) -> Int {
+    if previous.month >= 10, current.month <= 3 { return 1 }
+    if previous.month <= 3, current.month >= 10 { return -1 }
+    return 0
   }
 
   private func effectiveFormat(

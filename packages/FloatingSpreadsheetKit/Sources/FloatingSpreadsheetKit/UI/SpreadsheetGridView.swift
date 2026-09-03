@@ -40,7 +40,7 @@ protocol SpreadsheetGridViewDelegate: AnyObject {
 
 final class SpreadsheetGridContainerView: NSView {
   static let rowHeaderWidth: CGFloat = 48
-  static let columnHeaderHeight: CGFloat = 24
+  static let columnHeaderHeight: CGFloat = 30
 
   let gridView: SpreadsheetGridView
   private let scrollView = NSScrollView()
@@ -779,11 +779,31 @@ private final class SpreadsheetColumnHeaderView: NSView {
       let paragraph = NSMutableParagraphStyle()
       paragraph.alignment = .center
       (CellAddress.columnName(column) as NSString).draw(
-        in: rect.insetBy(dx: 2, dy: 4),
+        in: NSRect(
+          x: rect.minX + 2,
+          y: rect.minY + 1,
+          width: rect.width - 4,
+          height: 15
+        ),
         withAttributes: [
           .font: NSFont.systemFont(ofSize: 11, weight: .medium),
           .foregroundColor: NSColor.secondaryLabelColor,
           .paragraphStyle: paragraph,
+        ]
+      )
+      let typeParagraph = NSMutableParagraphStyle()
+      typeParagraph.alignment = .center
+      (gridView.document.columnType(at: column).shortLabel as NSString).draw(
+        in: NSRect(
+          x: rect.minX + 2,
+          y: rect.minY + 15,
+          width: rect.width - 4,
+          height: 11
+        ),
+        withAttributes: [
+          .font: NSFont.systemFont(ofSize: 7, weight: .semibold),
+          .foregroundColor: NSColor.tertiaryLabelColor,
+          .paragraphStyle: typeParagraph,
         ]
       )
       NSColor.gridColor.setStroke()
@@ -822,7 +842,10 @@ private final class SpreadsheetColumnHeaderView: NSView {
     guard let gridView else { return }
     let point = convert(event.locationInWindow, from: nil)
     guard let column = resizableColumn(at: point.x, gridView: gridView) else {
-      super.mouseDown(with: event)
+      showColumnTypeMenu(
+        for: gridView.columnIndex(atX: point.x + scrollOffset),
+        at: point
+      )
       return
     }
     resizingColumn = column
@@ -851,6 +874,38 @@ private final class SpreadsheetColumnHeaderView: NSView {
     gridView.commitPreviewedColumnWidth(at: resizingColumn)
     self.resizingColumn = nil
     window?.invalidateCursorRects(for: self)
+  }
+
+  @objc private func selectColumnType(_ sender: NSMenuItem) {
+    guard let gridView,
+      let value = sender.representedObject as? [String: Any],
+      let column = value["column"] as? Int,
+      let rawType = value["type"] as? String,
+      let type = SpreadsheetColumnType(rawValue: rawType)
+    else {
+      return
+    }
+    gridView.document.setColumnType(type, at: column)
+    gridView.reloadData()
+    needsDisplay = true
+  }
+
+  private func showColumnTypeMenu(for column: Int, at point: NSPoint) {
+    guard let gridView else { return }
+    let selectedType = gridView.document.columnType(at: column)
+    let menu = NSMenu(title: "Column \(CellAddress.columnName(column)) type")
+    for type in SpreadsheetColumnType.allCases {
+      let item = NSMenuItem(
+        title: type.title,
+        action: #selector(selectColumnType(_:)),
+        keyEquivalent: ""
+      )
+      item.target = self
+      item.state = type == selectedType ? .on : .off
+      item.representedObject = ["column": column, "type": type.rawValue]
+      menu.addItem(item)
+    }
+    menu.popUp(positioning: nil, at: point, in: self)
   }
 
   private func resizableColumn(

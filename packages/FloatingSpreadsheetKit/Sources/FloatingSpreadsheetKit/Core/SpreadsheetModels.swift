@@ -247,10 +247,45 @@ enum SpreadsheetDisplayLocale: String, Codable, CaseIterable {
   }
 }
 
+enum SpreadsheetColumnType: String, Codable, CaseIterable {
+  case automatic
+  case dateTime
+  case number
+  case text
+
+  var title: String {
+    switch self {
+    case .automatic: return "Automatic"
+    case .dateTime: return "Date & time"
+    case .number: return "Number"
+    case .text: return "Text"
+    }
+  }
+
+  var shortLabel: String {
+    switch self {
+    case .automatic: return "AUTO"
+    case .dateTime: return "DATE"
+    case .number: return "123"
+    case .text: return "TEXT"
+    }
+  }
+}
+
 struct SpreadsheetSettings: Codable, Equatable {
   var displayLocale: SpreadsheetDisplayLocale = .french
   var currencyCode = "EUR"
   var scheduledArchiveAt: Date?
+  var timeZoneIdentifier: String?
+  var columnTypes: [Int: SpreadsheetColumnType]?
+
+  var timeZone: TimeZone {
+    timeZoneIdentifier.flatMap { TimeZone(identifier: $0) } ?? .current
+  }
+
+  func columnType(at column: Int) -> SpreadsheetColumnType {
+    columnTypes?[column] ?? .automatic
+  }
 
   static let standard = SpreadsheetSettings()
 }
@@ -347,36 +382,6 @@ enum SpreadsheetTime {
       wrappedMinutes / 60,
       wrappedMinutes % 60
     )
-  }
-}
-
-enum SpreadsheetDate {
-  static func parse(_ input: String) -> Date? {
-    let value = input.trimmingCharacters(in: .whitespacesAndNewlines)
-    let isoFormatter = ISO8601DateFormatter()
-    if let date = isoFormatter.date(from: value) { return date }
-
-    let formats = ["yyyy-MM-dd", "dd/MM/yyyy", "MM/dd/yyyy", "dd-MM-yyyy"]
-    for format in formats {
-      let formatter = DateFormatter()
-      formatter.locale = .current
-      formatter.calendar = .current
-      formatter.timeZone = .current
-      formatter.dateFormat = format
-      formatter.isLenient = false
-      if let date = formatter.date(from: value) { return date }
-    }
-    return nil
-  }
-
-  static func format(_ date: Date, locale: Locale = .current) -> String {
-    let formatter = DateFormatter()
-    formatter.locale = locale
-    formatter.calendar = .current
-    formatter.timeZone = .current
-    formatter.dateStyle = .short
-    formatter.timeStyle = .none
-    return formatter.string(from: date)
   }
 }
 

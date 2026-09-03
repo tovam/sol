@@ -21,6 +21,7 @@ final class SpreadsheetSettingsPopoverController: NSViewController {
     action: nil
   )
   private let currencyPopup = NSPopUpButton()
+  private let timeZonePopup = NSComboBox()
   private let archiveCheckbox = NSButton(checkboxWithTitle: "Enabled", target: nil, action: nil)
   private let archiveDatePicker = NSDatePicker()
 
@@ -35,7 +36,7 @@ final class SpreadsheetSettingsPopoverController: NSViewController {
   }
 
   override func loadView() {
-    let root = NSView(frame: NSRect(x: 0, y: 0, width: 340, height: 178))
+    let root = NSView(frame: NSRect(x: 0, y: 0, width: 340, height: 212))
 
     localeControl.target = self
     localeControl.action = #selector(changeLocale)
@@ -46,6 +47,15 @@ final class SpreadsheetSettingsPopoverController: NSViewController {
     currencyPopup.target = self
     currencyPopup.action = #selector(changeCurrency)
     currencyPopup.setAccessibilityLabel("Spreadsheet currency")
+
+    timeZonePopup.addItem(withObjectValue: "System — \(TimeZone.current.identifier)")
+    timeZonePopup.addItems(withObjectValues: TimeZone.knownTimeZoneIdentifiers)
+    timeZonePopup.isEditable = true
+    timeZonePopup.completes = true
+    timeZonePopup.numberOfVisibleItems = 12
+    timeZonePopup.target = self
+    timeZonePopup.action = #selector(changeTimeZone)
+    timeZonePopup.setAccessibilityLabel("Spreadsheet time zone")
 
     archiveCheckbox.target = self
     archiveCheckbox.action = #selector(toggleScheduledArchive)
@@ -64,8 +74,9 @@ final class SpreadsheetSettingsPopoverController: NSViewController {
 
     let formatLabel = NSTextField(labelWithString: "Format")
     let currencyLabel = NSTextField(labelWithString: "Currency")
+    let timeZoneLabel = NSTextField(labelWithString: "Time zone")
     let archiveLabel = NSTextField(labelWithString: "Auto-archive")
-    for label in [formatLabel, currencyLabel, archiveLabel] {
+    for label in [formatLabel, currencyLabel, timeZoneLabel, archiveLabel] {
       label.font = .systemFont(ofSize: 11)
       label.textColor = .secondaryLabelColor
       label.alignment = .right
@@ -74,6 +85,7 @@ final class SpreadsheetSettingsPopoverController: NSViewController {
     let grid = NSGridView(views: [
       [formatLabel, localeControl],
       [currencyLabel, currencyPopup],
+      [timeZoneLabel, timeZonePopup],
       [archiveLabel, archiveControls],
     ])
     grid.rowSpacing = 8
@@ -142,6 +154,8 @@ final class SpreadsheetSettingsPopoverController: NSViewController {
       $0.code == settings.currencyCode
     } ?? 0
     currencyPopup.selectItem(at: currencyIndex)
+    timeZonePopup.stringValue = settings.timeZoneIdentifier
+      ?? "System — \(TimeZone.current.identifier)"
     let scheduledArchiveAt = settings.scheduledArchiveAt
     archiveCheckbox.state = scheduledArchiveAt == nil ? .off : .on
     archiveDatePicker.isEnabled = scheduledArchiveAt != nil
@@ -165,6 +179,21 @@ final class SpreadsheetSettingsPopoverController: NSViewController {
     let selected = currencyPopup.indexOfSelectedItem
     guard selected >= 0, selected < Self.currencies.count else { return }
     settings.currencyCode = Self.currencies[selected].code
+    onChange?(settings)
+  }
+
+  @objc private func changeTimeZone() {
+    let value = timeZonePopup.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    if value.hasPrefix("System —") || value.isEmpty {
+      settings.timeZoneIdentifier = nil
+    } else if TimeZone(identifier: value) != nil {
+      settings.timeZoneIdentifier = value
+    } else {
+      NSSound.beep()
+      timeZonePopup.stringValue = settings.timeZoneIdentifier
+        ?? "System — \(TimeZone.current.identifier)"
+      return
+    }
     onChange?(settings)
   }
 
