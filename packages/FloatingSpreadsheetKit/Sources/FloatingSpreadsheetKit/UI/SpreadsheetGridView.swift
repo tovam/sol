@@ -2,6 +2,7 @@ import AppKit
 
 private final class SpreadsheetCellEditorView: NSTextView {
   var onCommitAndMove: ((_ rowDelta: Int, _ columnDelta: Int) -> Void)?
+  var arrowKeysCommitAndMove = true
 
   override func keyDown(with event: NSEvent) {
     if hasMarkedText() {
@@ -9,6 +10,10 @@ private final class SpreadsheetCellEditorView: NSTextView {
       return
     }
     let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+    if !arrowKeysCommitAndMove, (123...126).contains(event.keyCode) {
+      super.keyDown(with: event)
+      return
+    }
     switch event.keyCode {
     case 36, 76:
       onCommitAndMove?(modifiers.contains(.shift) ? -1 : 1, 0)
@@ -593,6 +598,7 @@ final class SpreadsheetGridView: NSView, NSTextViewDelegate {
     field.wantsLayer = true
     field.layer?.borderWidth = 1
     field.layer?.borderColor = NSColor.controlAccentColor.cgColor
+    field.arrowKeysCommitAndMove = replacement != nil
     field.delegate = self
     field.onCommitAndMove = { [weak self] rowDelta, columnDelta in
       self?.finishEditing(
