@@ -230,27 +230,37 @@ final class SpreadsheetWindowController: NSWindowController, NSWindowDelegate,
   }
 
   private func toggleBold() {
-    let range = gridContainer.gridView.selectedRange
+    let gridView = gridContainer.gridView
     let active = gridContainer.gridView.activeCell
     let enabled = !(spreadsheetDocument.record(at: active)?.style.isBold ?? false)
-    spreadsheetDocument.setBold(enabled, in: range)
+    if gridView.hasAdditionalSelection {
+      spreadsheetDocument.setBold(enabled, at: gridView.selectedAddresses)
+    } else {
+      spreadsheetDocument.setBold(enabled, in: gridView.selectedRange)
+    }
   }
 
   private func toggleItalic() {
-    let range = gridContainer.gridView.selectedRange
+    let gridView = gridContainer.gridView
     let active = gridContainer.gridView.activeCell
     let enabled = !(spreadsheetDocument.record(at: active)?.style.isItalic ?? false)
-    spreadsheetDocument.setItalic(enabled, in: range)
+    if gridView.hasAdditionalSelection {
+      spreadsheetDocument.setItalic(enabled, at: gridView.selectedAddresses)
+    } else {
+      spreadsheetDocument.setItalic(enabled, in: gridView.selectedRange)
+    }
   }
 
   private func toggleFormat(_ requested: CellDisplayFormat) {
-    let range = gridContainer.gridView.selectedRange
+    let gridView = gridContainer.gridView
     let active = gridContainer.gridView.activeCell
     let current = spreadsheetDocument.record(at: active)?.style.displayFormat ?? .automatic
-    spreadsheetDocument.setDisplayFormat(
-      current == requested ? .automatic : requested,
-      in: range
-    )
+    let format = current == requested ? CellDisplayFormat.automatic : requested
+    if gridView.hasAdditionalSelection {
+      spreadsheetDocument.setDisplayFormat(format, at: gridView.selectedAddresses)
+    } else {
+      spreadsheetDocument.setDisplayFormat(format, in: gridView.selectedRange)
+    }
   }
 
   private func confirmAndImport(

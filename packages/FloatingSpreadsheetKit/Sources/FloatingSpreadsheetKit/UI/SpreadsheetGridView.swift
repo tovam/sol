@@ -166,12 +166,26 @@ final class SpreadsheetGridView: NSView, NSTextViewDelegate {
   private(set) var selectedRange = CellRange(CellAddress(row: 0, column: 0))
   private(set) var activeCell = CellAddress(row: 0, column: 0)
   private var selectionAnchor = CellAddress(row: 0, column: 0)
+  private var additionalSelectedCells = Set<CellAddress>()
+  private var isCommandSelectionGesture = false
   private var editor: SpreadsheetCellEditorView?
   private var editingOriginalValue = ""
   private var editingReferenceRanges: [CellRange] = []
   private var isFinishingEdit = false
   private var previewColumnWidths: [Int: CGFloat] = [:]
   private let previewFormulaEngine = SpreadsheetFormulaEngine()
+
+  var selectedAddresses: [CellAddress] {
+    var addresses = selectedRange.addresses()
+    addresses.append(contentsOf: additionalSelectedCells.filter {
+      !selectedRange.contains($0)
+    })
+    return addresses.sorted()
+  }
+
+  var hasAdditionalSelection: Bool {
+    !additionalSelectedCells.isEmpty
+  }
 
   init(document: SpreadsheetDocument) {
     self.document = document
@@ -218,6 +232,7 @@ final class SpreadsheetGridView: NSView, NSTextViewDelegate {
       )
     )
     selectionAnchor = activeCell
+    additionalSelectedCells.removeAll()
     notifySelectionChanged()
     reloadData()
   }
@@ -328,9 +343,16 @@ final class SpreadsheetGridView: NSView, NSTextViewDelegate {
 
   private func drawSelection(in dirtyRect: NSRect) {
     let rect = rangeRect(selectedRange)
-    guard rect.intersects(dirtyRect) else { return }
     NSColor.controlAccentColor.withAlphaComponent(0.11).setFill()
-    rect.intersection(dirtyRect).fill()
+    if rect.intersects(dirtyRect) {
+      rect.intersection(dirtyRect).fill()
+    }
+    for address in additionalSelectedCells {
+      let cell = cellRect(address)
+      if cell.intersects(dirtyRect) {
+        cell.intersection(dirtyRect).fill()
+      }
+    }
   }
 
   private func drawSelectionBorder() {
@@ -338,6 +360,11 @@ final class SpreadsheetGridView: NSView, NSTextViewDelegate {
     let path = NSBezierPath(rect: rangeRect(selectedRange).insetBy(dx: 1, dy: 1))
     path.lineWidth = 2
     path.stroke()
+    for address in additionalSelectedCells {
+      let additionalPath = NSBezierPath(rect: cellRect(address).insetBy(dx: 1, dy: 1))
+      additionalPath.lineWidth = 2
+      additionalPath.stroke()
+    }
   }
 
   private func drawGrid(
@@ -366,27 +393,39 @@ final class SpreadsheetGridView: NSView, NSTextViewDelegate {
   override func mouseDown(with event: NSEvent) {
     finishEditing(commit: true)
     let address = address(at: convert(event.locationInWindow, from: nil))
-    if event.modifierFlags.contains(.shift) {
+    let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+    isCommandSelectionGesture = modifiers.contains(.command)
+    if isCommandSelectionGesture {
+      toggleCommandSelection(at: address)
+    } else if modifiers.contains(.shift) {
+      additionalSelectedCells.removeAll()
       activeCell = address
       selectedRange = CellRange(start: selectionAnchor, end: address)
     } else {
+      additionalSelectedCells.removeAll()
       activeCell = address
       selectionAnchor = address
       selectedRange = CellRange(address)
     }
     window?.makeFirstResponder(self)
     notifySelectionChanged()
-    if event.clickCount >= 2 {
+    if event.clickCount >= 2, !isCommandSelectionGesture {
       beginEditing(replacingWith: nil)
     }
   }
 
   override func mouseDragged(with event: NSEvent) {
+    guard !isCommandSelectionGesture else { return }
     autoscroll(with: event)
     let address = address(at: convert(event.locationInWindow, from: nil))
     activeCell = address
     selectedRange = CellRange(start: selectionAnchor, end: address)
     notifySelectionChanged()
+  }
+
+  override func mouseUp(with event: NSEvent) {
+    isCommandSelectionGesture = false
+    super.mouseUp(with: event)
   }
 
   override func keyDown(with event: NSEvent) {
@@ -431,7 +470,7 @@ final class SpreadsheetGridView: NSView, NSTextViewDelegate {
         extending: false
       )
     case 51, 117:
-      document.clear(selectedRange)
+      clearSelection()
       reloadData()
     default:
       if let characters = event.characters,
@@ -449,12 +488,28 @@ final class SpreadsheetGridView: NSView, NSTextViewDelegate {
 
   override func menu(for event: NSEvent) -> NSMenu? {
     let address = address(at: convert(event.locationInWindow, from: nil))
-    activeCell = address
-    selectionAnchor = address
-    selectedRange = CellRange(address)
-    notifySelectionChanged()
+    if isCellSelected(address) {
+      if activeCell != address {
+        activeCell = address
+        notifySelectionChanged()
+      }
+    } else {
+      activeCell = address
+      selectionAnchor = address
+      selectedRange = CellRange(address)
+      additionalSelectedCells.removeAll()
+      notifySelectionChanged()
+    }
 
     let menu = NSMenu()
+    if document.canNormalizeDates(at: selectedAddresses) {
+      menu.addItem(
+        withTitle: "Convert to YYYY-MM-DD HH:mm:ss",
+        action: #selector(normalizeSelectedDates),
+        keyEquivalent: ""
+      )
+      menu.addItem(.separator())
+    }
     menu.addItem(withTitle: "Insert row above", action: #selector(insertRow), keyEquivalent: "")
     menu.addItem(withTitle: "Delete row", action: #selector(deleteRow), keyEquivalent: "")
     menu.addItem(.separator())
@@ -466,6 +521,14 @@ final class SpreadsheetGridView: NSView, NSTextViewDelegate {
     menu.addItem(withTitle: "Delete column", action: #selector(deleteColumn), keyEquivalent: "")
     for item in menu.items { item.target = self }
     return menu
+  }
+
+  @objc private func normalizeSelectedDates() {
+    guard document.normalizeDates(at: selectedAddresses) else {
+      NSSound.beep()
+      return
+    }
+    reloadData()
   }
 
   @objc private func insertRow() {
@@ -493,6 +556,7 @@ final class SpreadsheetGridView: NSView, NSTextViewDelegate {
       row: min(Self.rowCount - 1, max(0, activeCell.row + rowDelta)),
       column: min(Self.columnCount - 1, max(0, activeCell.column + columnDelta))
     )
+    additionalSelectedCells.removeAll()
     activeCell = destination
     if extending {
       selectedRange = CellRange(start: selectionAnchor, end: destination)
@@ -579,11 +643,21 @@ final class SpreadsheetGridView: NSView, NSTextViewDelegate {
     needsDisplay = true
   }
 
-  private func copySelection() {
+  @discardableResult
+  private func copySelection() -> Bool {
     let addresses = selectedRange.addresses()
     guard !addresses.isEmpty else {
       NSSound.beep()
-      return
+      return false
+    }
+    if hasAdditionalSelection {
+      let values = selectedAddresses.map {
+        escapedClipboardValue(document.rawInput(at: $0))
+      }
+      let pasteboard = NSPasteboard.general
+      pasteboard.clearContents()
+      pasteboard.setString(values.joined(separator: "\n"), forType: .string)
+      return true
     }
     var rows: [String] = []
     for row in selectedRange.start.row...selectedRange.end.row {
@@ -597,11 +671,12 @@ final class SpreadsheetGridView: NSView, NSTextViewDelegate {
     let pasteboard = NSPasteboard.general
     pasteboard.clearContents()
     pasteboard.setString(rows.joined(separator: "\n"), forType: .string)
+    return true
   }
 
   private func cutSelection() {
-    copySelection()
-    document.clear(selectedRange, label: "Cut cells")
+    guard copySelection() else { return }
+    clearSelection(label: "Cut cells")
     reloadData()
   }
 
@@ -621,6 +696,51 @@ final class SpreadsheetGridView: NSView, NSTextViewDelegate {
     needsDisplay = true
     onSelectionVisualChange?()
     delegate?.spreadsheetGridView(self, selectionDidChange: selectedRange)
+  }
+
+  func selectionIncludes(column: Int) -> Bool {
+    (column >= selectedRange.start.column && column <= selectedRange.end.column)
+      || additionalSelectedCells.contains { $0.column == column }
+  }
+
+  func selectionIncludes(row: Int) -> Bool {
+    (row >= selectedRange.start.row && row <= selectedRange.end.row)
+      || additionalSelectedCells.contains { $0.row == row }
+  }
+
+  private func isCellSelected(_ address: CellAddress) -> Bool {
+    selectedRange.contains(address) || additionalSelectedCells.contains(address)
+  }
+
+  private func toggleCommandSelection(at address: CellAddress) {
+    if selectedRange.contains(address) {
+      guard selectedRange.start == selectedRange.end,
+        !additionalSelectedCells.isEmpty,
+        let replacement = additionalSelectedCells.sorted().first
+      else {
+        activeCell = address
+        return
+      }
+      additionalSelectedCells.remove(replacement)
+      selectedRange = CellRange(replacement)
+      selectionAnchor = replacement
+      activeCell = replacement
+      return
+    }
+    if additionalSelectedCells.remove(address) != nil {
+      activeCell = selectedRange.start
+    } else {
+      additionalSelectedCells.insert(address)
+      activeCell = address
+    }
+  }
+
+  private func clearSelection(label: String = "Clear cells") {
+    if hasAdditionalSelection {
+      document.clear(selectedAddresses, label: label)
+    } else {
+      document.clear(selectedRange, label: label)
+    }
   }
 
   func cellRect(_ address: CellAddress) -> NSRect {
@@ -770,9 +890,7 @@ private final class SpreadsheetColumnHeaderView: NSView {
         width: gridView.columnWidth(column),
         height: bounds.height
       )
-      if column >= gridView.selectedRange.start.column,
-        column <= gridView.selectedRange.end.column
-      {
+      if gridView.selectionIncludes(column: column) {
         NSColor.controlAccentColor.withAlphaComponent(0.14).setFill()
         rect.fill()
       }
@@ -966,9 +1084,7 @@ private final class SpreadsheetRowHeaderView: NSView {
         width: bounds.width,
         height: SpreadsheetGridView.rowHeight
       )
-      if row >= gridView.selectedRange.start.row,
-        row <= gridView.selectedRange.end.row
-      {
+      if gridView.selectionIncludes(row: row) {
         NSColor.controlAccentColor.withAlphaComponent(0.14).setFill()
         rect.fill()
       }

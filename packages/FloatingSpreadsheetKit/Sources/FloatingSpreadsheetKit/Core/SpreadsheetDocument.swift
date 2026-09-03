@@ -203,8 +203,22 @@ final class SpreadsheetDocument {
     commitCellChanges(changes, label: label)
   }
 
+  func clear(_ addresses: [CellAddress], label: String = "Clear cells") {
+    let changes = Set(addresses).compactMap { address -> SpreadsheetCellChange? in
+      guard let record = cells[address] else { return nil }
+      return SpreadsheetCellChange(address: address, before: record, after: nil)
+    }.sorted { $0.address < $1.address }
+    commitCellChanges(changes, label: label)
+  }
+
   func setBold(_ enabled: Bool, in range: CellRange) {
     updateStyle(in: range, label: enabled ? "Bold" : "Remove bold") {
+      $0.isBold = enabled
+    }
+  }
+
+  func setBold(_ enabled: Bool, at addresses: [CellAddress]) {
+    updateStyle(at: addresses, label: enabled ? "Bold" : "Remove bold") {
       $0.isBold = enabled
     }
   }
@@ -215,10 +229,39 @@ final class SpreadsheetDocument {
     }
   }
 
+  func setItalic(_ enabled: Bool, at addresses: [CellAddress]) {
+    updateStyle(at: addresses, label: enabled ? "Italic" : "Remove italic") {
+      $0.isItalic = enabled
+    }
+  }
+
   func setDisplayFormat(_ format: CellDisplayFormat, in range: CellRange) {
     updateStyle(in: range, label: "Format cells") {
       $0.displayFormat = format
     }
+  }
+
+  func setDisplayFormat(_ format: CellDisplayFormat, at addresses: [CellAddress]) {
+    updateStyle(at: addresses, label: "Format cells") {
+      $0.displayFormat = format
+    }
+  }
+
+  func canNormalizeDates(at addresses: [CellAddress]) -> Bool {
+    normalizedDates(at: addresses) != nil
+  }
+
+  @discardableResult
+  func normalizeDates(at addresses: [CellAddress]) -> Bool {
+    guard let normalized = normalizedDates(at: addresses) else { return false }
+    let changes = normalized.compactMap { address, timestamp -> SpreadsheetCellChange? in
+      guard let before = cells[address], before.rawInput != timestamp else { return nil }
+      var after = before
+      after.rawInput = timestamp
+      return SpreadsheetCellChange(address: address, before: before, after: after)
+    }
+    commitCellChanges(changes, label: "Normalize dates")
+    return true
   }
 
   func setColumnWidth(_ width: Double, at column: Int) {
@@ -614,6 +657,26 @@ final class SpreadsheetDocument {
     commitCellChanges(changes, label: label)
   }
 
+  private func updateStyle(
+    at addresses: [CellAddress],
+    label: String,
+    transform: (inout CellStyle) -> Void
+  ) {
+    let changes = Set(addresses).compactMap { address -> SpreadsheetCellChange? in
+      let before = cells[address]
+      var after = before ?? CellRecord(rawInput: "")
+      transform(&after.style)
+      let normalizedAfter = normalized(after)
+      guard before != normalizedAfter else { return nil }
+      return SpreadsheetCellChange(
+        address: address,
+        before: before,
+        after: normalizedAfter
+      )
+    }.sorted { $0.address < $1.address }
+    commitCellChanges(changes, label: label)
+  }
+
   private func commitCellChanges(_ changes: [SpreadsheetCellChange], label: String) {
     guard !changes.isEmpty else { return }
     commit(
@@ -786,6 +849,31 @@ final class SpreadsheetDocument {
       displayLocale: settings.displayLocale,
       timeZone: settings.timeZone
     ).map(SpreadsheetValue.date)
+  }
+
+  private func normalizedDates(
+    at addresses: [CellAddress]
+  ) -> [(CellAddress, String)]? {
+    let uniqueAddresses = Set(addresses).sorted()
+    guard !uniqueAddresses.isEmpty else { return nil }
+    var result: [(CellAddress, String)] = []
+    result.reserveCapacity(uniqueAddresses.count)
+    for address in uniqueAddresses {
+      guard let record = cells[address],
+        !record.rawInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+        case .date(let date) = contextualDateValue(
+          for: record.rawInput,
+          at: address
+        )
+      else {
+        return nil
+      }
+      result.append((
+        address,
+        SpreadsheetDate.timestamp(date, timeZone: settings.timeZone)
+      ))
+    }
+    return result
   }
 
   private func inferredDateYears(for column: Int) -> [Int: Int] {

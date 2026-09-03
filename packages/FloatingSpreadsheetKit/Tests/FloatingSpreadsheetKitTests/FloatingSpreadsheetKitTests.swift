@@ -336,6 +336,51 @@ final class FloatingSpreadsheetKitTests: XCTestCase {
     XCTAssertEqual(restored.value(at: address), .text("2026-09-06 9pm"))
   }
 
+  func testMixedSelectedDatesNormalizeAsOneUndoableAction() throws {
+    let document = SpreadsheetDocument(name: "Normalize dates")
+    var settings = document.settings
+    settings.displayLocale = .french
+    settings.timeZoneIdentifier = "UTC"
+    document.updateSettings(settings)
+    let rawValues = [
+      "3/09 18:31",
+      "04/9 19h14",
+      "5/9 3h",
+      "2026-09-06 9pm",
+      "09-07 11:21am",
+    ]
+    let addresses = rawValues.indices.map { CellAddress(row: $0, column: 0) }
+    for (address, rawValue) in zip(addresses, rawValues) {
+      document.setRawInput(rawValue, at: address)
+    }
+    let historyCount = document.history.count
+
+    XCTAssertTrue(document.canNormalizeDates(at: addresses))
+    XCTAssertTrue(document.normalizeDates(at: addresses))
+    XCTAssertEqual(document.history.count, historyCount + 1)
+    XCTAssertEqual(document.rawInput(at: addresses[0]), "2026-09-03 18:31:00")
+    XCTAssertEqual(document.rawInput(at: addresses[1]), "2026-09-04 19:14:00")
+    XCTAssertEqual(document.rawInput(at: addresses[2]), "2026-09-05 03:00:00")
+    XCTAssertEqual(document.rawInput(at: addresses[3]), "2026-09-06 21:00:00")
+    XCTAssertEqual(document.rawInput(at: addresses[4]), "2026-09-07 11:21:00")
+
+    XCTAssertTrue(document.undo())
+    XCTAssertEqual(addresses.map { document.rawInput(at: $0) }, rawValues)
+  }
+
+  func testDateNormalizationRequiresEverySelectedCellToParse() {
+    let document = SpreadsheetDocument(name: "Invalid normalization")
+    let date = CellAddress(row: 0, column: 0)
+    let text = CellAddress(row: 2, column: 3)
+    document.setColumnType(.text, at: date.column)
+    document.setRawInput("2026-09-03 18:31:00", at: date)
+    document.setRawInput("not a date", at: text)
+
+    XCTAssertTrue(document.canNormalizeDates(at: [date]))
+    XCTAssertFalse(document.canNormalizeDates(at: [date, text]))
+    XCTAssertFalse(document.normalizeDates(at: [date, text]))
+  }
+
   func testHistogramUsesOptimalBinsAndPreservesEverySample() throws {
     let samples = (1...100).map {
       SpreadsheetHistogramSample(value: Double($0), isDuration: false)
