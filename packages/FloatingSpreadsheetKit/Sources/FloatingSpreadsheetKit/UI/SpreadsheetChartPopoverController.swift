@@ -9,14 +9,14 @@ final class SpreadsheetChartPopoverController: NSViewController {
   private let titleField = NSTextField(string: "Chart")
   private let rangeField = NSTextField()
   private let typePopup = NSPopUpButton()
-  private let orientationPopup = NSPopUpButton()
-  private let headerCheckbox = NSButton(
-    checkboxWithTitle: "First row contains headers",
+  private let xModeControl = NSSegmentedControl(
+    labels: ["Row index", "First column = X"],
+    trackingMode: .selectOne,
     target: nil,
     action: nil
   )
-  private let labelsCheckbox = NSButton(
-    checkboxWithTitle: "First column contains labels",
+  private let headerCheckbox = NSButton(
+    checkboxWithTitle: "First row contains headers",
     target: nil,
     action: nil
   )
@@ -43,16 +43,16 @@ final class SpreadsheetChartPopoverController: NSViewController {
     })
     typePopup.target = self
     typePopup.action = #selector(chartTypeChanged)
-    orientationPopup.addItems(withTitles: ["Series in columns", "Series in rows"])
     headerCheckbox.state = .on
-    labelsCheckbox.state = .on
+    xModeControl.selectedSegment = initialRange.columnCount > 1 ? 1 : 0
+    xModeControl.setAccessibilityLabel("Horizontal axis source")
     updateControlsForSelectedType()
 
     let grid = NSGridView(views: [
       [NSTextField(labelWithString: "Title"), titleField],
       [NSTextField(labelWithString: "Type"), typePopup],
       [NSTextField(labelWithString: "Range"), rangeField],
-      [NSTextField(labelWithString: "Series"), orientationPopup],
+      [NSTextField(labelWithString: "X values"), xModeControl],
     ])
     grid.rowSpacing = 7
     grid.columnSpacing = 10
@@ -86,7 +86,6 @@ final class SpreadsheetChartPopoverController: NSViewController {
     let stack = NSStackView(views: [
       grid,
       headerCheckbox,
-      labelsCheckbox,
       validationLabel,
       createButton,
       separator,
@@ -127,10 +126,10 @@ final class SpreadsheetChartPopoverController: NSViewController {
       type: type,
       sourceRange: range,
       firstRowContainsHeaders: headerCheckbox.state == .on,
-      firstColumnContainsLabels: type == .histogram ? false : labelsCheckbox.state == .on,
-      seriesOrientation: type == .histogram
-        ? .columns
-        : (orientationPopup.indexOfSelectedItem == 1 ? .rows : .columns)
+      firstColumnContainsLabels: type == .histogram
+        ? false
+        : xModeControl.selectedSegment == 1,
+      seriesOrientation: .columns
     )
     onCreate?(chart)
   }
@@ -147,12 +146,11 @@ final class SpreadsheetChartPopoverController: NSViewController {
       return
     }
     let isHistogram = types[typePopup.indexOfSelectedItem] == .histogram
-    labelsCheckbox.isEnabled = !isHistogram
-    orientationPopup.isEnabled = !isHistogram
-    labelsCheckbox.toolTip = isHistogram
+    xModeControl.isEnabled = !isHistogram
+    xModeControl.toolTip = isHistogram
       ? "Histograms use every numeric cell in the range."
       : nil
-    orientationPopup.toolTip = labelsCheckbox.toolTip
+    if isHistogram { xModeControl.selectedSegment = 0 }
   }
 
   @objc private func openSavedChart() {

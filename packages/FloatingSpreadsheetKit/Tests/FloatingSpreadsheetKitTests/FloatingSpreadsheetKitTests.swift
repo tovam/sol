@@ -216,6 +216,26 @@ final class FloatingSpreadsheetKitTests: XCTestCase {
       try XCTUnwrap(SpreadsheetDate.parse("2026-08-21"))
     )
     XCTAssertNil(point.x)
+    XCTAssertEqual(document.chartSeries(for: chart).count, 1)
+  }
+
+  func testChartRowIndexModePlotsEveryColumnAsASeries() {
+    let document = SpreadsheetDocument(name: "Index chart")
+    document.setRawInput("Left", at: CellAddress(row: 0, column: 0))
+    document.setRawInput("Right", at: CellAddress(row: 0, column: 1))
+    document.setRawInput("10", at: CellAddress(row: 1, column: 0))
+    document.setRawInput("20", at: CellAddress(row: 1, column: 1))
+    let chart = SpreadsheetChartDefinition(
+      sourceRange: CellRange(
+        start: CellAddress(row: 0, column: 0),
+        end: CellAddress(row: 1, column: 1)
+      ),
+      firstColumnContainsLabels: false
+    )
+
+    let series = document.chartSeries(for: chart)
+    XCTAssertEqual(series.map(\.name), ["Left", "Right"])
+    XCTAssertEqual(series.compactMap { $0.points.first?.x }, [0, 0])
   }
 
   func testMixedDateTimeColumnUsesColumnWideYearInference() throws {

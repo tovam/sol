@@ -174,26 +174,24 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
       action: nil
     )
     headerCheckbox.state = chart.firstRowContainsHeaders ? .on : .off
-    let labelsCheckbox = NSButton(
-      checkboxWithTitle: "First column contains labels",
+    let xModeControl = NSSegmentedControl(
+      labels: ["Row index", "First column = X"],
+      trackingMode: .selectOne,
       target: nil,
       action: nil
     )
-    labelsCheckbox.state = chart.firstColumnContainsLabels ? .on : .off
+    xModeControl.selectedSegment = chart.firstColumnContainsLabels ? 1 : 0
+    xModeControl.setAccessibilityLabel("Horizontal axis source")
     let lastValueLabelsCheckbox = NSButton(
       checkboxWithTitle: "Label the last value of every series",
       target: nil,
       action: nil
     )
     lastValueLabelsCheckbox.state = chart.displaysLastValueLabels ? .on : .off
-    let orientation = NSPopUpButton()
-    orientation.addItems(withTitles: ["Series in columns", "Series in rows"])
-    orientation.selectItem(at: chart.seriesOrientation == .columns ? 0 : 1)
     if chart.type == .histogram {
-      labelsCheckbox.isEnabled = false
-      labelsCheckbox.toolTip = "Histograms use every numeric cell in the range."
-      orientation.isEnabled = false
-      orientation.toolTip = labelsCheckbox.toolTip
+      xModeControl.isEnabled = false
+      xModeControl.selectedSegment = 0
+      xModeControl.toolTip = "Histograms use every numeric cell in the range."
     }
 
     let xTitleField = NSTextField(string: xAxis.title)
@@ -286,7 +284,7 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
     let generalGrid = NSGridView(views: [
       [NSTextField(labelWithString: "Title"), titleField],
       [NSTextField(labelWithString: "Data range"), rangeField],
-      [NSTextField(labelWithString: "Series"), orientation],
+      [NSTextField(labelWithString: "X values"), xModeControl],
     ])
     configureOptionsGrid(generalGrid)
 
@@ -330,7 +328,6 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
     let stack = NSStackView(views: [
       generalGrid,
       headerCheckbox,
-      labelsCheckbox,
       lastValueLabelsCheckbox,
       firstSeparator,
       xHeading,
@@ -386,8 +383,9 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
         if changed.title.isEmpty { changed.title = "Chart" }
         changed.sourceRange = range
         changed.firstRowContainsHeaders = headerCheckbox.state == .on
-        changed.firstColumnContainsLabels = labelsCheckbox.state == .on
-        changed.seriesOrientation = orientation.indexOfSelectedItem == 1 ? .rows : .columns
+        changed.firstColumnContainsLabels = xModeControl.isEnabled
+          && xModeControl.selectedSegment == 1
+        changed.seriesOrientation = .columns
         if lastValueLabelsCheckbox.isEnabled {
           changed.showsLastValueLabels = lastValueLabelsCheckbox.state == .on
             ? true
