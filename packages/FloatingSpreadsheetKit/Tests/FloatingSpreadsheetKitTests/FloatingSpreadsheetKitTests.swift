@@ -238,6 +238,24 @@ final class FloatingSpreadsheetKitTests: XCTestCase {
     XCTAssertEqual(series.compactMap { $0.points.first?.x }, [0, 0])
   }
 
+  func testLegacyRowOrientationIsStillReadAsColumnSeries() {
+    let document = SpreadsheetDocument(name: "Legacy orientation")
+    document.setRawInput("Left", at: CellAddress(row: 0, column: 0))
+    document.setRawInput("Right", at: CellAddress(row: 0, column: 1))
+    document.setRawInput("10", at: CellAddress(row: 1, column: 0))
+    document.setRawInput("20", at: CellAddress(row: 1, column: 1))
+    let chart = SpreadsheetChartDefinition(
+      sourceRange: CellRange(
+        start: CellAddress(row: 0, column: 0),
+        end: CellAddress(row: 1, column: 1)
+      ),
+      firstColumnContainsLabels: false,
+      seriesOrientation: .rows
+    )
+
+    XCTAssertEqual(document.chartSeries(for: chart).map(\.name), ["Left", "Right"])
+  }
+
   func testMixedDateTimeColumnUsesColumnWideYearInference() throws {
     let document = SpreadsheetDocument(name: "Mixed dates")
     var settings = document.settings

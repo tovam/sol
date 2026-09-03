@@ -539,12 +539,9 @@ final class SpreadsheetDocument {
     if chart.isFrozen && !ignoringFrozenState { return chart.frozenSeries }
     let range = chart.sourceRange
     guard range.rowCount > 0, range.columnCount > 0 else { return [] }
-    switch chart.seriesOrientation {
-    case .columns:
-      return columnSeries(for: chart)
-    case .rows:
-      return rowSeries(for: chart)
-    }
+    // `seriesOrientation` remains decodable for old saved charts, but Sol now
+    // consistently treats spreadsheet columns as data series.
+    return columnSeries(for: chart)
   }
 
   private func columnSeries(
@@ -586,54 +583,6 @@ final class SpreadsheetDocument {
       }
       return SpreadsheetChartSeries(
         id: "column:\(column - range.start.column)",
-        name: seriesName,
-        points: points
-      )
-    }
-  }
-
-  private func rowSeries(
-    for chart: SpreadsheetChartDefinition
-  ) -> [SpreadsheetChartSeries] {
-    let range = chart.sourceRange
-    let dataStartRow = range.start.row + (chart.firstRowContainsHeaders ? 1 : 0)
-    let dataStartColumn = range.start.column + (chart.firstColumnContainsLabels ? 1 : 0)
-    guard dataStartRow <= range.end.row, dataStartColumn <= range.end.column else {
-      return []
-    }
-
-    return (dataStartRow...range.end.row).map { row in
-      let labelAddress = CellAddress(row: row, column: range.start.column)
-      let seriesName = chart.firstColumnContainsLabels
-        ? nonEmptyDisplayText(at: labelAddress, fallback: "Row \(row + 1)")
-        : "Row \(row + 1)"
-      let points = (dataStartColumn...range.end.column).compactMap {
-        column -> SpreadsheetChartPoint? in
-        let valueAddress = CellAddress(row: row, column: column)
-        let pointValue = value(at: valueAddress)
-        guard let number = pointValue.numericValue else { return nil }
-        let headerAddress = CellAddress(row: range.start.row, column: column)
-        let headerValue = value(at: headerAddress)
-        let category = chart.firstRowContainsHeaders
-          ? nonEmptyDisplayText(
-            at: headerAddress,
-            fallback: CellAddress.columnName(column)
-          )
-          : CellAddress.columnName(column)
-        let x = chart.firstRowContainsHeaders
-          ? headerValue.numericValue
-          : Double(column - dataStartColumn)
-        return SpreadsheetChartPoint(
-          category: category,
-          x: x,
-          xDate: chart.firstRowContainsHeaders ? headerValue.dateValue : nil,
-          value: number,
-          xIsTime: chart.firstRowContainsHeaders ? headerValue.isTime : false,
-          valueIsTime: pointValue.isTime
-        )
-      }
-      return SpreadsheetChartSeries(
-        id: "row:\(row - range.start.row)",
         name: seriesName,
         points: points
       )
