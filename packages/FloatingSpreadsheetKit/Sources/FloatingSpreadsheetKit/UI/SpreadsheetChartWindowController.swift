@@ -4,6 +4,76 @@ import Combine
 import SwiftUI
 import UniformTypeIdentifiers
 
+private final class SpreadsheetChartResizeHandleView: NSView {
+  private var initialMouseLocation: NSPoint?
+  private var initialWindowFrame: NSRect?
+
+  override init(frame frameRect: NSRect) {
+    super.init(frame: frameRect)
+    toolTip = "Drag to resize chart"
+    setAccessibilityRole(.handle)
+    setAccessibilityLabel("Resize chart")
+  }
+
+  @available(*, unavailable)
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) has not been implemented")
+  }
+
+  override var mouseDownCanMoveWindow: Bool { false }
+
+  override func resetCursorRects() {
+    super.resetCursorRects()
+    addCursorRect(bounds, cursor: .resizeLeftRight)
+  }
+
+  override func draw(_ dirtyRect: NSRect) {
+    super.draw(dirtyRect)
+    let path = NSBezierPath()
+    for inset: CGFloat in [4, 8, 12] {
+      path.move(to: NSPoint(x: bounds.maxX - inset, y: bounds.minY + 2))
+      path.line(to: NSPoint(x: bounds.maxX - 2, y: bounds.minY + inset))
+    }
+    NSColor.secondaryLabelColor.withAlphaComponent(0.45).setStroke()
+    path.lineWidth = 1
+    path.stroke()
+  }
+
+  override func mouseDown(with event: NSEvent) {
+    guard let window else { return }
+    initialMouseLocation = NSEvent.mouseLocation
+    initialWindowFrame = window.frame
+  }
+
+  override func mouseDragged(with event: NSEvent) {
+    guard let window,
+      let initialMouseLocation,
+      let initialWindowFrame
+    else {
+      return
+    }
+    let currentMouseLocation = NSEvent.mouseLocation
+    let deltaX = currentMouseLocation.x - initialMouseLocation.x
+    let deltaY = currentMouseLocation.y - initialMouseLocation.y
+    let width = max(window.minSize.width, initialWindowFrame.width + deltaX)
+    let height = max(window.minSize.height, initialWindowFrame.height - deltaY)
+    window.setFrame(
+      NSRect(
+        x: initialWindowFrame.minX,
+        y: initialWindowFrame.maxY - height,
+        width: width,
+        height: height
+      ),
+      display: true
+    )
+  }
+
+  override func mouseUp(with event: NSEvent) {
+    initialMouseLocation = nil
+    initialWindowFrame = nil
+  }
+}
+
 final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelegate {
   let documentID: UUID
   var onReturnToSpreadsheet: (() -> Void)?
@@ -15,6 +85,7 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
   private let model: SpreadsheetChartViewModel
   private let chartHost: NSView
   private let toolbar = SpreadsheetChartToolbarView()
+  private let resizeHandle = SpreadsheetChartResizeHandleView()
   private var statisticsPopover: NSPopover?
   private var documentObserver: NSObjectProtocol?
   private var didClose = false
@@ -111,6 +182,8 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
 
     chartHost.translatesAutoresizingMaskIntoConstraints = false
     backdrop.addSubview(chartHost)
+    resizeHandle.translatesAutoresizingMaskIntoConstraints = false
+    backdrop.addSubview(resizeHandle)
 
     NSLayoutConstraint.activate([
       toolbar.leadingAnchor.constraint(equalTo: backdrop.leadingAnchor),
@@ -121,6 +194,10 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
       chartHost.trailingAnchor.constraint(equalTo: backdrop.trailingAnchor, constant: -6),
       chartHost.topAnchor.constraint(equalTo: toolbar.bottomAnchor),
       chartHost.bottomAnchor.constraint(equalTo: backdrop.bottomAnchor, constant: -6),
+      resizeHandle.trailingAnchor.constraint(equalTo: backdrop.trailingAnchor, constant: -3),
+      resizeHandle.bottomAnchor.constraint(equalTo: backdrop.bottomAnchor, constant: 3),
+      resizeHandle.widthAnchor.constraint(equalToConstant: 16),
+      resizeHandle.heightAnchor.constraint(equalToConstant: 16),
     ])
     refreshToolbar()
   }
