@@ -19,6 +19,10 @@ private final class SpreadsheetCellEditorView: NSTextView {
       onCommitAndMove?(modifiers.contains(.shift) ? -1 : 1, 0)
     case 48:
       onCommitAndMove?(0, modifiers.contains(.shift) ? -1 : 1)
+    case 123:
+      onCommitAndMove?(0, -1)
+    case 124:
+      onCommitAndMove?(0, 1)
     case 125:
       onCommitAndMove?(1, 0)
     case 126:
