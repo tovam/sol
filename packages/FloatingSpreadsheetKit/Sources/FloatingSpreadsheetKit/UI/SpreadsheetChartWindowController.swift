@@ -99,6 +99,7 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
 
     toolbar.translatesAutoresizingMaskIntoConstraints = false
     toolbar.onType = { [weak self] type in self?.changeType(type) }
+    toolbar.onSeriesOptions = { [weak self] in self?.showSeriesOptions() }
     toolbar.onToggleFrozen = { [weak self] in self?.toggleFrozen() }
     toolbar.onOptions = { [weak self] in self?.showOptions() }
     toolbar.onStatistics = { [weak self] in self?.showHistogramStatistics() }
@@ -478,6 +479,65 @@ final class SpreadsheetChartWindowController: NSWindowController, NSWindowDelega
     }
   }
 
+  private func showSeriesOptions() {
+    guard let chart = spreadsheetDocument.charts.first(where: { $0.id == chartID }) else {
+      return
+    }
+    let series = spreadsheetDocument.chartSeries(for: chart)
+    let xUsesDate = model.usesDateXAxis
+    let xUsesTime = model.usesTimeXAxis
+    let yUsesTime = model.usesTimeValueAxis
+    let rowHeight: CGFloat = chart.type == .line ? 126 : 38
+    let desiredHeight = CGFloat(series.count) * rowHeight
+      + CGFloat(max(0, series.count - 1) * 6)
+      + 12
+    let seriesOptions = SpreadsheetChartSeriesOptionsView(
+      series: series,
+      chart: chart,
+      showsLineControls: chart.type == .line,
+      xPlaceholder: xUsesDate ? "Date" : (xUsesTime ? "HH:mm" : "X"),
+      yPlaceholder: yUsesTime ? "HH:mm" : "Y",
+      visibleHeight: min(390, max(150, desiredHeight))
+    )
+
+    let alert = NSAlert()
+    alert.messageText = chart.type == .line
+      ? "Series and target lines"
+      : "Series"
+    alert.informativeText = chart.type == .line
+      ? "Configure each data series and its optional dashed A→B target."
+      : "Configure the visibility and color of each data series."
+    alert.accessoryView = seriesOptions
+    alert.addButton(withTitle: "Save")
+    alert.addButton(withTitle: "Cancel")
+    alert.beginSheetModal(for: panel) { [weak self] response in
+      guard let self, response == .alertFirstButtonReturn else { return }
+      let configurations = seriesOptions.configurations()
+      do {
+        if chart.type == .line {
+          try validateSeriesConfigurations(
+            configurations,
+            xIsTime: xUsesTime,
+            xIsDate: xUsesDate,
+            yIsTime: yUsesTime,
+            xScale: chart.effectiveXAxis.scale,
+            yScale: chart.effectiveYAxis.scale
+          )
+        }
+        var changed = chart
+        changed.seriesConfigurations = configurations.isEmpty
+          ? nil
+          : configurations
+        spreadsheetDocument.updateChart(
+          changed,
+          label: "Update chart series"
+        )
+      } catch {
+        showChartSettingsError(error.localizedDescription)
+      }
+    }
+  }
+
   private func configureOptionsGrid(_ grid: NSGridView) {
     grid.rowSpacing = 6
     grid.columnSpacing = 10
@@ -787,6 +847,7 @@ private enum SpreadsheetChartSettingsError: LocalizedError {
 
 private final class SpreadsheetChartToolbarView: NSView {
   var onType: ((SpreadsheetChartType) -> Void)?
+  var onSeriesOptions: (() -> Void)?
   var onToggleFrozen: (() -> Void)?
   var onOptions: (() -> Void)?
   var onStatistics: (() -> Void)?
@@ -802,6 +863,10 @@ private final class SpreadsheetChartToolbarView: NSView {
   private let freezeButton = SpreadsheetChartToolbarView.button(
     symbol: "snowflake",
     tooltip: "Freeze live data"
+  )
+  private let seriesButton = SpreadsheetChartToolbarView.button(
+    symbol: "scope",
+    tooltip: "Series and target lines"
   )
   private let copyButton = SpreadsheetChartToolbarView.button(
     symbol: "doc.on.doc",
@@ -833,6 +898,8 @@ private final class SpreadsheetChartToolbarView: NSView {
     close.action = #selector(closeWindow)
     typeButton.target = self
     typeButton.action = #selector(showTypes)
+    seriesButton.target = self
+    seriesButton.action = #selector(showSeriesOptions)
     freezeButton.target = self
     freezeButton.action = #selector(toggleFrozen)
     copyButton.target = self
@@ -848,6 +915,7 @@ private final class SpreadsheetChartToolbarView: NSView {
         spacer,
         source,
         typeButton,
+        seriesButton,
         freezeButton,
         statisticsButton,
         copyButton,
@@ -934,6 +1002,7 @@ private final class SpreadsheetChartToolbarView: NSView {
   }
 
   @objc private func toggleFrozen() { onToggleFrozen?() }
+  @objc private func showSeriesOptions() { onSeriesOptions?() }
   @objc private func showOptions() { onOptions?() }
   @objc private func showStatistics() { onStatistics?() }
   @objc private func copyPNG() { onCopyPNG?() }

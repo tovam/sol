@@ -49,7 +49,8 @@ final class SpreadsheetChartSeriesOptionsView: NSView {
     chart: SpreadsheetChartDefinition,
     showsLineControls: Bool,
     xPlaceholder: String,
-    yPlaceholder: String
+    yPlaceholder: String,
+    visibleHeight: CGFloat = 176
   ) {
     rows = series.enumerated().map { index, series in
       SpreadsheetChartSeriesOptionRow(
@@ -61,7 +62,7 @@ final class SpreadsheetChartSeriesOptionsView: NSView {
         yPlaceholder: yPlaceholder
       )
     }
-    super.init(frame: NSRect(x: 0, y: 0, width: 440, height: 176))
+    super.init(frame: NSRect(x: 0, y: 0, width: 440, height: visibleHeight))
     configure(series: series, showsLineControls: showsLineControls)
   }
 
@@ -102,7 +103,7 @@ final class SpreadsheetChartSeriesOptionsView: NSView {
     content.alignment = .leading
     content.spacing = 6
     content.edgeInsets = NSEdgeInsets(top: 6, left: 6, bottom: 6, right: 6)
-    let rowHeight: CGFloat = showsLineControls ? 112 : 38
+    let rowHeight: CGFloat = showsLineControls ? 126 : 38
     content.frame = NSRect(
       x: 0,
       y: 0,
@@ -184,6 +185,7 @@ private final class SpreadsheetChartSeriesOptionRow: NSView {
     targetCheckbox.target = self
     targetCheckbox.action = #selector(toggleTarget)
     targetCheckbox.setAccessibilityLabel("Show target segment for \(series.name)")
+    targetCheckbox.toolTip = "Draw a dashed target segment for this series"
 
     colorWell.color = SpreadsheetChartPalette.color(
       from: configuration.colorHex ?? defaultColorHex
@@ -213,11 +215,20 @@ private final class SpreadsheetChartSeriesOptionRow: NSView {
       field.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular)
       field.controlSize = .small
     }
+    startXField.toolTip = "Target point A — X"
+    startYField.toolTip = "Target point A — Y"
+    endXField.toolTip = "Target point B — X"
+    endYField.toolTip = "Target point B — Y"
     scaleCheckbox.state = configuration.target?.includesInScale == true ? .on : .off
     scaleCheckbox.controlSize = .small
     targetControls = [startXField, startYField, endXField, endYField, scaleCheckbox]
 
     let targetGrid = NSGridView(views: [
+      [
+        NSTextField(labelWithString: ""),
+        targetCoordinateHeading("X"),
+        targetCoordinateHeading("Y"),
+      ],
       [NSTextField(labelWithString: "A"), startXField, startYField],
       [NSTextField(labelWithString: "B"), endXField, endYField],
     ])
@@ -282,5 +293,13 @@ private final class SpreadsheetChartSeriesOptionRow: NSView {
   private func updateTargetControls() {
     let enabled = targetCheckbox.state == .on
     for control in targetControls { control.isEnabled = enabled }
+  }
+
+  private func targetCoordinateHeading(_ title: String) -> NSTextField {
+    let label = NSTextField(labelWithString: title)
+    label.font = .systemFont(ofSize: 9, weight: .semibold)
+    label.textColor = .secondaryLabelColor
+    label.alignment = .center
+    return label
   }
 }
