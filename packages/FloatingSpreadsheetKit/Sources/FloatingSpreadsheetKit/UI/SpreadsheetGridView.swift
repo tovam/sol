@@ -440,7 +440,15 @@ final class SpreadsheetGridView: NSView, NSTextViewDelegate {
   override func keyDown(with event: NSEvent) {
     let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
     if modifiers.contains(.command) {
+      if let direction = commandNavigationDirection(for: event.keyCode) {
+        jumpSelection(
+          direction: direction,
+          extending: modifiers.contains(.shift)
+        )
+        return
+      }
       switch event.charactersIgnoringModifiers?.lowercased() {
+      case "a": selectConnectedDataRegion()
       case "c": copySelection()
       case "x": cutSelection()
       case "v": pasteSelection()
@@ -574,6 +582,50 @@ final class SpreadsheetGridView: NSView, NSTextViewDelegate {
       selectedRange = CellRange(destination)
     }
     scrollToVisible(cellRect(destination))
+    notifySelectionChanged()
+  }
+
+  private func jumpSelection(
+    direction: SpreadsheetNavigationDirection,
+    extending: Bool
+  ) {
+    let destination = document.navigationDestination(
+      from: activeCell,
+      direction: direction,
+      maximumRow: Self.rowCount - 1,
+      maximumColumn: Self.columnCount - 1
+    )
+    additionalSelectedCells.removeAll()
+    activeCell = destination
+    if extending {
+      selectedRange = CellRange(start: selectionAnchor, end: destination)
+    } else {
+      selectionAnchor = destination
+      selectedRange = CellRange(destination)
+    }
+    scrollToVisible(cellRect(destination))
+    notifySelectionChanged()
+  }
+
+  private func commandNavigationDirection(
+    for keyCode: UInt16
+  ) -> SpreadsheetNavigationDirection? {
+    switch keyCode {
+    case 123: return .left
+    case 124: return .right
+    case 125: return .down
+    case 126: return .up
+    default: return nil
+    }
+  }
+
+  private func selectConnectedDataRegion() {
+    guard let range = document.connectedDataRange(containing: activeCell) else {
+      return
+    }
+    additionalSelectedCells.removeAll()
+    selectionAnchor = activeCell
+    selectedRange = range
     notifySelectionChanged()
   }
 

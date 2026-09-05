@@ -66,6 +66,80 @@ final class FloatingSpreadsheetKitTests: XCTestCase {
     XCTAssertEqual(restored.columnWidths[2], 174)
   }
 
+  func testCommandArrowNavigationUsesContiguousBlocksAndNextValues() {
+    let document = SpreadsheetDocument(name: "Navigation")
+    for column in [0, 1, 2, 4] {
+      document.setRawInput("x", at: CellAddress(row: 0, column: column))
+    }
+    document.setRawInput("x", at: CellAddress(row: 3, column: 0))
+    document.setRawInput("x", at: CellAddress(row: 4, column: 0))
+
+    XCTAssertEqual(
+      document.navigationDestination(
+        from: CellAddress(row: 0, column: 0),
+        direction: .right,
+        maximumRow: 99,
+        maximumColumn: 99
+      ),
+      CellAddress(row: 0, column: 2)
+    )
+    XCTAssertEqual(
+      document.navigationDestination(
+        from: CellAddress(row: 0, column: 2),
+        direction: .right,
+        maximumRow: 99,
+        maximumColumn: 99
+      ),
+      CellAddress(row: 0, column: 4)
+    )
+    XCTAssertEqual(
+      document.navigationDestination(
+        from: CellAddress(row: 0, column: 3),
+        direction: .right,
+        maximumRow: 99,
+        maximumColumn: 99
+      ),
+      CellAddress(row: 0, column: 4)
+    )
+    XCTAssertEqual(
+      document.navigationDestination(
+        from: CellAddress(row: 0, column: 4),
+        direction: .right,
+        maximumRow: 99,
+        maximumColumn: 99
+      ),
+      CellAddress(row: 0, column: 99)
+    )
+    XCTAssertEqual(
+      document.navigationDestination(
+        from: CellAddress(row: 0, column: 0),
+        direction: .down,
+        maximumRow: 99,
+        maximumColumn: 99
+      ),
+      CellAddress(row: 3, column: 0)
+    )
+  }
+
+  func testCommandASelectsBoundingBoxOfConnectedPopulatedCells() {
+    let document = SpreadsheetDocument(name: "Connected")
+    document.setRawInput("B1", at: CellAddress(row: 0, column: 1))
+    document.setRawInput("A2", at: CellAddress(row: 1, column: 0))
+    document.setRawInput("B2", at: CellAddress(row: 1, column: 1))
+    document.setRawInput("D1", at: CellAddress(row: 0, column: 3))
+
+    XCTAssertEqual(
+      document.connectedDataRange(containing: CellAddress(row: 1, column: 0)),
+      CellRange(
+        start: CellAddress(row: 0, column: 0),
+        end: CellAddress(row: 1, column: 1)
+      )
+    )
+    XCTAssertNil(
+      document.connectedDataRange(containing: CellAddress(row: 0, column: 0))
+    )
+  }
+
   func testLegacyPayloadDefaultsToNoCustomColumnWidths() throws {
     let document = SpreadsheetDocument(name: "Legacy")
     let encoded = try JSONEncoder().encode(document.payload)

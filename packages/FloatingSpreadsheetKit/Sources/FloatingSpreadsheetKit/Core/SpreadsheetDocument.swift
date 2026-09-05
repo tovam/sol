@@ -6,6 +6,13 @@ extension Notification.Name {
   )
 }
 
+enum SpreadsheetNavigationDirection {
+  case left
+  case right
+  case up
+  case down
+}
+
 final class SpreadsheetDocument {
   static let historyLimit = 50
 
@@ -112,6 +119,109 @@ final class SpreadsheetDocument {
     !cells.contains { range.contains($0.key) && !$0.value.rawInput.isEmpty }
   }
 
+  func navigationDestination(
+    from origin: CellAddress,
+    direction: SpreadsheetNavigationDirection,
+    maximumRow: Int,
+    maximumColumn: Int
+  ) -> CellAddress {
+    let boundedOrigin = CellAddress(
+      row: min(maximumRow, origin.row),
+      column: min(maximumColumn, origin.column)
+    )
+    let delta: (row: Int, column: Int)
+    let sheetBoundary: CellAddress
+    switch direction {
+    case .left:
+      delta = (0, -1)
+      sheetBoundary = CellAddress(row: boundedOrigin.row, column: 0)
+    case .right:
+      delta = (0, 1)
+      sheetBoundary = CellAddress(row: boundedOrigin.row, column: maximumColumn)
+    case .up:
+      delta = (-1, 0)
+      sheetBoundary = CellAddress(row: 0, column: boundedOrigin.column)
+    case .down:
+      delta = (1, 0)
+      sheetBoundary = CellAddress(row: maximumRow, column: boundedOrigin.column)
+    }
+
+    func advanced(from address: CellAddress) -> CellAddress? {
+      let row = address.row + delta.row
+      let column = address.column + delta.column
+      guard row >= 0, row <= maximumRow,
+        column >= 0, column <= maximumColumn
+      else {
+        return nil
+      }
+      return CellAddress(row: row, column: column)
+    }
+
+    if let adjacent = advanced(from: boundedOrigin), isPopulated(adjacent) {
+      var destination = adjacent
+      while let next = advanced(from: destination), isPopulated(next) {
+        destination = next
+      }
+      return destination
+    }
+
+    let nearestPopulated = cells.keys.compactMap { address -> (Int, CellAddress)? in
+      let distance: Int
+      if delta.row == 0, address.row == boundedOrigin.row {
+        distance = (address.column - boundedOrigin.column) * delta.column
+      } else if delta.column == 0, address.column == boundedOrigin.column {
+        distance = (address.row - boundedOrigin.row) * delta.row
+      } else {
+        return nil
+      }
+      guard distance > 0, isPopulated(address) else { return nil }
+      return (distance, address)
+    }.min { $0.0 < $1.0 }?.1
+
+    return nearestPopulated ?? sheetBoundary
+  }
+
+  func connectedDataRange(containing origin: CellAddress) -> CellRange? {
+    var remaining = Set(cells.compactMap { address, record in
+      record.rawInput.isEmpty ? nil : address
+    })
+    guard remaining.remove(origin) != nil else { return nil }
+
+    var queue = [origin]
+    var cursor = 0
+    var minimumRow = origin.row
+    var maximumRow = origin.row
+    var minimumColumn = origin.column
+    var maximumColumn = origin.column
+    while cursor < queue.count {
+      let address = queue[cursor]
+      cursor += 1
+      let neighbours = [
+        address.row > 0
+          ? CellAddress(row: address.row - 1, column: address.column)
+          : nil,
+        CellAddress(row: address.row + 1, column: address.column),
+        address.column > 0
+          ? CellAddress(row: address.row, column: address.column - 1)
+          : nil,
+        CellAddress(row: address.row, column: address.column + 1),
+      ]
+      for neighbour in neighbours.compactMap({ $0 })
+      where remaining.remove(neighbour) != nil {
+        queue.append(neighbour)
+        minimumRow = min(minimumRow, neighbour.row)
+        maximumRow = max(maximumRow, neighbour.row)
+        minimumColumn = min(minimumColumn, neighbour.column)
+        maximumColumn = max(maximumColumn, neighbour.column)
+      }
+    }
+
+    return CellRange(
+      start: CellAddress(row: minimumRow, column: minimumColumn),
+      end: CellAddress(row: maximumRow, column: maximumColumn)
+    )
+  }
+
   func displayText(at address: CellAddress) -> String {
     let value = value(at: address)
     let record = cells[address]
@@ -146,6 +256,10 @@ final class SpreadsheetDocument {
     case .number(let number):
       return formatNumber(number, as: format)
     }
+  }
+
+  private func isPopulated(_ address: CellAddress) -> Bool {
+    cells[address].map { !$0.rawInput.isEmpty } ?? false
   }
 
   func setRawInput(_ rawInput: String, at address: CellAddress, label: String = "Edit cell") {
