@@ -1064,14 +1064,17 @@ export const createUIStore = (root: IRootStore) => {
 		get items(): Item[] {
 			const spreadsheetCommand = resolveSpreadsheetCommand(store.query);
 			if (spreadsheetCommand && root.spreadsheets) {
-				if (spreadsheetCommand.kind === "create") {
-					return [root.spreadsheets.createItem];
-				}
 				const spreadsheetItems = root.spreadsheets.itemsForFilter(
 					spreadsheetCommand.filter,
 				);
-				if (spreadsheetItems.length > 0) return spreadsheetItems;
+				const createItems = spreadsheetCommand.includesCreate
+					? [root.spreadsheets.createItem]
+					: [];
+				if (spreadsheetItems.length > 0) {
+					return [...createItems, ...spreadsheetItems];
+				}
 				return [
+					...createItems,
 					{
 						id: "floating_spreadsheets_empty",
 						icon: "▦",

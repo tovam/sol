@@ -1,5 +1,4 @@
 const createAliases = ["sheet", "spreadsheet", "excel", "tableur"];
-const createAliasSet = new Set(createAliases);
 const browseAliases = [
 	...createAliases,
 	"sheets",
@@ -29,20 +28,30 @@ const browseAliases = [
 	"charger tableurs",
 ].sort((left, right) => right.length - left.length);
 
-export type SpreadsheetCommand =
-	| { kind: "create" }
-	| { kind: "list"; filter: string };
+export type SpreadsheetCommand = {
+	kind: "list";
+	filter: string;
+	includesCreate: boolean;
+};
 
 export const resolveSpreadsheetCommand = (
 	query: string,
 ): SpreadsheetCommand | null => {
 	const trimmed = query.trim();
 	const normalized = trimmed.toLocaleLowerCase();
-	if (createAliasSet.has(normalized)) return { kind: "create" };
+	if (createAliases.includes(normalized)) {
+		return { kind: "list", filter: "", includesCreate: true };
+	}
 	for (const alias of browseAliases) {
-		if (normalized === alias) return { kind: "list", filter: "" };
+		if (normalized === alias) {
+			return { kind: "list", filter: "", includesCreate: false };
+		}
 		if (normalized.startsWith(`${alias} `)) {
-			return { kind: "list", filter: trimmed.slice(alias.length).trim() };
+			return {
+				kind: "list",
+				filter: trimmed.slice(alias.length).trim(),
+				includesCreate: false,
+			};
 		}
 	}
 	return null;
