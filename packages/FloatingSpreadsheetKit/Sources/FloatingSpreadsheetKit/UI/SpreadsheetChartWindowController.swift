@@ -1865,10 +1865,13 @@ private struct SpreadsheetChartView: View {
             description: Text("Logarithmic axes require values greater than zero.")
           )
         } else {
-          chartContent(chart)
-            .chartLegend(position: .bottom, alignment: .center, spacing: 8)
-            .padding(.horizontal, 8)
-            .padding(.bottom, 8)
+          VStack(spacing: 4) {
+            chartContent(chart)
+              .chartLegend(position: .bottom, alignment: .center, spacing: 8)
+            hoverInspector(chart)
+          }
+          .padding(.horizontal, 8)
+          .padding(.bottom, 8)
         }
       } else {
         ContentUnavailableView("Chart unavailable", systemImage: "chart.xyaxis.line")
@@ -2119,23 +2122,14 @@ private struct SpreadsheetChartView: View {
           RuleMark(x: .value("Hovered date", anchor.xDate ?? .distantPast))
             .foregroundStyle(Color.secondary.opacity(0.65))
             .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-            .annotation(position: .top, spacing: 5) {
-              hoverCard(selection)
-            }
         } else if model.usesNumericXAxis || definition.type == .scatter {
           RuleMark(x: .value("Hovered X", anchor.x))
             .foregroundStyle(Color.secondary.opacity(0.65))
             .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-            .annotation(position: .top, spacing: 5) {
-              hoverCard(selection)
-            }
         } else {
           RuleMark(x: .value("Hovered category", anchor.category))
             .foregroundStyle(Color.secondary.opacity(0.65))
             .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-            .annotation(position: .top, spacing: 5) {
-              hoverCard(selection)
-            }
         }
 
         ForEach(selection.points) { datum in
@@ -2307,36 +2301,47 @@ private struct SpreadsheetChartView: View {
     }
   }
 
-  private func hoverCard(_ selection: SpreadsheetChartHoverSelection) -> some View {
-    VStack(alignment: .leading, spacing: 3) {
-      Text(hoverTitle(selection))
-        .font(.system(size: 10, weight: .semibold))
-      ForEach(selection.points.prefix(8)) { datum in
-        HStack(spacing: 8) {
-          Text(datum.series)
-            .foregroundStyle(.secondary)
-          Spacer(minLength: 8)
-          Text(model.formattedValue(datum.value, isTime: model.usesTimeValueAxis))
-            .monospacedDigit()
+  private func hoverInspector(_ definition: SpreadsheetChartDefinition) -> some View {
+    ZStack(alignment: .leading) {
+      if let selection = hoverSelection {
+        RoundedRectangle(cornerRadius: 5, style: .continuous)
+          .fill(Color.secondary.opacity(0.08))
+          .overlay {
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+              .stroke(Color.secondary.opacity(0.14), lineWidth: 0.5)
+          }
+
+        ScrollView(.horizontal, showsIndicators: false) {
+          HStack(spacing: 10) {
+            Text(hoverTitle(selection))
+              .fontWeight(.semibold)
+              .foregroundStyle(.primary)
+
+            Divider()
+              .frame(height: 14)
+
+            ForEach(selection.points) { datum in
+              HStack(spacing: 4) {
+                Circle()
+                  .fill(model.seriesColor(for: datum.seriesID, definition: definition))
+                  .frame(width: 6, height: 6)
+                Text(datum.series)
+                  .foregroundStyle(.secondary)
+                Text(model.formattedValue(datum.value, isTime: model.usesTimeValueAxis))
+                  .fontWeight(.medium)
+                  .monospacedDigit()
+              }
+            }
+          }
+          .font(.system(size: 10))
+          .lineLimit(1)
+          .fixedSize(horizontal: true, vertical: false)
+          .padding(.horizontal, 8)
         }
-        .font(.system(size: 10))
-      }
-      if selection.points.count > 8 {
-        Text("+\(selection.points.count - 8) more")
-          .font(.system(size: 9))
-          .foregroundStyle(.secondary)
       }
     }
-    .padding(.horizontal, 7)
-    .padding(.vertical, 5)
-    .frame(minWidth: 120)
-    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
-    .overlay {
-      RoundedRectangle(cornerRadius: 6)
-        .stroke(Color.secondary.opacity(0.2), lineWidth: 0.5)
-    }
-    .shadow(color: .black.opacity(0.16), radius: 4, y: 2)
-    .allowsHitTesting(false)
+    // The inspector always owns the same space, so hovering cannot resize the plot.
+    .frame(maxWidth: .infinity, minHeight: 30, maxHeight: 30, alignment: .leading)
   }
 
   private func hoverTitle(_ selection: SpreadsheetChartHoverSelection) -> String {
