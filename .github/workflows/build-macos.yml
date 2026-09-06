@@ -47,6 +47,17 @@ jobs:
       - name: Install JavaScript dependencies
         run: bun install --frozen-lockfile
 
+      - name: Set up Node.js for validation
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Verify local imports and calculator regressions
+        run: |
+          bun run check:imports
+          bun run test:calculator
+
       - name: Create CI app configuration
         run: cp src/env.ci.ts src/env.ts
 

@@ -12,6 +12,7 @@
 		"fix-dependencies": "rnx-align-deps --write",
 		"pods": "cd macos && rm -rf Podfile.lock && bundle exec pod install && xcodebuild -resolvePackageDependencies -workspace sol.xcworkspace -scheme debug",
 		"test:calculator": "node --experimental-strip-types --test scripts/calculator-engine.test.mjs",
+		"check:imports": "node scripts/check-local-imports.mjs",
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
