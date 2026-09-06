@@ -5,6 +5,10 @@ import {
 	type ClipboardStore,
 	createClipboardStore,
 } from "stores/clipboard.store";
+import {
+	createCurrencyRatesStore,
+	type CurrencyRatesStore,
+} from "stores/currencyRates.store";
 import { createEmojiStore, type EmojiStore } from "stores/emoji.store";
 import {
 	createExternalCommandsStore,
@@ -30,6 +34,7 @@ export interface IRootStore {
 	ai: AIStore;
 	ui: UIStore;
 	clipboard: ClipboardStore;
+	currencyRates: CurrencyRatesStore;
 	keystroke: KeystrokeStore;
 	calendar: CalendarStore;
 	processes: ProcessesStore;
@@ -46,6 +51,7 @@ const createRootStore = (): IRootStore => {
 
 	store.ai = createAIStore();
 	store.ui = createUIStore(store);
+	store.currencyRates = createCurrencyRatesStore(store);
 	store.spreadsheets = createSpreadsheetsStore(store);
 	store.clipboard = createClipboardStore(store);
 	store.keystroke = createKeystrokeStore(store);
@@ -61,6 +67,7 @@ const createRootStore = (): IRootStore => {
 		store.calendar.cleanUp();
 		store.keystroke.cleanUp();
 		store.clipboard.cleanUp();
+		store.currencyRates.cleanUp();
 		store.scripts.cleanUp();
 		store.spreadsheets.cleanUp();
 		store.externalCommands.cleanUp();

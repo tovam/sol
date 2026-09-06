@@ -39,6 +39,17 @@ const SEARCH_TABS = [
 
 const SEARCH_ITEM_HEIGHT = 56;
 
+const formatRateTimestamp = (timestamp: number) => {
+	try {
+		return new Intl.DateTimeFormat(undefined, {
+			dateStyle: "short",
+			timeStyle: "short",
+		}).format(new Date(timestamp));
+	} catch {
+		return new Date(timestamp).toLocaleString();
+	}
+};
+
 function getSearchItemType(item: Item) {
 	return item.type === ItemType.TEMPORARY_RESULT ? "temporary" : "standard";
 }
@@ -62,14 +73,27 @@ function TemporaryResultView({
 		return (
 			<View className="flex-1 px-4 flex-row items-center gap-4">
 				<View className="flex-1 min-w-0">
-					<Text
-						className="text-sm darker-text"
-						numberOfLines={1}
-						adjustsFontSizeToFit
-						minimumFontScale={0.75}
-					>
-						{result.interpretedExpression ?? result.expression} =
-					</Text>
+					<View className="flex-row items-center gap-2">
+						<Text
+							className="flex-1 min-w-0 text-sm darker-text"
+							numberOfLines={1}
+							adjustsFontSizeToFit
+							minimumFontScale={0.75}
+						>
+							{result.interpretedExpression ?? result.expression} =
+						</Text>
+						{result.exchangeRateInfo && (
+							<Text
+								className="max-w-[52%] text-xxs darker-text opacity-70"
+								numberOfLines={1}
+								accessibilityLabel={`${result.exchangeRateInfo.source}. ${result.exchangeRateInfo.summary}. Retrieved ${formatRateTimestamp(result.exchangeRateInfo.fetchedAt)}`}
+							>
+								{result.exchangeRateInfo.source} ·{" "}
+								{result.exchangeRateInfo.summary} · retrieved{" "}
+								{formatRateTimestamp(result.exchangeRateInfo.fetchedAt)}
+							</Text>
+						)}
+					</View>
 					<Text
 						className="mt-0.5 text-2xl font-medium"
 						numberOfLines={1}

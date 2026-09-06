@@ -1,6 +1,7 @@
 import axios from "axios";
 import * as chrono from "chrono-node";
 import convert from "convert-units";
+import type { CurrencyRateSnapshot } from "lib/currencyRates";
 import {
 	evaluateCalculatorExpression,
 	isCalculatorExpressionCandidate,
@@ -30,6 +31,11 @@ export type TemporaryResult =
 			interpretedExpression?: string;
 			value: string;
 			copyValue: string;
+			exchangeRateInfo?: {
+				summary: string;
+				fetchedAt: number;
+				source: string;
+			};
 	  }
 	| {
 			kind: "flight";
@@ -352,9 +358,12 @@ export function isCalculationCandidate(query: string) {
 	);
 }
 
-export function parseCalculation(query: string): TemporaryResult | null {
+export function parseCalculation(
+	query: string,
+	currencyRates?: CurrencyRateSnapshot | null,
+): TemporaryResult | null {
 	const normalized = query.trim().replace(/,/g, "").replace(/\s+/g, " ");
-	const expressionResult = evaluateCalculatorExpression(query);
+	const expressionResult = evaluateCalculatorExpression(query, currencyRates);
 	if (expressionResult != null) {
 		const canonicalSuffix = expressionResult.targetUnit
 			? ` ${expressionResult.targetUnit}`
@@ -369,6 +378,7 @@ export function parseCalculation(query: string): TemporaryResult | null {
 			interpretedExpression: expressionResult.interpretedExpression,
 			value: `${expressionResult.formattedValue}${displaySuffix}`,
 			copyValue: canonicalResult,
+			exchangeRateInfo: expressionResult.exchangeRateInfo,
 		};
 	}
 

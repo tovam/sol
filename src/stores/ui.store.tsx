@@ -2,6 +2,11 @@ import * as Sentry from "@sentry/react-native";
 import { Assets } from "assets";
 import { CONSTANTS } from "lib/constants";
 import {
+	DEFAULT_CURRENCY_REFRESH_INTERVAL_MINUTES,
+	MAX_CURRENCY_REFRESH_INTERVAL_MINUTES,
+	MIN_CURRENCY_REFRESH_INTERVAL_MINUTES,
+} from "lib/currencyRates";
+import {
 	type DailymotionStream,
 	dailymotionPlayerURL,
 	extractDailymotionVideoID,
@@ -64,6 +69,7 @@ import {
 	writePersistedUIState,
 } from "./persisted-config";
 import {
+	calculatorExpressionUsesCurrency,
 	createTextTemporaryResult,
 	fetchFlightInfoFromWeb,
 	getInitials,
@@ -83,6 +89,7 @@ let onAppsChangedListener: EmitterSubscription | undefined;
 let appareanceListener: NativeEventSubscription | undefined;
 let bookmarksDisposer: IReactionDisposer | undefined;
 let configDisposer: IReactionDisposer | undefined;
+let currencyRatesDisposer: IReactionDisposer | undefined;
 
 export enum Widget {
 	ONBOARDING = "ONBOARDING",
@@ -151,6 +158,16 @@ export const FileSort = {
 export type FileSort = (typeof FileSort)[keyof typeof FileSort];
 
 const FILE_SORT_VALUES = new Set<string>(Object.values(FileSort));
+
+const normalizeCurrencyRefreshIntervalMinutes = (value: unknown): number => {
+	if (typeof value !== "number" || !Number.isInteger(value)) {
+		return DEFAULT_CURRENCY_REFRESH_INTERVAL_MINUTES;
+	}
+	return Math.min(
+		MAX_CURRENCY_REFRESH_INTERVAL_MINUTES,
+		Math.max(MIN_CURRENCY_REFRESH_INTERVAL_MINUTES, value),
+	);
+};
 
 const normalizeFileSort = (value: unknown): FileSort => {
 	return typeof value === "string" && FILE_SORT_VALUES.has(value)
@@ -739,6 +756,10 @@ export const createUIStore = (root: IRootStore) => {
 						src.searchWindowAnimation,
 					);
 					store.glassAppearance = normalizeGlassAppearance(src.glassAppearance);
+					store.currencyRefreshIntervalMinutes =
+						normalizeCurrencyRefreshIntervalMinutes(
+							src.currencyRefreshIntervalMinutes,
+						);
 					store.calendarEnabled = src.calendarEnabled ?? true;
 					store.showAllDayEvents = src.showAllDayEvents ?? true;
 					store.launchAtLogin = src.launchAtLogin ?? true;
@@ -847,6 +868,10 @@ export const createUIStore = (root: IRootStore) => {
 				store.glassAppearance = normalizeGlassAppearance(
 					jsonConfig.glassAppearance,
 				);
+				store.currencyRefreshIntervalMinutes =
+					normalizeCurrencyRefreshIntervalMinutes(
+						jsonConfig.currencyRefreshIntervalMinutes,
+					);
 				if (jsonConfig.calendarEnabled !== undefined)
 					store.calendarEnabled = jsonConfig.calendarEnabled;
 				if (jsonConfig.showAllDayEvents !== undefined)
@@ -939,6 +964,8 @@ export const createUIStore = (root: IRootStore) => {
 			...DEFAULT_SEARCH_WINDOW_ANIMATION,
 		} as SearchWindowAnimation,
 		glassAppearance: { ...DEFAULT_GLASS_APPEARANCE } as GlassAppearance,
+		currencyRefreshIntervalMinutes:
+			DEFAULT_CURRENCY_REFRESH_INTERVAL_MINUTES,
 		initialHydrationComplete: false,
 		query: "",
 		selectedIndex: 0,
@@ -1672,6 +1699,10 @@ export const createUIStore = (root: IRootStore) => {
 			store.glassAppearance = { ...DEFAULT_GLASS_APPEARANCE };
 			solNative.setGlassAppearance(toJS(store.glassAppearance));
 		},
+		setCurrencyRefreshIntervalMinutes: (minutes: number) => {
+			store.currencyRefreshIntervalMinutes =
+				normalizeCurrencyRefreshIntervalMinutes(minutes);
+		},
 		focusWidget: (widget: Widget) => {
 			if (widget !== Widget.SEARCH) {
 				invalidatePendingCalculation();
@@ -1878,22 +1909,31 @@ export const createUIStore = (root: IRootStore) => {
 
 				if (isCalculationCandidate(store.query)) {
 					const querySnapshot = store.query;
+					const usesCurrency = calculatorExpressionUsesCurrency(querySnapshot);
 					store.isCalculating = true;
 					calculationTimer = setTimeout(() => {
 						calculationTimer = undefined;
-						const calculationResult = parseCalculation(querySnapshot);
-						if (
-							currentCalculationRequestId !== calculationRequestId ||
-							store.focusedWidget !== Widget.SEARCH ||
-							store.searchTab === SearchTab.FILES ||
-							store.query !== querySnapshot
-						) {
-							return;
-						}
-						runInAction(() => {
-							store.isCalculating = false;
-							store.temporaryResult = calculationResult;
-						});
+						void (async () => {
+							const currencyRates = usesCurrency
+								? await root.currencyRates.ensureSnapshot()
+								: null;
+							const calculationResult = parseCalculation(
+								querySnapshot,
+								currencyRates,
+							);
+							if (
+								currentCalculationRequestId !== calculationRequestId ||
+								store.focusedWidget !== Widget.SEARCH ||
+								store.searchTab === SearchTab.FILES ||
+								store.query !== querySnapshot
+							) {
+								return;
+							}
+							runInAction(() => {
+								store.isCalculating = false;
+								store.temporaryResult = calculationResult;
+							});
+						})();
 					}, CALCULATION_PAINT_DELAY_MS);
 					return;
 				}
@@ -2092,6 +2132,7 @@ export const createUIStore = (root: IRootStore) => {
 			appareanceListener?.remove();
 			bookmarksDisposer?.();
 			configDisposer?.();
+			currencyRatesDisposer?.();
 		},
 		getCalendarAccess: () => {
 			store.calendarAuthorizationStatus =
@@ -2626,6 +2667,26 @@ export const createUIStore = (root: IRootStore) => {
 			getPersistedUISnapshot();
 			persistToJson();
 		});
+		currencyRatesDisposer = reaction(
+			() => root.currencyRates.snapshot?.fetchedAt,
+			() => {
+				if (
+					store.focusedWidget !== Widget.SEARCH ||
+					store.searchTab === SearchTab.FILES ||
+					!calculatorExpressionUsesCurrency(store.query)
+				) {
+					return;
+				}
+				const result = parseCalculation(
+					store.query,
+					root.currencyRates.snapshot,
+				);
+				runInAction(() => {
+					store.isCalculating = false;
+					store.temporaryResult = result;
+				});
+			},
+		);
 		store.getCalendarAccess();
 		store.getAccessibilityStatus();
 		store.getFullDiskAccessStatus();

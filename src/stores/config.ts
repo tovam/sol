@@ -12,6 +12,7 @@ export const PORTABLE_KEYS = [
 	"searchWindowPosition",
 	"searchWindowAnimation",
 	"glassAppearance",
+	"currencyRefreshIntervalMinutes",
 	"calendarEnabled",
 	"showAllDayEvents",
 	"launchAtLogin",
