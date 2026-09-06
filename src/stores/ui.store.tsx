@@ -40,6 +40,7 @@ import {
 	normalizeShortcutMap,
 } from "lib/shortcuts";
 import { googleTranslate } from "lib/translator";
+import { calculatorExpressionUsesCurrency } from "lib/unitExpression";
 import MiniSearch from "minisearch";
 import {
 	autorun,
@@ -69,7 +70,6 @@ import {
 	writePersistedUIState,
 } from "./persisted-config";
 import {
-	calculatorExpressionUsesCurrency,
 	createTextTemporaryResult,
 	fetchFlightInfoFromWeb,
 	getInitials,

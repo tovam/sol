@@ -59,10 +59,28 @@ test("converts EUR, USD and BTC as case-insensitive units", () => {
 	});
 });
 
-test("handles bare constants and currency symbols without throwing", () => {
+test("handles first-character constants, units, and currency symbols", () => {
+	for (const input of ["e", "E", "s", "d", "$", "€"]) {
+		assert.equal(isCalculatorExpressionCandidate(input), true, input);
+		assert.equal(
+			calculatorExpressionUsesCurrency(input),
+			input === "$" || input === "€",
+			input,
+		);
+		assert.ok(evaluateCalculatorExpression(input, currencyRates), input);
+	}
+	for (const input of ["r", "u", "S", "D"]) {
+		assert.equal(isCalculatorExpressionCandidate(input), false, input);
+		assert.equal(calculatorExpressionUsesCurrency(input), false, input);
+	}
 	assert.equal(evaluate("e").formattedValue, "2.71828182845905");
+	assert.equal(evaluate("E").formattedValue, "2.71828182845905");
+	assert.equal(evaluate("s").targetUnit, "s");
+	assert.equal(evaluate("d").targetUnit, "d");
 	assert.equal(evaluateCurrency("$").targetUnit, "USD");
 	assert.equal(evaluateCurrency("€").targetUnit, "EUR");
+	assert.equal(evaluateCalculatorExpression("$"), null);
+	assert.equal(evaluateCalculatorExpression("€"), null);
 });
 
 test("validates the public Coinbase rate payload", () => {
