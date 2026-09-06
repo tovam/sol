@@ -59,6 +59,12 @@ test("converts EUR, USD and BTC as case-insensitive units", () => {
 	});
 });
 
+test("handles bare constants and currency symbols without throwing", () => {
+	assert.equal(evaluate("e").formattedValue, "2.71828182845905");
+	assert.equal(evaluateCurrency("$").targetUnit, "USD");
+	assert.equal(evaluateCurrency("€").targetUnit, "EUR");
+});
+
 test("validates the public Coinbase rate payload", () => {
 	assert.deepEqual(
 		parseCoinbaseCurrencyRates(
@@ -114,7 +120,7 @@ test("keeps compact compound units attached to their coefficient", () => {
 	assert.ok(Math.abs(Number(grouped.value) - 1 / 7500) < 1e-18);
 
 	const groupedWithCoefficientSpace = evaluate("1/(30s) / 900 km/h");
-	assert.equal(groupedWithCoefficientSpace.targetUnit, "1/m");
+	assert.equal(groupedWithCoefficientSpace.targetUnit, "m^-1");
 	assert.ok(
 		Math.abs(Number(groupedWithCoefficientSpace.value) - 1 / 7500) < 1e-18,
 	);

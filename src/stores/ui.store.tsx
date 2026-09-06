@@ -1913,14 +1913,20 @@ export const createUIStore = (root: IRootStore) => {
 					store.isCalculating = true;
 					calculationTimer = setTimeout(() => {
 						calculationTimer = undefined;
-						void (async () => {
-							const currencyRates = usesCurrency
-								? await root.currencyRates.ensureSnapshot()
-								: null;
-							const calculationResult = parseCalculation(
-								querySnapshot,
-								currencyRates,
-							);
+						const applyCalculation = (
+							currencyRates: Parameters<typeof parseCalculation>[1],
+						) => {
+							let calculationResult: TemporaryResult | null = null;
+							try {
+								calculationResult = parseCalculation(
+									querySnapshot,
+									currencyRates,
+								);
+							} catch {
+								// Calculator input is user-controlled. A malformed expression or
+								// stale rate snapshot must never escape into the RN event loop.
+								calculationResult = null;
+							}
 							if (
 								currentCalculationRequestId !== calculationRequestId ||
 								store.focusedWidget !== Widget.SEARCH ||
@@ -1933,6 +1939,23 @@ export const createUIStore = (root: IRootStore) => {
 								store.isCalculating = false;
 								store.temporaryResult = calculationResult;
 							});
+						};
+
+						if (!usesCurrency) {
+							// Keep ordinary calculations entirely synchronous. In particular,
+							// constants such as `e` must not become unhandled async work.
+							applyCalculation(null);
+							return;
+						}
+
+						void (async () => {
+							try {
+								applyCalculation(await root.currencyRates.ensureSnapshot());
+							} catch {
+								// Network/storage failures degrade to no calculator result; they
+								// must never terminate Sol while the user is typing.
+								applyCalculation(null);
+							}
 						})();
 					}, CALCULATION_PAINT_DELAY_MS);
 					return;
