@@ -1,13 +1,28 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+	calculatorExpressionUsesCurrency,
 	evaluateCalculatorExpression,
 	isCalculatorExpressionCandidate,
 } from "../src/lib/unitExpression.ts";
+import { parseCoinbaseCurrencyRates } from "../src/lib/currencyRates.ts";
+
+const currencyRates = {
+	base: "EUR",
+	rates: { EUR: "1", USD: "2", BTC: "0.0001" },
+	fetchedAt: 1_700_000_000_000,
+	source: "Coinbase",
+};
 
 function evaluate(expression) {
 	const result = evaluateCalculatorExpression(expression);
 	assert.ok(result, `Expected a result for: ${expression}`);
+	return result;
+}
+
+function evaluateCurrency(expression) {
+	const result = evaluateCalculatorExpression(expression, currencyRates);
+	assert.ok(result, `Expected a currency result for: ${expression}`);
 	return result;
 }
 
@@ -23,6 +38,50 @@ test("recognizes complete calculator input without evaluating it", () => {
 	assert.equal(isCalculatorExpressionCandidate("3 m / 4 s * 7 g"), true);
 	assert.equal(isCalculatorExpressionCandidate("26**"), false);
 	assert.equal(isCalculatorExpressionCandidate("calendar"), false);
+	assert.equal(isCalculatorExpressionCandidate("btc in $"), true);
+});
+
+test("converts EUR, USD and BTC as case-insensitive units", () => {
+	assert.equal(evaluateCurrency("btc in $").value, "20000");
+	assert.equal(evaluateCurrency("BTC in usd").formattedValue, "20000");
+	assert.equal(evaluateCurrency("€ in USD").value, "2");
+	assert.equal(evaluateCurrency("100 $ in eur").value, "50");
+	assert.equal(evaluateCurrency("2 btc + 10000 EUR in USD").value, "60000");
+	assert.equal(evaluateCalculatorExpression("BTC in USD"), null);
+	assert.equal(calculatorExpressionUsesCurrency("3 m in cm"), false);
+	assert.equal(calculatorExpressionUsesCurrency("3 Btc in €"), true);
+
+	const result = evaluateCurrency("btc in $");
+	assert.deepEqual(result.exchangeRateInfo, {
+		summary: "1 BTC = 20000 USD",
+		fetchedAt: currencyRates.fetchedAt,
+		source: "Coinbase",
+	});
+});
+
+test("validates the public Coinbase rate payload", () => {
+	assert.deepEqual(
+		parseCoinbaseCurrencyRates(
+			{
+				data: {
+					currency: "EUR",
+					rates: { EUR: "1.0", USD: "1.25", BTC: "0.00002" },
+				},
+			},
+			currencyRates.fetchedAt,
+		),
+		{
+			base: "EUR",
+			rates: { EUR: "1.0", USD: "1.25", BTC: "0.00002" },
+			fetchedAt: currencyRates.fetchedAt,
+			source: "Coinbase",
+		},
+	);
+	assert.throws(() =>
+		parseCoinbaseCurrencyRates({
+			data: { currency: "EUR", rates: { EUR: "1", USD: "nope" } },
+		}),
+	);
 });
 
 test("applies conventional operator precedence", () => {

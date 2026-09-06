@@ -1,6 +1,11 @@
 import Big from "big.js";
+import {
+	currencyCodeForIdentifier,
+	type CurrencyCode,
+	type CurrencyRateSnapshot,
+} from "./currencyRates.ts";
 
-type Dimensions = readonly [number, number, number, number, number];
+type Dimensions = readonly [number, number, number, number, number, number];
 
 type Quantity = {
 	value: Big;
@@ -44,16 +49,22 @@ export type CalculatorExpressionResult = {
 	value: string;
 	formattedValue: string;
 	hasUnits: boolean;
+	exchangeRateInfo?: {
+		summary: string;
+		fetchedAt: number;
+		source: string;
+	};
 };
 
 export type UnitExpressionResult = CalculatorExpressionResult;
 
-const DIMENSIONLESS: Dimensions = [0, 0, 0, 0, 0];
-const MASS: Dimensions = [1, 0, 0, 0, 0];
-const LENGTH: Dimensions = [0, 1, 0, 0, 0];
-const TIME: Dimensions = [0, 0, 1, 0, 0];
-const CURRENT: Dimensions = [0, 0, 0, 1, 0];
-const ANGLE: Dimensions = [0, 0, 0, 0, 1];
+const DIMENSIONLESS: Dimensions = [0, 0, 0, 0, 0, 0];
+const MASS: Dimensions = [1, 0, 0, 0, 0, 0];
+const LENGTH: Dimensions = [0, 1, 0, 0, 0, 0];
+const TIME: Dimensions = [0, 0, 1, 0, 0, 0];
+const CURRENT: Dimensions = [0, 0, 0, 1, 0, 0];
+const ANGLE: Dimensions = [0, 0, 0, 0, 1, 0];
+const CURRENCY: Dimensions = [0, 0, 0, 0, 0, 1];
 
 Big.DP = 40;
 Big.RM = Big.roundHalfEven;
@@ -118,7 +129,7 @@ const derivedDimensions = (
 	time: number,
 	current = 0,
 	angle = 0,
-): Dimensions => [mass, length, time, current, angle];
+): Dimensions => [mass, length, time, current, angle, 0];
 
 const UNITS: Record<string, Quantity> = {
 	// Length
@@ -320,6 +331,7 @@ function addDimensions(a: Dimensions, b: Dimensions): Dimensions {
 		a[2] + b[2],
 		a[3] + b[3],
 		a[4] + b[4],
+		a[5] + b[5],
 	];
 }
 
@@ -330,6 +342,7 @@ function subtractDimensions(a: Dimensions, b: Dimensions): Dimensions {
 		a[2] - b[2],
 		a[3] - b[3],
 		a[4] - b[4],
+		a[5] - b[5],
 	];
 }
 
@@ -340,6 +353,7 @@ function scaleDimensions(dimensions: Dimensions, power: number): Dimensions {
 		dimensions[2] * power,
 		dimensions[3] * power,
 		dimensions[4] * power,
+		dimensions[5] * power,
 	];
 }
 
@@ -351,7 +365,22 @@ function isDimensionless(dimensions: Dimensions) {
 	return dimensionsMatch(dimensions, DIMENSIONLESS);
 }
 
-function resolveUnitIdentifier(rawIdentifier: string): Quantity | null {
+function resolveCurrencyUnit(
+	rawIdentifier: string,
+	currencyRates?: CurrencyRateSnapshot | null,
+): Quantity | null {
+	const code = currencyCodeForIdentifier(rawIdentifier);
+	if (!code || !currencyRates) return null;
+	return unit(new Big("1").div(currencyRates.rates[code]), CURRENCY);
+}
+
+function resolveUnitIdentifier(
+	rawIdentifier: string,
+	currencyRates?: CurrencyRateSnapshot | null,
+): Quantity | null {
+	const currency = resolveCurrencyUnit(rawIdentifier, currencyRates);
+	if (currency) return currency;
+
 	const direct = UNITS[rawIdentifier];
 	if (direct) {
 		return direct;
@@ -364,13 +393,16 @@ function resolveUnitIdentifier(rawIdentifier: string): Quantity | null {
 	return null;
 }
 
-function resolveIdentifier(rawIdentifier: string): Quantity {
+function resolveIdentifier(
+	rawIdentifier: string,
+	currencyRates?: CurrencyRateSnapshot | null,
+): Quantity {
 	const constant = EXPRESSION_CONSTANTS[rawIdentifier.toLowerCase()];
 	if (constant) {
 		return constant;
 	}
 
-	const resolvedUnit = resolveUnitIdentifier(rawIdentifier);
+	const resolvedUnit = resolveUnitIdentifier(rawIdentifier, currencyRates);
 	if (resolvedUnit) return resolvedUnit;
 
 	throw new Error(`Unknown identifier: ${rawIdentifier}`);
@@ -379,7 +411,7 @@ function resolveIdentifier(rawIdentifier: string): Quantity {
 function tokenize(input: string): Token[] {
 	const tokens: Token[] = [];
 	const tokenPattern =
-		/\s*(?:(\d+(?:\.\d*)?(?:[eE][+-]?\d+)?|\.\d+(?:[eE][+-]?\d+)?)|([A-Za-zµμ°]+)|([()+\-*/^%,]))/y;
+		/\s*(?:(\d+(?:\.\d*)?(?:[eE][+-]?\d+)?|\.\d+(?:[eE][+-]?\d+)?)|([A-Za-zµμ°$€]+)|([()+\-*/^%,]))/y;
 	let offset = 0;
 
 	while (offset < input.length) {
@@ -700,9 +732,14 @@ function evaluateFunction(name: string, args: Quantity[]): Quantity {
 class QuantityParser {
 	private index = 0;
 	private readonly tokens: Token[];
+	private readonly currencyRates?: CurrencyRateSnapshot | null;
 
-	constructor(tokens: Token[]) {
+	constructor(
+		tokens: Token[],
+		currencyRates?: CurrencyRateSnapshot | null,
+	) {
 		this.tokens = tokens;
+		this.currencyRates = currencyRates;
 	}
 
 	parse() {
@@ -940,7 +977,7 @@ class QuantityParser {
 			) {
 				return this.parseFunctionCall(normalizedName);
 			}
-			return parsedQuantity(resolveIdentifier(token.value), {
+			return parsedQuantity(resolveIdentifier(token.value, this.currencyRates), {
 				type: "atom",
 				value: token.value,
 			});
@@ -1007,7 +1044,7 @@ class QuantityParser {
 			operator.joinedToPrevious &&
 			right?.type === "identifier" &&
 			right.joinedToPrevious &&
-			resolveUnitIdentifier(right.value) != null
+			resolveUnitIdentifier(right.value, this.currencyRates) != null
 		);
 	}
 
@@ -1019,12 +1056,18 @@ class QuantityParser {
 	}
 }
 
-function parseQuantity(input: string) {
-	return new QuantityParser(tokenize(input)).parse().quantity;
+function parseQuantity(
+	input: string,
+	currencyRates?: CurrencyRateSnapshot | null,
+) {
+	return new QuantityParser(tokenize(input), currencyRates).parse().quantity;
 }
 
-function parseQuantityWithInterpretation(input: string) {
-	return new QuantityParser(tokenize(input)).parse();
+function parseQuantityWithInterpretation(
+	input: string,
+	currencyRates?: CurrencyRateSnapshot | null,
+) {
+	return new QuantityParser(tokenize(input), currencyRates).parse();
 }
 
 type AutomaticUnitGroup = {
@@ -1082,6 +1125,11 @@ const AUTOMATIC_UNIT_GROUPS: AutomaticUnitGroup[] = [
 		units: ["MW", "kW", "W"],
 		fallback: "W",
 	},
+	{
+		dimensions: CURRENCY,
+		units: ["BTC", "EUR", "USD"],
+		fallback: "EUR",
+	},
 ];
 
 function formatExponent(value: number) {
@@ -1091,7 +1139,7 @@ function formatExponent(value: number) {
 }
 
 function formatBaseUnit(dimensions: Dimensions) {
-	const names = ["kg", "m", "s", "A", "rad"];
+	const names = ["kg", "m", "s", "A", "rad", "EUR"];
 	const numerator: string[] = [];
 	const denominator: string[] = [];
 	const negativePowers: string[] = [];
@@ -1119,7 +1167,10 @@ function formatBaseUnit(dimensions: Dimensions) {
 	return denominator.length === 1 ? `${top}/${bottom}` : `${top}/(${bottom})`;
 }
 
-function inferTargetUnit(source: Quantity) {
+function inferTargetUnit(
+	source: Quantity,
+	currencyRates?: CurrencyRateSnapshot | null,
+) {
 	const group = AUTOMATIC_UNIT_GROUPS.find(({ dimensions }) =>
 		dimensionsMatch(source.dimensions, dimensions),
 	);
@@ -1131,11 +1182,14 @@ function inferTargetUnit(source: Quantity) {
 	}
 
 	if (source.value.eq("0")) {
-		return { unit: group.fallback, quantity: parseQuantity(group.fallback) };
+		return {
+			unit: group.fallback,
+			quantity: parseQuantity(group.fallback, currencyRates),
+		};
 	}
 
 	for (const unit of group.units) {
-		const target = parseQuantity(unit);
+		const target = parseQuantity(unit, currencyRates);
 		const converted = source.value.div(target.value).abs();
 		if (converted.gte("1") && converted.lt("1000")) {
 			return { unit, quantity: target };
@@ -1144,12 +1198,15 @@ function inferTargetUnit(source: Quantity) {
 
 	const edgeUnit =
 		source.value
-			.div(parseQuantity(group.units[0]).value)
+			.div(parseQuantity(group.units[0], currencyRates).value)
 			.abs()
 			.gte("1000")
 			? group.units[0]
 			: group.units[group.units.length - 1];
-	return { unit: edgeUnit, quantity: parseQuantity(edgeUnit) };
+	return {
+		unit: edgeUnit,
+		quantity: parseQuantity(edgeUnit, currencyRates),
+	};
 }
 
 function formatResult(value: Big) {
@@ -1217,6 +1274,7 @@ function tokensFormCompleteCalculatorInput(tokens: Token[]) {
 		) {
 			continue;
 		}
+		if (currencyCodeForIdentifier(token.value)) continue;
 
 		try {
 			resolveIdentifier(token.value);
@@ -1232,6 +1290,29 @@ function tokensFormCompleteCalculatorInput(tokens: Token[]) {
 		lastToken.type !== "leftParen" &&
 		lastToken.type !== "comma"
 	);
+}
+
+function currencyCodesInExpression(input: string): CurrencyCode[] {
+	const codes: CurrencyCode[] = [];
+	for (const token of tokenize(input)) {
+		if (token.type !== "identifier") continue;
+		const code = currencyCodeForIdentifier(token.value);
+		if (code && !codes.includes(code)) codes.push(code);
+	}
+	return codes;
+}
+
+export function calculatorExpressionUsesCurrency(query: string) {
+	const normalized = normalizeExpression(query);
+	const { expression, targetUnit } = splitConversionExpression(normalized);
+	try {
+		return (
+			currencyCodesInExpression(expression).length > 0 ||
+			currencyCodesInExpression(targetUnit).length > 0
+		);
+	} catch {
+		return false;
+	}
 }
 
 /**
@@ -1255,8 +1336,44 @@ export function isCalculatorExpressionCandidate(query: string) {
 	}
 }
 
+function exchangeRateSummary(
+	sourceExpression: string,
+	targetExpression: string,
+	currencyRates: CurrencyRateSnapshot,
+): string | null {
+	const sourceCodes = currencyCodesInExpression(sourceExpression);
+	const targetCodes = currencyCodesInExpression(targetExpression);
+	if (sourceCodes.length === 1 && targetCodes.length === 1) {
+		const source = sourceCodes[0];
+		const target = targetCodes[0];
+		if (source !== target) {
+			const rate = new Big(currencyRates.rates[target]).div(
+				currencyRates.rates[source],
+			);
+			return `1 ${source} = ${formatResult(rate)} ${target}`;
+		}
+	}
+
+	const codes = [...new Set([...sourceCodes, ...targetCodes])];
+	const summaries: string[] = [];
+	if (codes.includes("USD")) {
+		summaries.push(
+			`1 EUR = ${formatResult(new Big(currencyRates.rates.USD))} USD`,
+		);
+	}
+	if (codes.includes("BTC")) {
+		summaries.push(
+			`1 BTC = ${formatResult(
+				new Big("1").div(currencyRates.rates.BTC),
+			)} EUR`,
+		);
+	}
+	return summaries.length > 0 ? summaries.join(" · ") : null;
+}
+
 export function evaluateCalculatorExpression(
 	query: string,
+	currencyRates?: CurrencyRateSnapshot | null,
 ): CalculatorExpressionResult | null {
 	const normalized = normalizeExpression(query);
 	const { expression, targetUnit, hasExplicitTarget } =
@@ -1264,10 +1381,16 @@ export function evaluateCalculatorExpression(
 	if (!expression || (hasExplicitTarget && !targetUnit)) return null;
 
 	try {
-		const parsedSource = parseQuantityWithInterpretation(expression);
+		const parsedSource = parseQuantityWithInterpretation(
+			expression,
+			currencyRates,
+		);
 		const source = parsedSource.quantity;
 		const interpretedSource = renderParsedExpression(parsedSource.expression);
 		if (!hasExplicitTarget && isDimensionless(source.dimensions)) {
+			const rateSummary = currencyRates
+				? exchangeRateSummary(expression, "", currencyRates)
+				: null;
 			return {
 				expression,
 				interpretedExpression: interpretedSource,
@@ -1275,12 +1398,23 @@ export function evaluateCalculatorExpression(
 				value: source.value.toString(),
 				formattedValue: formatResult(source.value),
 				hasUnits: false,
+				...(rateSummary
+					? {
+							exchangeRateInfo: {
+								summary: rateSummary,
+								fetchedAt: currencyRates!.fetchedAt,
+								source: currencyRates!.source,
+							},
+						}
+					: {}),
 			};
 		}
 		const parsedTarget = hasExplicitTarget
-			? parseQuantityWithInterpretation(targetUnit)
+			? parseQuantityWithInterpretation(targetUnit, currencyRates)
 			: null;
-		const inferredTarget = hasExplicitTarget ? null : inferTargetUnit(source);
+		const inferredTarget = hasExplicitTarget
+			? null
+			: inferTargetUnit(source, currencyRates);
 		const resolvedTargetUnit = inferredTarget?.unit ?? targetUnit;
 		const target = inferredTarget?.quantity ?? parsedTarget?.quantity;
 		if (
@@ -1292,6 +1426,9 @@ export function evaluateCalculatorExpression(
 		}
 
 		const value = source.value.div(target.value);
+		const rateSummary = currencyRates
+			? exchangeRateSummary(expression, resolvedTargetUnit, currencyRates)
+			: null;
 		return {
 			expression,
 			interpretedExpression: parsedTarget
@@ -1301,6 +1438,15 @@ export function evaluateCalculatorExpression(
 			value: value.toString(),
 			formattedValue: formatResult(value),
 			hasUnits: true,
+			...(rateSummary
+				? {
+						exchangeRateInfo: {
+							summary: rateSummary,
+							fetchedAt: currencyRates.fetchedAt,
+							source: currencyRates.source,
+						},
+					}
+				: {}),
 		};
 	} catch {
 		return null;
