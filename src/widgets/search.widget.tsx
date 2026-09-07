@@ -99,7 +99,12 @@ function TemporaryResultView({
 						adjustsFontSizeToFit
 						minimumFontScale={0.65}
 					>
-						{result.value}
+						{result.displayParts ? result.displayParts.map((part, index) => (
+							<Text key={index} style={{
+								...(part.small ? { fontSize: 18 } : {}),
+								...(part.muted ? { color: isDarkMode ? "#a3a3a3" : "#737373" } : {}),
+							}}>{part.text}</Text>
+						)) : result.value}
 					</Text>
 				</View>
 				<TouchableOpacity

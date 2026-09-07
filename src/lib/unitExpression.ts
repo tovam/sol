@@ -48,6 +48,7 @@ export type CalculatorExpressionResult = {
 	targetUnit: string;
 	value: string;
 	formattedValue: string;
+	displayParts?: { text: string; muted?: boolean; small?: boolean }[];
 	hasUnits: boolean;
 	exchangeRateInfo?: {
 		summary: string;
@@ -1334,6 +1335,7 @@ export function isCalculatorExpressionCandidate(query: string) {
 		if (!tokensFormCompleteCalculatorInput(tokenize(expression))) return false;
 		return (
 			!hasExplicitTarget ||
+			targetUnit.toLowerCase() === "hmin" ||
 			tokensFormCompleteCalculatorInput(tokenize(targetUnit))
 		);
 	} catch {
@@ -1396,6 +1398,29 @@ export function evaluateCalculatorExpression(
 		);
 		const source = parsedSource.quantity;
 		const interpretedSource = renderParsedExpression(parsedSource.expression);
+		if (hasExplicitTarget && targetUnit.toLowerCase() === "hmin") {
+			if (!dimensionsMatch(source.dimensions, TIME)) return null;
+			const units = ["j", "h", "min", "s", "ms"];
+			const scales = [86400000, 3600000, 60000, 1000, 1];
+			let remaining = source.value.abs().times(1000).round(0, Big.roundDown);
+			const first = scales.findIndex((scale) => remaining.gte(scale));
+			const start = first < 0 ? 4 : first;
+			const displayParts: NonNullable<CalculatorExpressionResult["displayParts"]> = [];
+			for (let index = start; index < Math.min(start + 3, scales.length); index++) {
+				const count = remaining.div(scales[index]).round(0, Big.roundDown);
+				remaining = remaining.minus(count.times(scales[index]));
+				if (count.eq(0) && first >= 0) continue;
+				displayParts.push({
+					text: `${displayParts.length ? " " : source.value.lt(0) ? "−" : ""}${count.toFixed(0)}${units[index]}`,
+				muted: index === start + 2,
+				small: index === start + 2,
+				});
+			}
+			return { expression, interpretedExpression: `${interpretedSource} → hmin`,
+				targetUnit: "", value: source.value.toString(),
+				formattedValue: displayParts.map((part) => part.text).join(""),
+				hasUnits: true, displayParts };
+		}
 		if (!hasExplicitTarget && isDimensionless(source.dimensions)) {
 			const rateSummary = currencyRates
 				? exchangeRateSummary(expression, "", currencyRates)

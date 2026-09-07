@@ -29,6 +29,7 @@ export type TemporaryResult =
 			kind: "calculation";
 			expression: string;
 			interpretedExpression?: string;
+			displayParts?: { text: string; muted?: boolean; small?: boolean }[];
 			value: string;
 			copyValue: string;
 			exchangeRateInfo?: {
@@ -376,6 +377,7 @@ export function parseCalculation(
 			kind: "calculation",
 			expression: query.trim().replace(/\s+/g, " "),
 			interpretedExpression: expressionResult.interpretedExpression,
+			displayParts: expressionResult.displayParts,
 			value: `${expressionResult.formattedValue}${displaySuffix}`,
 			copyValue: canonicalResult,
 			exchangeRateInfo: expressionResult.exchangeRateInfo,

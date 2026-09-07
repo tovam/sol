@@ -43,6 +43,13 @@ test("inverts the entire expression with a leading or trailing inv", () => {
 });
 
 test("uses exact decimal arithmetic", () => {
+	assert.equal(evaluate("(824km/130km/h) in hmin").formattedValue, "6h 20min 18s");
+	assert.equal(evaluate("1j in hmin").formattedValue, "1j");
+	assert.equal(evaluate("0s in hmin").formattedValue, "0ms");
+	assert.equal(evaluate("-90s in hmin").formattedValue, "−1min 30s");
+	assert.equal(evaluate("1.234s in hmin").formattedValue, "1s 234ms");
+	assert.equal(evaluateCalculatorExpression("1m in hmin"), null);
+	assert.equal(evaluate("3661s in hmin").displayParts[2].small, true);
 	assert.equal(evaluate("26**8").value, "208827064576");
 	assert.equal(evaluate("26^8").formattedValue, "208827064576");
 	assert.equal(evaluate("0.1 + 0.2").value, "0.3");
