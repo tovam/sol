@@ -61,6 +61,16 @@ test("inverts the entire expression with a leading or trailing inv", () => {
 });
 
 test("uses exact decimal arithmetic", () => {
+	for (const alias of ["month", "months", "mo"]) {
+		assert.equal(evaluateCalculatorExpression(`1 ${alias} in d`), null);
+		assert.equal(evaluateCalculatorExpression(`1 ${alias} in d`, null, "30").value, "30");
+		assert.equal(evaluateCalculatorExpression(`1 ${alias} in d`, null, "30.4375").value, "30.4375");
+	}
+	assert.equal(evaluateCalculatorExpression("60d in month", null, "30").value, "2");
+	assert.notEqual(evaluateCalculatorExpression("60d in month", null, "30.4375").value, "2");
+	assert.equal(evaluateCalculatorExpression("1/month in 1/d", null, "30").value, evaluateCalculatorExpression("1/(30d) in 1/d").value);
+	assert.equal(evaluateDateCalculation("2026-01-01 + 1month", undefined, new Date(2026, 0, 1), "30").value, "2026-01-31");
+	assert.equal(evaluateDateCalculation("2026-01-01 + 1month", undefined, new Date(2026, 0, 1), "30.4375").value, "2026-01-31 10:30");
 	assert.equal(evaluate("(824km/130km/h) in hmin").formattedValue, "6h 20min 18s");
 	assert.equal(evaluate("1j in hmin").formattedValue, "1j");
 	assert.equal(evaluate("0s in hmin").formattedValue, "0ms");

@@ -106,6 +106,8 @@ function TemporaryResultView({
 							}}>{part.text}</Text>
 						)) : result.value}
 					</Text>
+					{result.monthWarning && <Text className="text-xs mt-1" style={{ color: isDarkMode ? "#fbbf24" : "#92400e" }}>{result.monthWarning}</Text>}
+					{result.monthAlternative && <Text className="text-xs darker-text mt-0.5" selectable>{result.monthAlternative}</Text>}
 				</View>
 				<TouchableOpacity
 					accessibilityRole="button"

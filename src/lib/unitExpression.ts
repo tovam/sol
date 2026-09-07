@@ -161,7 +161,6 @@ const UNITS: Record<string, Quantity> = {
 	h: unit("3600", TIME),
 	d: unit("86400", TIME),
 	wk: unit("604800", TIME),
-	mo: unit("2629800", TIME),
 	yr: unit("31557600", TIME),
 
 	// Electric current
@@ -383,7 +382,11 @@ function resolveCurrencyUnit(
 function resolveUnitIdentifier(
 	rawIdentifier: string,
 	currencyRates?: CurrencyRateSnapshot | null,
+	monthDays?: "30" | "30.4375",
 ): Quantity | null {
+	if (/^(mo|month|months)$/i.test(rawIdentifier)) {
+		return monthDays ? unit(new Big(monthDays).times("86400").toString(), TIME) : null;
+	}
 	const currency = resolveCurrencyUnit(rawIdentifier, currencyRates);
 	if (currency) return currency;
 
@@ -402,13 +405,14 @@ function resolveUnitIdentifier(
 function resolveIdentifier(
 	rawIdentifier: string,
 	currencyRates?: CurrencyRateSnapshot | null,
+	monthDays?: "30" | "30.4375",
 ): Quantity {
 	const constant = EXPRESSION_CONSTANTS[rawIdentifier.toLowerCase()];
 	if (constant) {
 		return constant;
 	}
 
-	const resolvedUnit = resolveUnitIdentifier(rawIdentifier, currencyRates);
+	const resolvedUnit = resolveUnitIdentifier(rawIdentifier, currencyRates, monthDays);
 	if (resolvedUnit) return resolvedUnit;
 
 	throw new Error(`Unknown identifier: ${rawIdentifier}`);
@@ -739,13 +743,16 @@ class QuantityParser {
 	private index = 0;
 	private readonly tokens: Token[];
 	private readonly currencyRates?: CurrencyRateSnapshot | null;
+	private readonly monthDays?: "30" | "30.4375";
 
 	constructor(
 		tokens: Token[],
 		currencyRates?: CurrencyRateSnapshot | null,
+		monthDays?: "30" | "30.4375",
 	) {
 		this.tokens = tokens;
 		this.currencyRates = currencyRates;
+		this.monthDays = monthDays;
 	}
 
 	parse() {
@@ -983,7 +990,7 @@ class QuantityParser {
 			) {
 				return this.parseFunctionCall(normalizedName);
 			}
-			return parsedQuantity(resolveIdentifier(token.value, this.currencyRates), {
+			return parsedQuantity(resolveIdentifier(token.value, this.currencyRates, this.monthDays), {
 				type: "atom",
 				value: token.value,
 			});
@@ -1050,7 +1057,7 @@ class QuantityParser {
 			operator.joinedToPrevious &&
 			right?.type === "identifier" &&
 			right.joinedToPrevious &&
-			resolveUnitIdentifier(right.value, this.currencyRates) != null
+			resolveUnitIdentifier(right.value, this.currencyRates, this.monthDays) != null
 		);
 	}
 
@@ -1072,8 +1079,9 @@ function parseQuantity(
 function parseQuantityWithInterpretation(
 	input: string,
 	currencyRates?: CurrencyRateSnapshot | null,
+	monthDays?: "30" | "30.4375",
 ) {
-	return new QuantityParser(tokenize(input), currencyRates).parse();
+	return new QuantityParser(tokenize(input), currencyRates, monthDays).parse();
 }
 
 type AutomaticUnitGroup = {
@@ -1091,7 +1099,7 @@ const AUTOMATIC_UNIT_GROUPS: AutomaticUnitGroup[] = [
 	},
 	{
 		dimensions: TIME,
-		units: ["yr", "mo", "wk", "d", "h", "min", "s", "ms"],
+		units: ["yr", "wk", "d", "h", "min", "s", "ms"],
 		fallback: "s",
 	},
 	{ dimensions: CURRENT, units: ["A", "mA"], fallback: "A" },
@@ -1281,6 +1289,7 @@ function tokensFormCompleteCalculatorInput(tokens: Token[]) {
 			continue;
 		}
 		if (currencyCodeForIdentifier(token.value)) continue;
+		if (/^(mo|month|months)$/i.test(token.value)) continue;
 
 		try {
 			resolveIdentifier(token.value);
@@ -1385,6 +1394,7 @@ function exchangeRateSummary(
 export function evaluateCalculatorExpression(
 	query: string,
 	currencyRates?: CurrencyRateSnapshot | null,
+	monthDays?: "30" | "30.4375",
 ): CalculatorExpressionResult | null {
 	const normalized = normalizeExpression(query);
 	const { expression, targetUnit, hasExplicitTarget } =
@@ -1395,6 +1405,7 @@ export function evaluateCalculatorExpression(
 		const parsedSource = parseQuantityWithInterpretation(
 			expression,
 			currencyRates,
+			monthDays,
 		);
 		const source = parsedSource.quantity;
 		const interpretedSource = renderParsedExpression(parsedSource.expression);
@@ -1444,7 +1455,7 @@ export function evaluateCalculatorExpression(
 			};
 		}
 		const parsedTarget = hasExplicitTarget
-			? parseQuantityWithInterpretation(targetUnit, currencyRates)
+			? parseQuantityWithInterpretation(targetUnit, currencyRates, monthDays)
 			: null;
 		const inferredTarget = hasExplicitTarget
 			? null

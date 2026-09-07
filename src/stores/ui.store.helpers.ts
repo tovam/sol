@@ -31,6 +31,8 @@ export type TemporaryResult =
 			expression: string;
 			interpretedExpression?: string;
 			displayParts?: { text: string; muted?: boolean; small?: boolean }[];
+			monthWarning?: string;
+			monthAlternative?: string;
 			value: string;
 			copyValue: string;
 			exchangeRateInfo?: {
@@ -352,7 +354,8 @@ function formatCalculatorUnitForDisplay(unit: string) {
 		.replace(/\*/g, "·");
 }
 
-export function isCalculationCandidate(query: string) {
+export function isCalculationCandidate(query: string, monthsEnabled = false) {
+	if (!monthsEnabled && /(?:^|[^a-zA-Z])(?:mo|month|months)(?![a-zA-Z])/i.test(query)) return false;
 	const normalized = query.trim().replace(/,/g, "").replace(/\s+/g, " ");
 	return (
 		isDateCalculationCandidate(query) ||
@@ -365,11 +368,32 @@ export function parseCalculation(
 	query: string,
 	currencyRates?: CurrencyRateSnapshot | null,
 	dateFormat?: string,
+	monthsEnabled = false,
 ): TemporaryResult | null {
-	const dateResult = evaluateDateCalculation(query, dateFormat);
+	const usesMonths = /(?:^|[^a-zA-Z])(?:mo|month|months)(?![a-zA-Z])/i.test(query);
+	if (usesMonths && !monthsEnabled) return null;
+	const now = new Date();
+	const result = parseCalculationValue(query, currencyRates, dateFormat, monthsEnabled ? "30" : undefined, now);
+	if (!usesMonths || !result || result.kind !== "calculation") return result;
+	const alternative = parseCalculationValue(query, currencyRates, dateFormat, "30.4375", now);
+	return {
+		...result,
+		monthWarning: "⚠ Approximation : 1 month = 30 j",
+		monthAlternative: `Avec 365,25 / 12 = 30,4375 j : ${alternative && alternative.kind === "calculation" ? alternative.value : "résultat non défini"}`,
+	};
+}
+
+function parseCalculationValue(
+	query: string,
+	currencyRates?: CurrencyRateSnapshot | null,
+	dateFormat?: string,
+	monthDays?: "30" | "30.4375",
+	now = new Date(),
+): TemporaryResult | null {
+	const dateResult = evaluateDateCalculation(query, dateFormat, now, monthDays);
 	if (dateResult) return dateResult;
 	const normalized = query.trim().replace(/,/g, "").replace(/\s+/g, " ");
-	const expressionResult = evaluateCalculatorExpression(query, currencyRates);
+	const expressionResult = evaluateCalculatorExpression(query, currencyRates, monthDays);
 	if (expressionResult != null) {
 		const canonicalSuffix = expressionResult.targetUnit
 			? ` ${expressionResult.targetUnit}`

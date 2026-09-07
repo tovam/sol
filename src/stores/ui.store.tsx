@@ -758,6 +758,7 @@ export const createUIStore = (root: IRootStore) => {
 					);
 					store.glassAppearance = normalizeGlassAppearance(src.glassAppearance);
 					if (typeof src.calculatorDateFormat === "string") store.calculatorDateFormat = src.calculatorDateFormat;
+					store.calculatorMonthsEnabled = src.calculatorMonthsEnabled === true;
 					store.currencyRefreshIntervalMinutes =
 						normalizeCurrencyRefreshIntervalMinutes(
 							src.currencyRefreshIntervalMinutes,
@@ -875,6 +876,7 @@ export const createUIStore = (root: IRootStore) => {
 						jsonConfig.currencyRefreshIntervalMinutes,
 					);
 				if (typeof jsonConfig.calculatorDateFormat === "string") store.calculatorDateFormat = jsonConfig.calculatorDateFormat;
+				store.calculatorMonthsEnabled = jsonConfig.calculatorMonthsEnabled === true;
 				if (jsonConfig.calendarEnabled !== undefined)
 					store.calendarEnabled = jsonConfig.calendarEnabled;
 				if (jsonConfig.showAllDayEvents !== undefined)
@@ -1918,7 +1920,7 @@ export const createUIStore = (root: IRootStore) => {
 					return;
 				}
 
-				if (isCalculationCandidate(store.query)) {
+				if (isCalculationCandidate(store.query, store.calculatorMonthsEnabled)) {
 					const querySnapshot = store.query;
 					const usesCurrency = calculatorExpressionUsesCurrency(querySnapshot);
 					store.isCalculating = true;
@@ -1933,6 +1935,7 @@ export const createUIStore = (root: IRootStore) => {
 									querySnapshot,
 									currencyRates,
 									store.calculatorDateFormat,
+									store.calculatorMonthsEnabled,
 								);
 							} catch {
 								// Calculator input is user-controlled. A malformed expression or
@@ -2715,6 +2718,8 @@ export const createUIStore = (root: IRootStore) => {
 				const result = parseCalculation(
 					store.query,
 					root.currencyRates.snapshot,
+					store.calculatorDateFormat,
+					store.calculatorMonthsEnabled,
 				);
 				runInAction(() => {
 					store.isCalculating = false;

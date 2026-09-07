@@ -14,6 +14,7 @@ export const PORTABLE_KEYS = [
 	"glassAppearance",
 	"currencyRefreshIntervalMinutes",
 	"calculatorDateFormat",
+	"calculatorMonthsEnabled",
 	"calendarEnabled",
 	"showAllDayEvents",
 	"launchAtLogin",

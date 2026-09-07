@@ -22,6 +22,7 @@ export function evaluateDateCalculation(
 	query: string,
 	pattern = DEFAULT_CALCULATOR_DATE_FORMAT,
 	now = new Date(),
+	monthDays?: "30" | "30.4375",
 ) {
 	const match = query.trim().match(DATE_QUERY);
 	if (!match) return null;
@@ -37,7 +38,7 @@ export function evaluateDateCalculation(
 	let interpretedExpression = anchor;
 	let seconds = 0;
 	if (match[2]) {
-		const duration = evaluateCalculatorExpression(`(${match[3]}) in s`);
+		const duration = evaluateCalculatorExpression(`(${match[3]}) in s`, null, monthDays);
 		if (!duration) return null;
 		seconds = Number(duration.value) * (match[2] === "-" ? -1 : 1);
 		if (!Number.isFinite(seconds)) return null;
