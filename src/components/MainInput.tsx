@@ -77,9 +77,11 @@ export const MainInput = observer<Props>(
 					multiline={false}
 					enableFocusRing={false}
 					value={store.ui.query}
-					selection={store.ui.fileSearchSelection}
 					onChangeText={(query) => {
-						selectionRef.current = store.ui.setQueryFromInput(
+						// Native selection events may precede text events. Never feed the
+						// file-search caret estimate back into the native input or this ref:
+						// repeated characters make the edit position ambiguous.
+						store.ui.setQueryFromInput(
 							query,
 							selectionRef.current,
 						);
