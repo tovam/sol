@@ -18,7 +18,7 @@ type Token = (
 	| { type: "identifier"; value: string }
 	| {
 			type: "operator";
-			value: "+" | "-" | "*" | "/" | "%" | "^";
+			value: "+" | "-" | "*" | "/" | "mod" | "%of" | "^";
 	  }
 	| { type: "leftParen" }
 	| { type: "rightParen" }
@@ -31,7 +31,7 @@ type ParsedExpression =
 	| { type: "unary"; operator: "+" | "-"; value: ParsedExpression }
 	| {
 			type: "binary";
-			operator: "+" | "-" | "*" | "/" | "%" | "^";
+			operator: "+" | "-" | "*" | "/" | "mod" | "%of" | "^";
 			left: ParsedExpression;
 			right: ParsedExpression;
 	  }
@@ -433,6 +433,8 @@ function tokenize(input: string): Token[] {
 
 		if (match[1]) {
 			tokens.push({ type: "number", value: match[1], joinedToPrevious });
+		} else if (match[2]?.toLowerCase() === "mod") {
+			tokens.push({ type: "operator", value: "mod", joinedToPrevious });
 		} else if (match[2]) {
 			tokens.push({
 				type: "identifier",
@@ -446,11 +448,20 @@ function tokenize(input: string): Token[] {
 		} else if (match[3] === ",") {
 			tokens.push({ type: "comma", joinedToPrevious });
 		} else if (match[3] === "%") {
-			tokens.push({ type: "identifier", value: "%", joinedToPrevious });
+			const tail = input.slice(tokenPattern.lastIndex);
+			// Longest symbol first, then the explicit numeric-right-operand convention.
+			if (/^of(?=$|[^a-zA-Z])/i.test(tail)) {
+				tokenPattern.lastIndex += 2;
+				tokens.push({ type: "operator", value: "%of", joinedToPrevious });
+			} else if (/^\s*(?:\d|\.\d)/.test(tail)) {
+				tokens.push({ type: "operator", value: "mod", joinedToPrevious });
+			} else {
+				tokens.push({ type: "identifier", value: "%", joinedToPrevious });
+			}
 		} else {
 			tokens.push({
 				type: "operator",
-				value: match[3] as "+" | "-" | "*" | "/" | "%" | "^",
+				value: match[3] as "+" | "-" | "*" | "/" | "^",
 				joinedToPrevious,
 			});
 		}
@@ -735,7 +746,7 @@ function evaluateFunction(name: string, args: Quantity[]): Quantity {
 	}
 }
 
-// Precedence from lowest to highest: +/-, explicit */%, juxtaposition, compact
+// Precedence from lowest to highest: +/-, explicit */mod/%of, juxtaposition, compact
 // compound-unit operators, unary signs, then right-associative powers.
 // Juxtaposition deliberately binds tightly so `9m / 2h` means `(9 m) / (2 h)`.
 // A slash without surrounding spaces inside a unit, as in `900km/h`, binds the
@@ -803,17 +814,26 @@ class QuantityParser {
 		let result = this.parseImplicitMultiplicative();
 		while (
 			this.matchesOperator("*") ||
-			this.matchesOperator("/")
+			this.matchesOperator("/") ||
+			this.matchesOperator("mod") ||
+			this.matchesOperator("%of")
 		) {
 			const operator = (
 				this.tokens[this.index] as Extract<Token, { type: "operator" }>
 			).value;
 			this.index += 1;
 			const right = this.parseImplicitMultiplicative();
-			if (operator === "*") {
+			if (operator === "mod") {
+				assertMatchingDimensions([result.quantity, right.quantity], "Modulo");
+				result = parsedQuantity(
+					quantity(result.quantity.value.mod(right.quantity.value), result.quantity.dimensions,
+						result.quantity.hasUnit || right.quantity.hasUnit),
+					{ type: "binary", operator, left: result.expression, right: right.expression },
+				);
+			} else if (operator === "*" || operator === "%of") {
 				result = parsedQuantity(
 					quantity(
-						result.quantity.value.times(right.quantity.value),
+						result.quantity.value.times(right.quantity.value).div(operator === "%of" ? "100" : "1"),
 						addDimensions(
 							result.quantity.dimensions,
 							right.quantity.dimensions,

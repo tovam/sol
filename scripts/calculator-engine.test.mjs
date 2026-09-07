@@ -68,6 +68,26 @@ test("inverts the entire expression with a leading or trailing inv", () => {
 });
 
 test("uses exact decimal arithmetic", () => {
+	for (const [expression, expected] of [
+		["10 mod 3", "1"], ["10 mod (2 + 1)", "1"],
+		["10%3", "1"], ["10 % .3", "0.1"], ["20 % 6 * 2", "4"],
+		["7%of 293", "20.51"], ["7%of293", "20.51"],
+		["7%of 200 + 100", "114"], ["7%of (200 + 100)", "21"],
+		["100 / 2%of 10", "5"], ["7%of 2^3", "0.56"],
+		["50% (2 + 1)", "1.5"], ["50% -2", "-1.5"],
+		["10 mod -3", "1"], ["50% 2", "0"],
+		["7%OF 293", "20.51"], ["10 MOD 3", "1"],
+	]) {
+		assert.equal(isCalculatorExpressionCandidate(expression), true, expression);
+		assert.equal(evaluate(expression).value, expected, expression);
+	}
+	assert.equal(evaluate("50% pi").value, evaluate("0.5 * pi").value);
+	assert.equal(evaluate("7%of 200kg in kg").value, "14");
+	assert.equal(evaluate("10m mod 300cm in m").value, "1");
+	assert.equal(evaluateCalculatorExpression("10m mod 3s"), null);
+	for (const invalid of ["10 mod", "7%of", "10 % 0"]) {
+		assert.equal(evaluateCalculatorExpression(invalid), null);
+	}
 	assert.equal(isCalculatorExpressionCandidate("50%"), true);
 	assert.equal(evaluate("%").value, "0.01");
 	assert.equal(evaluate("50%").value, "0.5");
@@ -194,7 +214,7 @@ test("applies conventional operator precedence", () => {
 	assert.equal(evaluate("-2^2").value, "-4");
 	assert.equal(evaluate("(-2)^2").value, "4");
 	assert.equal(evaluate("2^3^2").value, "512");
-	assert.equal(evaluate("10 % 3").value, "0.3");
+	assert.equal(evaluate("10 % 3").value, "1");
 	assert.equal(evaluate("1 / 2 pi").formattedValue, "0.159154943091895");
 });
 
