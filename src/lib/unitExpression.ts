@@ -324,9 +324,7 @@ function normalizeExpression(input: string) {
 		.replace(/\bper\b/gi, "/")
 		.replace(/(\d),(?=\d{3}(?:\D|$))/g, "$1")
 		.replace(/\s+/g, " ");
-	const inverse = normalized.match(/^inv\s+(.+)$/i)
-		?? normalized.match(/^(.+)\s+inv$/i);
-	return inverse ? `1/(${inverse[1].trim()})` : normalized;
+	return normalized;
 }
 
 function addDimensions(a: Dimensions, b: Dimensions): Dimensions {
@@ -1239,13 +1237,14 @@ function splitConversionExpression(normalized: string) {
 		}
 	}
 
-	return separatorIndex < 0
-		? { expression: normalized, targetUnit: "", hasExplicitTarget: false }
-		: {
-				expression: normalized.slice(0, separatorIndex).trim(),
-				targetUnit: normalized.slice(separatorIndex + 4).trim(),
-				hasExplicitTarget: true,
-			};
+	// Separate the conversion first: inv applies to the quantity, never its destination.
+	const source = separatorIndex < 0 ? normalized : normalized.slice(0, separatorIndex).trim();
+	const inverse = source.match(/^inv\s+(.+)$/i) ?? source.match(/^(.+)\s+inv$/i);
+	return {
+		expression: inverse ? `1/(${inverse[1].trim()})` : source,
+		targetUnit: separatorIndex < 0 ? "" : normalized.slice(separatorIndex + 4).trim(),
+		hasExplicitTarget: separatorIndex >= 0,
+	};
 }
 
 function tokensFormCompleteCalculatorInput(tokens: Token[]) {

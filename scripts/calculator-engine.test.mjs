@@ -45,6 +45,13 @@ function evaluateCurrency(expression) {
 }
 
 test("inverts the entire expression with a leading or trailing inv", () => {
+	for (const query of ["inv 2w in Hz", "2w inv in Hz", "INV 2w TO Hz"]) {
+		assert.equal(isCalculatorExpressionCandidate(query), true);
+		assert.deepEqual(evaluate(query), evaluate("1/(2w) in Hz"));
+	}
+	assert.deepEqual(evaluate("inv 2+3 in %"), evaluate("1/(2+3) in %"));
+	assert.equal(evaluateCalculatorExpression("inv 2w in m"), null);
+	assert.equal(evaluateCalculatorExpression("inv 0s in Hz"), null);
 	for (const expression of ["inv 2+3", "2+3 inv", " INV 2+3 "]) {
 		assert.equal(isCalculatorExpressionCandidate(expression), true);
 		assert.equal(evaluate(expression).value, "0.2");
