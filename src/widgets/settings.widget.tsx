@@ -10,6 +10,7 @@ import { Applications } from "./settings/applications";
 import { Calendars } from "./settings/calendars";
 import { DailymotionSettings } from "./settings/dailymotion";
 import { General } from "./settings/general";
+import { CalculatorSettings } from "./settings/calculator";
 import { Items } from "./settings/items";
 import { Scripts } from "./settings/scripts";
 import { Sidebar } from "./settings/sidebar";
@@ -20,6 +21,7 @@ const sectionDetails: Record<
 	SettingsSection,
 	{ title: string; description: string }
 > = {
+	CALCULATOR: { title: "Calculator", description: "Units, dates and exchange rates" },
 	GENERAL: {
 		title: "General",
 		description: "Window, search and system behavior",
@@ -79,6 +81,7 @@ export const SettingsWidget: FC = observer(() => {
 				</View>
 				<View className="flex-1">
 					{selected === "GENERAL" && <General />}
+					{selected === "CALCULATOR" && <CalculatorSettings />}
 					{selected === "APPLICATIONS" && <Applications />}
 					{selected === "ITEMS" && <Items />}
 					{selected === "TRANSLATE" && <Translate />}

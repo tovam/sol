@@ -22,6 +22,7 @@ type NavigationItem = {
 
 const PRIMARY_ITEMS: NavigationItem[] = [
 	{ section: "GENERAL", title: "General", icon: Icons.Gears },
+	{ section: "CALCULATOR", title: "Calculator", icon: Icons.Gears },
 	{ section: "AI", title: "AI", icon: Icons.Robot },
 	{ section: "TRANSLATE", title: "Translation", icon: Icons.World },
 	{ section: "CALENDARS", title: "Calendars", icon: Icons.Calendar },

@@ -288,6 +288,7 @@ export enum ScratchPadColor {
 export type SettingsSection =
 	| "ABOUT"
 	| "GENERAL"
+	| "CALCULATOR"
 	| "APPLICATIONS"
 	| "TRANSLATE"
 	| "ITEMS"
@@ -969,6 +970,7 @@ export const createUIStore = (root: IRootStore) => {
 		currencyRefreshIntervalMinutes:
 			DEFAULT_CURRENCY_REFRESH_INTERVAL_MINUTES,
 		calculatorDateFormat: "YYYY-MM-DD",
+		calculatorMonthsEnabled: false,
 		initialHydrationComplete: false,
 		query: "",
 		selectedIndex: 0,
@@ -1708,6 +1710,9 @@ export const createUIStore = (root: IRootStore) => {
 		},
 		setCalculatorDateFormat: (format: string) => {
 			store.calculatorDateFormat = format.slice(0, 120);
+		},
+		setCalculatorMonthsEnabled: (enabled: boolean) => {
+			store.calculatorMonthsEnabled = enabled;
 		},
 		focusWidget: (widget: Widget) => {
 			if (widget !== Widget.SEARCH) {
