@@ -40,7 +40,7 @@ import {
 	normalizeShortcutMap,
 } from "lib/shortcuts";
 import { googleTranslate } from "lib/translator";
-import { calculatorExpressionUsesCurrency } from "lib/unitExpression";
+import { calculatorExpressionUsesCurrency, normalizeCalculatorVariables, type CalculatorVariables } from "lib/unitExpression";
 import MiniSearch from "minisearch";
 import {
 	autorun,
@@ -759,6 +759,7 @@ export const createUIStore = (root: IRootStore) => {
 					store.glassAppearance = normalizeGlassAppearance(src.glassAppearance);
 					if (typeof src.calculatorDateFormat === "string") store.calculatorDateFormat = src.calculatorDateFormat;
 					store.calculatorMonthsEnabled = src.calculatorMonthsEnabled === true;
+					store.calculatorVariables = normalizeCalculatorVariables(src.calculatorVariables);
 					store.currencyRefreshIntervalMinutes =
 						normalizeCurrencyRefreshIntervalMinutes(
 							src.currencyRefreshIntervalMinutes,
@@ -877,6 +878,7 @@ export const createUIStore = (root: IRootStore) => {
 					);
 				if (typeof jsonConfig.calculatorDateFormat === "string") store.calculatorDateFormat = jsonConfig.calculatorDateFormat;
 				store.calculatorMonthsEnabled = jsonConfig.calculatorMonthsEnabled === true;
+				store.calculatorVariables = normalizeCalculatorVariables(jsonConfig.calculatorVariables);
 				if (jsonConfig.calendarEnabled !== undefined)
 					store.calendarEnabled = jsonConfig.calendarEnabled;
 				if (jsonConfig.showAllDayEvents !== undefined)
@@ -973,6 +975,7 @@ export const createUIStore = (root: IRootStore) => {
 			DEFAULT_CURRENCY_REFRESH_INTERVAL_MINUTES,
 		calculatorDateFormat: "YYYY-MM-DD",
 		calculatorMonthsEnabled: false,
+		calculatorVariables: {} as CalculatorVariables,
 		initialHydrationComplete: false,
 		query: "",
 		selectedIndex: 0,
@@ -1716,6 +1719,9 @@ export const createUIStore = (root: IRootStore) => {
 		setCalculatorMonthsEnabled: (enabled: boolean) => {
 			store.calculatorMonthsEnabled = enabled;
 		},
+		setCalculatorVariables: (variables: CalculatorVariables) => {
+			store.calculatorVariables = normalizeCalculatorVariables(variables);
+		},
 		focusWidget: (widget: Widget) => {
 			if (widget !== Widget.SEARCH) {
 				invalidatePendingCalculation();
@@ -1920,9 +1926,9 @@ export const createUIStore = (root: IRootStore) => {
 					return;
 				}
 
-				if (isCalculationCandidate(store.query, store.calculatorMonthsEnabled)) {
+				if (isCalculationCandidate(store.query, store.calculatorMonthsEnabled, store.calculatorVariables)) {
 					const querySnapshot = store.query;
-					const usesCurrency = calculatorExpressionUsesCurrency(querySnapshot);
+					const usesCurrency = calculatorExpressionUsesCurrency(querySnapshot, store.calculatorVariables);
 					store.isCalculating = true;
 					calculationTimer = setTimeout(() => {
 						calculationTimer = undefined;
@@ -1936,6 +1942,7 @@ export const createUIStore = (root: IRootStore) => {
 									currencyRates,
 									store.calculatorDateFormat,
 									store.calculatorMonthsEnabled,
+									store.calculatorVariables,
 								);
 							} catch {
 								// Calculator input is user-controlled. A malformed expression or
@@ -2711,7 +2718,7 @@ export const createUIStore = (root: IRootStore) => {
 				if (
 					store.focusedWidget !== Widget.SEARCH ||
 					store.searchTab === SearchTab.FILES ||
-					!calculatorExpressionUsesCurrency(store.query)
+					!calculatorExpressionUsesCurrency(store.query, store.calculatorVariables)
 				) {
 					return;
 				}
@@ -2720,6 +2727,7 @@ export const createUIStore = (root: IRootStore) => {
 					root.currencyRates.snapshot,
 					store.calculatorDateFormat,
 					store.calculatorMonthsEnabled,
+					store.calculatorVariables,
 				);
 				runInAction(() => {
 					store.isCalculating = false;

@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
 	calculatorExpressionUsesCurrency,
+	expandCalculatorVariables,
+	validateCalculatorVariableName,
 	evaluateCalculatorExpression,
 	isCalculatorExpressionCandidate,
 } from "../src/lib/unitExpression.ts";
@@ -68,6 +70,18 @@ test("inverts the entire expression with a leading or trailing inv", () => {
 });
 
 test("uses exact decimal arithmetic", () => {
+	const variables = { zzz: "2384 m/s", toto: "1/(23 km/h) * e * pi*c", v2: "zzz * 2", period: "2w", fee: "2 USD" };
+	for (const [query, expanded] of [["2 * zzz in km/h", "2 * (2384 m/s) in km/h"], ["toto", "1/(23 km/h) * e * pi*c"], ["v2 in m/s", "4768m/s in m/s"], ["inv period in Hz", "inv 2w in Hz"]]) {
+		assert.equal(isCalculatorExpressionCandidate(query, variables), true);
+		assert.equal(evaluateCalculatorExpression(query, null, undefined, variables).value, evaluate(expanded).value);
+	}
+	assert.equal(calculatorExpressionUsesCurrency("fee * 3", variables), true);
+	assert.equal(evaluateCalculatorExpression("zzz", null, undefined, {}), null);
+	assert.throws(() => expandCalculatorVariables("a", { a: "b", b: "a" }), /Circular/);
+	assert.equal(evaluateCalculatorExpression("a", null, undefined, { a: "a" }), null);
+	assert.equal(expandCalculatorVariables("1e3 + 2e-3", { e3: "9" }), "1e3 + 2e-3");
+	assert.equal(validateCalculatorVariableName("zzz"), null);
+	for (const name of ["pi", "c", "m", "month", "now", "mod", "1foo"]) assert.ok(validateCalculatorVariableName(name), name);
 	for (const [expression, expected] of [
 		["10 mod 3", "1"], ["10 mod (2 + 1)", "1"],
 		["10%3", "1"], ["10 % .3", "0.1"], ["20 % 6 * 2", "4"],

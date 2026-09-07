@@ -5,6 +5,8 @@ import type { CurrencyRateSnapshot } from "lib/currencyRates";
 import { evaluateDateCalculation, isDateCalculationCandidate } from "lib/calculatorDates";
 import {
 	evaluateCalculatorExpression,
+	expandCalculatorVariables,
+	type CalculatorVariables,
 	isCalculatorExpressionCandidate,
 } from "lib/unitExpression";
 import { DateTime } from "luxon";
@@ -354,7 +356,8 @@ function formatCalculatorUnitForDisplay(unit: string) {
 		.replace(/\*/g, "·");
 }
 
-export function isCalculationCandidate(query: string, monthsEnabled = false) {
+export function isCalculationCandidate(query: string, monthsEnabled = false, variables: CalculatorVariables = {}) {
+	try { query = expandCalculatorVariables(query, variables); } catch { return false; }
 	if (!monthsEnabled && /(?:^|[^a-zA-Z])(?:mo|month|months)(?![a-zA-Z])/i.test(query)) return false;
 	const normalized = query.trim().replace(/,/g, "").replace(/\s+/g, " ");
 	return (
@@ -369,11 +372,15 @@ export function parseCalculation(
 	currencyRates?: CurrencyRateSnapshot | null,
 	dateFormat?: string,
 	monthsEnabled = false,
+	variables: CalculatorVariables = {},
 ): TemporaryResult | null {
+	const originalQuery = query;
+	try { query = expandCalculatorVariables(query, variables); } catch { return null; }
 	const usesMonths = /(?:^|[^a-zA-Z])(?:mo|month|months)(?![a-zA-Z])/i.test(query);
 	if (usesMonths && !monthsEnabled) return null;
 	const now = new Date();
 	const result = parseCalculationValue(query, currencyRates, dateFormat, monthsEnabled ? "30" : undefined, now);
+	if (result?.kind === "calculation") result.expression = originalQuery;
 	if (!usesMonths || !result || result.kind !== "calculation") return result;
 	const alternative = parseCalculationValue(query, currencyRates, dateFormat, "30.4375", now);
 	return {

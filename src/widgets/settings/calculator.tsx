@@ -6,6 +6,51 @@ import { observer } from "mobx-react-lite";
 import { useEffect, useState } from "react";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useStore } from "store";
+import { expandCalculatorVariables, isCalculatorExpressionCandidate, validateCalculatorVariableName } from "lib/unitExpression";
+
+const VariableSettings = observer(() => {
+	const store = useStore();
+	const [name, setName] = useState("");
+	const [expression, setExpression] = useState("");
+	const [editing, setEditing] = useState<string | null>(null);
+	const [error, setError] = useState("");
+	const reset = () => { setName(""); setExpression(""); setEditing(null); setError(""); };
+	const save = () => {
+		const key = name.trim();
+		const problem = validateCalculatorVariableName(key);
+		if (problem) { setError(problem); return; }
+		if (key !== editing && Object.hasOwn(store.ui.calculatorVariables, key)) { setError("This variable already exists. Edit it instead."); return; }
+		const next = { ...store.ui.calculatorVariables };
+		if (editing && editing !== key) delete next[editing];
+		next[key] = expression.trim().replace(/^(["'])(.*)\1$/, "$2");
+		if (!next[key] || next[key].length > 4096) { setError("Use an expression between 1 and 4096 characters."); return; }
+		try {
+			for (const variable of Object.keys(next)) {
+				const expanded = expandCalculatorVariables(variable, next);
+				if (!isCalculatorExpressionCandidate(expanded)) throw new Error(`Invalid expression or unknown reference in ${variable}.`);
+			}
+			store.ui.setCalculatorVariables(next); reset();
+		} catch (reason) { setError(reason instanceof Error ? reason.message : "Invalid variable."); }
+	};
+	return <View className="p-2.5 subBg gap-2 rounded-lg border border-lightBorder dark:border-darkBorder">
+		<Text className="text-sm text">Variables</Text>
+		<Text className="text-xs darker-text">Reusable expressions, with units and references to other variables. Names are case-sensitive; built-in units and constants are reserved.</Text>
+		{Object.entries(store.ui.calculatorVariables).map(([key, value]) => <View key={key} className="flex-row gap-2 items-center">
+			<TouchableOpacity className="flex-1" onPress={() => { setEditing(key); setName(key); setExpression(value); setError(""); }}><Text className="text-sm text">{key} = {value}</Text></TouchableOpacity>
+			<TouchableOpacity accessibilityLabel={`Delete variable ${key}`} onPress={() => {
+				const next = { ...store.ui.calculatorVariables }; delete next[key];
+				try {
+				if (Object.keys(next).some((other) => !isCalculatorExpressionCandidate(expandCalculatorVariables(other, next)))) { setError("Another variable depends on this one. Edit or remove it first."); return; }
+				store.ui.setCalculatorVariables(next); if (editing === key) reset();
+				} catch (reason) { setError(reason instanceof Error ? reason.message : "Invalid variable."); }
+			}}><Text className="text-xs text-red-500">Delete</Text></TouchableOpacity>
+		</View>)}
+		<Input bordered placeholder="Name (e.g. zzz)" value={name} onChangeText={setName} />
+		<Input bordered placeholder="Expression (e.g. 2384 m/s)" value={expression} onChangeText={setExpression} onSubmitEditing={save} />
+		{error ? <Text className="text-xs text-red-500">{error}</Text> : null}
+		<View className="flex-row gap-4"><TouchableOpacity onPress={save}><Text className="text-sm text">{editing ? "Save" : "Add variable"}</Text></TouchableOpacity>{editing && <TouchableOpacity onPress={reset}><Text className="text-sm darker-text">Cancel</Text></TouchableOpacity>}</View>
+	</View>;
+});
 
 const CurrencyRateSettings = observer(() => {
 	const store = useStore();
@@ -125,6 +170,7 @@ export const CalculatorSettings = observer(() => {
  const store = useStore();
  return <ScrollView className="flex-1" contentContainerClassName="p-3 gap-3">
  <CurrencyRateSettings />
+ <VariableSettings />
 			<View className="p-2.5 subBg gap-2 rounded-lg border border-lightBorder dark:border-darkBorder">
 				<Text className="text-sm text">Calculator date format</Text>
 				<Input value={store.ui.calculatorDateFormat}

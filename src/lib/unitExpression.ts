@@ -7,6 +7,39 @@ import {
 
 type Dimensions = readonly [number, number, number, number, number, number];
 
+export type CalculatorVariables = Record<string, string>;
+
+export function validateCalculatorVariableName(name: string): string | null {
+	if (!/^[A-Za-z_][A-Za-z_0-9]*$/.test(name)) return "Use letters, digits and underscores; do not start with a digit.";
+	if (["today", "now", "inv", "in", "to", "mod", "of", "hmin", "mo", "month", "months"].includes(name.toLowerCase()) || FUNCTION_NAMES.has(name.toLowerCase())) return "This name is reserved by the calculator.";
+	try { resolveIdentifier(name); return "This name is already a unit or constant."; } catch { return null; }
+}
+
+export function normalizeCalculatorVariables(value: unknown): CalculatorVariables {
+	const result: CalculatorVariables = Object.create(null);
+	if (!value || typeof value !== "object" || Array.isArray(value)) return result;
+	for (const [name, expression] of Object.entries(value)) {
+		if (typeof expression === "string" && !validateCalculatorVariableName(name)) result[name] = expression.slice(0, 4096);
+	}
+	return result;
+}
+
+/** Expand named expressions into grouped quantities, then use the normal parser. */
+export function expandCalculatorVariables(query: string, variables: CalculatorVariables = {}): string {
+	let budget = 1000;
+	const expand = (text: string, path: string[]): string => {
+		if (text.length > 32768 || path.length > 32 || --budget < 0) throw new Error("Variable expression is too complex.");
+		const expanded = text.replace(/(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?|[A-Za-z_][A-Za-z_0-9]*/g, (token) => {
+			if (!Object.hasOwn(variables, token)) return token;
+			if (path.includes(token)) throw new Error(`Circular variable reference: ${[...path, token].join(" → ")}`);
+			return `(${expand(variables[token], [...path, token])})`;
+		});
+		if (expanded.length > 32768) throw new Error("Variable expression is too complex.");
+		return expanded;
+	};
+	return expand(query, []);
+}
+
 type Quantity = {
 	value: Big;
 	dimensions: Dimensions;
@@ -1320,7 +1353,8 @@ function currencyCodesInExpression(input: string): CurrencyCode[] {
 	return codes;
 }
 
-export function calculatorExpressionUsesCurrency(query: string) {
+export function calculatorExpressionUsesCurrency(query: string, variables: CalculatorVariables = {}) {
+	try { query = expandCalculatorVariables(query, variables); } catch { return false; }
 	const normalized = normalizeExpression(query);
 	const { expression, targetUnit } = splitConversionExpression(normalized);
 	try {
@@ -1337,7 +1371,8 @@ export function calculatorExpressionUsesCurrency(query: string) {
  * Cheaply recognizes complete calculator-shaped input without evaluating it.
  * This lets the UI paint a loading state before an expensive calculation starts.
  */
-export function isCalculatorExpressionCandidate(query: string) {
+export function isCalculatorExpressionCandidate(query: string, variables: CalculatorVariables = {}) {
+	try { query = expandCalculatorVariables(query, variables); } catch { return false; }
 	const normalized = normalizeExpression(query);
 	const { expression, targetUnit, hasExplicitTarget } =
 		splitConversionExpression(normalized);
@@ -1398,7 +1433,9 @@ export function evaluateCalculatorExpression(
 	query: string,
 	currencyRates?: CurrencyRateSnapshot | null,
 	monthDays?: "30" | "30.4375",
+	variables: CalculatorVariables = {},
 ): CalculatorExpressionResult | null {
+	try { query = expandCalculatorVariables(query, variables); } catch { return null; }
 	const normalized = normalizeExpression(query);
 	const { expression, targetUnit, hasExplicitTarget } =
 		splitConversionExpression(normalized);

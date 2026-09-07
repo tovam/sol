@@ -15,6 +15,7 @@ export const PORTABLE_KEYS = [
 	"currencyRefreshIntervalMinutes",
 	"calculatorDateFormat",
 	"calculatorMonthsEnabled",
+	"calculatorVariables",
 	"calendarEnabled",
 	"showAllDayEvents",
 	"launchAtLogin",

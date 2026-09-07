@@ -12,6 +12,11 @@ registerHooks({ resolve(specifier, context, nextResolve) {
 const { parseCalculation, isCalculationCandidate } = await import("../src/stores/ui.store.helpers.ts");
 
 test("month settings gate recognition and attach both result conventions", () => {
+	const variables = { zzz: "2384 m/s", delay: "1month", interval: "8j" };
+	assert.equal(parseCalculation("zzz in m/s", null, undefined, false, variables).value, "2384 m/s");
+	assert.equal(parseCalculation("delay in d", null, undefined, false, variables), null);
+	assert.match(parseCalculation("delay in d", null, undefined, true, variables).monthAlternative, /30\.4375 d/);
+	assert.equal(parseCalculation("2026-09-07 + interval", null, undefined, false, variables).value, "2026-09-15");
 	assert.equal(isCalculationCandidate("1month in d"), false);
 	assert.equal(isCalculationCandidate("1month in d", true), true);
 	assert.equal(parseCalculation("1month in d"), null);
