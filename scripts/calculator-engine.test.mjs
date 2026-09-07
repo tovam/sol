@@ -204,6 +204,10 @@ test("parses slashes and powers identically inside and outside units", () => {
 });
 
 test("converts compound and aliased units", () => {
+	assert.equal(isCalculatorExpressionCandidate("1j"), true);
+	assert.equal(evaluate("1j in h").value, "24");
+	assert.equal(evaluate("2 j in s").value, "172800");
+	assert.equal(evaluate("48 h in j").value, "2");
 	const force = evaluate("5 kg * 9.81 m/s² in kN");
 	assert.equal(force.value, "0.04905");
 	assert.equal(force.targetUnit, "kN");
