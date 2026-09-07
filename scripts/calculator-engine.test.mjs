@@ -61,6 +61,14 @@ test("inverts the entire expression with a leading or trailing inv", () => {
 });
 
 test("uses exact decimal arithmetic", () => {
+	assert.equal(isCalculatorExpressionCandidate("50%"), true);
+	assert.equal(evaluate("%").value, "0.01");
+	assert.equal(evaluate("50%").value, "0.5");
+	assert.equal(evaluate("200 * 10%").value, "20");
+	assert.equal(evaluate("0.25 in %").value, "25");
+	assert.equal(evaluate("(20 + 30)%").value, "0.5");
+	assert.equal(evaluate("50% * 2h in h").value, "1");
+	assert.equal(evaluate("100 + 10%").value, "100.1");
 	for (const alias of ["month", "months", "mo"]) {
 		assert.equal(evaluateCalculatorExpression(`1 ${alias} in d`), null);
 		assert.equal(evaluateCalculatorExpression(`1 ${alias} in d`, null, "30").value, "30");
@@ -179,7 +187,7 @@ test("applies conventional operator precedence", () => {
 	assert.equal(evaluate("-2^2").value, "-4");
 	assert.equal(evaluate("(-2)^2").value, "4");
 	assert.equal(evaluate("2^3^2").value, "512");
-	assert.equal(evaluate("10 % 3").value, "1");
+	assert.equal(evaluate("10 % 3").value, "0.3");
 	assert.equal(evaluate("1 / 2 pi").formattedValue, "0.159154943091895");
 });
 

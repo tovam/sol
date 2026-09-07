@@ -384,6 +384,7 @@ function resolveUnitIdentifier(
 	currencyRates?: CurrencyRateSnapshot | null,
 	monthDays?: "30" | "30.4375",
 ): Quantity | null {
+	if (rawIdentifier === "%") return unit("0.01", DIMENSIONLESS);
 	if (/^(mo|month|months)$/i.test(rawIdentifier)) {
 		return monthDays ? unit(new Big(monthDays).times("86400").toString(), TIME) : null;
 	}
@@ -446,6 +447,8 @@ function tokenize(input: string): Token[] {
 			tokens.push({ type: "rightParen", joinedToPrevious });
 		} else if (match[3] === ",") {
 			tokens.push({ type: "comma", joinedToPrevious });
+		} else if (match[3] === "%") {
+			tokens.push({ type: "identifier", value: "%", joinedToPrevious });
 		} else {
 			tokens.push({
 				type: "operator",
@@ -802,33 +805,14 @@ class QuantityParser {
 		let result = this.parseImplicitMultiplicative();
 		while (
 			this.matchesOperator("*") ||
-			this.matchesOperator("/") ||
-			this.matchesOperator("%")
+			this.matchesOperator("/")
 		) {
 			const operator = (
 				this.tokens[this.index] as Extract<Token, { type: "operator" }>
 			).value;
 			this.index += 1;
 			const right = this.parseImplicitMultiplicative();
-			if (operator === "%") {
-				assertMatchingDimensions(
-					[result.quantity, right.quantity],
-					"Remainder",
-				);
-				result = parsedQuantity(
-					quantity(
-						result.quantity.value.mod(right.quantity.value),
-						result.quantity.dimensions,
-						result.quantity.hasUnit || right.quantity.hasUnit,
-					),
-					{
-						type: "binary",
-						operator,
-						left: result.expression,
-						right: right.expression,
-					},
-				);
-			} else if (operator === "*") {
+			if (operator === "*") {
 				result = parsedQuantity(
 					quantity(
 						result.quantity.value.times(right.quantity.value),
