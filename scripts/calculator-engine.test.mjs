@@ -204,6 +204,11 @@ test("parses slashes and powers identically inside and outside units", () => {
 });
 
 test("converts compound and aliased units", () => {
+	assert.equal(isCalculatorExpressionCandidate("1w"), true);
+	assert.equal(evaluate("1w in d").value, "7");
+	assert.equal(evaluate("2 w in j").value, "14");
+	assert.equal(evaluate("14d in w").value, "2");
+	assert.equal(evaluate("1 W in W").value, "1");
 	assert.equal(isCalculatorExpressionCandidate("1j"), true);
 	assert.equal(evaluate("1j in h").value, "24");
 	assert.equal(evaluate("2 j in s").value, "172800");

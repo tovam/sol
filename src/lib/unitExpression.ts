@@ -269,6 +269,7 @@ const UNIT_ALIASES: Record<string, string> = {
 	days: "d",
 	j: "d",
 	week: "wk",
+	w: "wk",
 	weeks: "wk",
 	month: "mo",
 	months: "mo",
