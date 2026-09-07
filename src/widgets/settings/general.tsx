@@ -683,7 +683,7 @@ const CurrencyRateSettings = observer(() => {
 			<View>
 				<Text className="text-sm text">Currency rates</Text>
 				<Text className="text-xxs text-neutral-500 dark:text-neutral-400 mt-1">
-					EUR, USD and BTC from Coinbase’s public exchange-rate endpoint
+					EUR, USD and BTC exchange rates
 				</Text>
 			</View>
 

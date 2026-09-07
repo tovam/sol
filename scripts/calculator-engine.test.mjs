@@ -59,6 +59,20 @@ test("converts EUR, USD and BTC as case-insensitive units", () => {
 	});
 });
 
+test("displays rounded Bitcoin reference rates in the same direction", () => {
+	const rates = { ...currencyRates, rates: { EUR: "1", USD: "1.23456", BTC: "0.00003" } };
+	for (const [query, summary] of [
+		["BTC in USD", "1 BTC = 41152 USD"],
+		["USD in BTC", "1 BTC = 41152 USD"],
+		["€ in btc", "1 BTC = 33333 EUR"],
+		["btc in €", "1 BTC = 33333 EUR"],
+		["2 btc", "1 BTC = 33333 EUR"],
+	]) {
+		assert.equal(evaluateCalculatorExpression(query, rates)?.exchangeRateInfo?.summary, summary, query);
+	}
+	assert.equal(evaluateCurrency("USD in BTC").value, "0.00005");
+});
+
 test("handles first-character constants, units, and currency symbols", () => {
 	for (const input of ["e", "E", "s", "d", "$", "€"]) {
 		assert.equal(isCalculatorExpressionCandidate(input), true, input);

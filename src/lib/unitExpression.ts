@@ -1347,6 +1347,12 @@ function exchangeRateSummary(
 		const source = sourceCodes[0];
 		const target = targetCodes[0];
 		if (source !== target) {
+			if (source === "BTC" || target === "BTC") {
+				const fiat = source === "BTC" ? target : source;
+				return `1 BTC = ${new Big(currencyRates.rates[fiat])
+					.div(currencyRates.rates.BTC)
+					.toFixed(0)} ${fiat}`;
+			}
 			const rate = new Big(currencyRates.rates[target]).div(
 				currencyRates.rates[source],
 			);
@@ -1363,9 +1369,7 @@ function exchangeRateSummary(
 	}
 	if (codes.includes("BTC")) {
 		summaries.push(
-			`1 BTC = ${formatResult(
-				new Big("1").div(currencyRates.rates.BTC),
-			)} EUR`,
+			`1 BTC = ${new Big("1").div(currencyRates.rates.BTC).toFixed(0)} EUR`,
 		);
 	}
 	return summaries.length > 0 ? summaries.join(" · ") : null;

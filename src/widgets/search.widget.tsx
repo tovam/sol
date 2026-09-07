@@ -86,9 +86,8 @@ function TemporaryResultView({
 							<Text
 								className="max-w-[52%] text-xxs darker-text opacity-70"
 								numberOfLines={1}
-								accessibilityLabel={`${result.exchangeRateInfo.source}. ${result.exchangeRateInfo.summary}. Retrieved ${formatRateTimestamp(result.exchangeRateInfo.fetchedAt)}`}
+								accessibilityLabel={`${result.exchangeRateInfo.summary}. Retrieved ${formatRateTimestamp(result.exchangeRateInfo.fetchedAt)}`}
 							>
-								{result.exchangeRateInfo.source} ·{" "}
 								{result.exchangeRateInfo.summary} · retrieved{" "}
 								{formatRateTimestamp(result.exchangeRateInfo.fetchedAt)}
 							</Text>
