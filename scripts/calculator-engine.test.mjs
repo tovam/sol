@@ -26,6 +26,22 @@ function evaluateCurrency(expression) {
 	return result;
 }
 
+test("inverts the entire expression with a leading or trailing inv", () => {
+	for (const expression of ["inv 2+3", "2+3 inv", " INV 2+3 "]) {
+		assert.equal(isCalculatorExpressionCandidate(expression), true);
+		assert.equal(evaluate(expression).value, "0.2");
+		assert.equal(evaluate(expression).interpretedExpression, evaluate("1/(2+3)").interpretedExpression);
+	}
+	for (const expression of ["inv 30s", "30s inv", "inv 3 m / 4 s * 7 g"]) {
+		const inner = expression.replace(/^inv\s+|\s+inv$/g, "");
+		assert.deepEqual(evaluate(expression), evaluate(`1/(${inner})`));
+	}
+	assert.equal(calculatorExpressionUsesCurrency("inv 2 USD"), true);
+	assert.equal(evaluateCalculatorExpression("inv 0"), null);
+	assert.equal(isCalculatorExpressionCandidate("inv"), false);
+	assert.equal(isCalculatorExpressionCandidate("invoice"), false);
+});
+
 test("uses exact decimal arithmetic", () => {
 	assert.equal(evaluate("26**8").value, "208827064576");
 	assert.equal(evaluate("26^8").formattedValue, "208827064576");

@@ -311,7 +311,7 @@ const UNIT_ALIASES: Record<string, string> = {
 };
 
 function normalizeExpression(input: string) {
-	return normalizeCalculatorExpression(input)
+	const normalized = normalizeCalculatorExpression(input)
 		.trim()
 		.replace(/π/g, "pi")
 		.replace(/[×·]/g, "*")
@@ -322,6 +322,9 @@ function normalizeExpression(input: string) {
 		.replace(/\bper\b/gi, "/")
 		.replace(/(\d),(?=\d{3}(?:\D|$))/g, "$1")
 		.replace(/\s+/g, " ");
+	const inverse = normalized.match(/^inv\s+(.+)$/i)
+		?? normalized.match(/^(.+)\s+inv$/i);
+	return inverse ? `1/(${inverse[1].trim()})` : normalized;
 }
 
 function addDimensions(a: Dimensions, b: Dimensions): Dimensions {
