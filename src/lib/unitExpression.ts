@@ -1401,17 +1401,17 @@ export function evaluateCalculatorExpression(
 		if (hasExplicitTarget && targetUnit.toLowerCase() === "hmin") {
 			if (!dimensionsMatch(source.dimensions, TIME)) return null;
 			const units = ["j", "h", "min", "s", "ms"];
-			const scales = [86400000, 3600000, 60000, 1000, 1];
-			let remaining = source.value.abs().times(1000).round(0, Big.roundDown);
+			const scales = ["86400000", "3600000", "60000", "1000", "1"];
+			let remaining = source.value.abs().times("1000").round(0, Big.roundDown);
 			const first = scales.findIndex((scale) => remaining.gte(scale));
 			const start = first < 0 ? 4 : first;
 			const displayParts: NonNullable<CalculatorExpressionResult["displayParts"]> = [];
 			for (let index = start; index < Math.min(start + 3, scales.length); index++) {
 				const count = remaining.div(scales[index]).round(0, Big.roundDown);
 				remaining = remaining.minus(count.times(scales[index]));
-				if (count.eq(0) && first >= 0) continue;
+				if (count.eq("0") && first >= 0) continue;
 				displayParts.push({
-					text: `${displayParts.length ? " " : source.value.lt(0) ? "−" : ""}${count.toFixed(0)}${units[index]}`,
+					text: `${displayParts.length ? " " : source.value.lt("0") ? "−" : ""}${count.toFixed(0)}${units[index]}`,
 				muted: index === start + 2,
 				small: index === start + 2,
 				});
