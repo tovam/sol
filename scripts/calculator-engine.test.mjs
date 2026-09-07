@@ -6,6 +6,24 @@ import {
 	isCalculatorExpressionCandidate,
 } from "../src/lib/unitExpression.ts";
 import { parseCoinbaseCurrencyRates } from "../src/lib/currencyRates.ts";
+import { evaluateDateCalculation, isDateCalculationCandidate } from "../src/lib/calculatorDates.ts";
+
+test("calculates local dates using the unit engine", () => {
+	const now = new Date(2026, 8, 7, 12, 30);
+	const calculate = (q, format) => evaluateDateCalculation(q, format, now);
+	assert.equal(calculate("today + 8j").value, "2026-09-15");
+	assert.equal(calculate("now + (824km/130km/h)").value, "2026-09-07 18:50");
+	assert.equal(calculate("now + (824km/130km/h)").displayParts[0].muted, true);
+	assert.equal(calculate("now + 1j").displayParts[0].muted, false);
+	assert.equal(calculate("today - 1w").value, "2026-08-31");
+	assert.equal(calculate("2026-12-31 + 1j").value, "2027-01-01");
+	assert.equal(calculate("2026-02-30 + 1j"), null);
+	assert.equal(calculate("today + 1kg"), null);
+	assert.equal(calculate("today", "DD/MM/YYYY").value, "07/09/2026");
+	assert.equal(calculate("today", "dddd YYYY-MM-DD").value, `${now.toLocaleDateString(undefined, { weekday: "long" })} 2026-09-07`);
+	assert.equal(isDateCalculationCandidate("today + 8j"), true);
+	assert.equal(isDateCalculationCandidate("now + ("), false);
+});
 
 const currencyRates = {
 	base: "EUR",

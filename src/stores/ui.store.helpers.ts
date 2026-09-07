@@ -2,6 +2,7 @@ import axios from "axios";
 import * as chrono from "chrono-node";
 import convert from "convert-units";
 import type { CurrencyRateSnapshot } from "lib/currencyRates";
+import { evaluateDateCalculation, isDateCalculationCandidate } from "lib/calculatorDates";
 import {
 	evaluateCalculatorExpression,
 	isCalculatorExpressionCandidate,
@@ -354,6 +355,7 @@ function formatCalculatorUnitForDisplay(unit: string) {
 export function isCalculationCandidate(query: string) {
 	const normalized = query.trim().replace(/,/g, "").replace(/\s+/g, " ");
 	return (
+		isDateCalculationCandidate(query) ||
 		isCalculatorExpressionCandidate(query) ||
 		LEGACY_UNIT_CONVERSION_PATTERN.test(normalized)
 	);
@@ -362,7 +364,10 @@ export function isCalculationCandidate(query: string) {
 export function parseCalculation(
 	query: string,
 	currencyRates?: CurrencyRateSnapshot | null,
+	dateFormat?: string,
 ): TemporaryResult | null {
+	const dateResult = evaluateDateCalculation(query, dateFormat);
+	if (dateResult) return dateResult;
 	const normalized = query.trim().replace(/,/g, "").replace(/\s+/g, " ");
 	const expressionResult = evaluateCalculatorExpression(query, currencyRates);
 	if (expressionResult != null) {

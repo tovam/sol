@@ -791,6 +791,13 @@ export const General = observer(() => {
 			<SearchWindowAnimationSettings />
 			<SearchWindowPositionSettings />
 			<CurrencyRateSettings />
+			<View className="p-2.5 subBg gap-2 rounded-lg border border-lightBorder dark:border-darkBorder">
+				<Text className="text-sm text">Calculator date format</Text>
+				<Input value={store.ui.calculatorDateFormat}
+					onChangeText={(value) => store.ui.setCalculatorDateFormat(value)}
+					placeholder="YYYY-MM-DD" />
+				<Text className="text-xxs darker-text">YYYY: year · MM: month · DD: day · dddd: weekday · ddd: short weekday. Example: dddd YYYY-MM-DD. Local timezone; now adds HH:mm.</Text>
+			</View>
 			<View className="z-20 p-2.5 subBg gap-2 rounded-lg border border-lightBorder dark:border-darkBorder">
 				<View className="flex-row items-center z-30">
 					<Text className="flex-1 text-sm">Global Shortcut</Text>

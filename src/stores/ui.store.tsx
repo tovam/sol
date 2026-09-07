@@ -756,6 +756,7 @@ export const createUIStore = (root: IRootStore) => {
 						src.searchWindowAnimation,
 					);
 					store.glassAppearance = normalizeGlassAppearance(src.glassAppearance);
+					if (typeof src.calculatorDateFormat === "string") store.calculatorDateFormat = src.calculatorDateFormat;
 					store.currencyRefreshIntervalMinutes =
 						normalizeCurrencyRefreshIntervalMinutes(
 							src.currencyRefreshIntervalMinutes,
@@ -872,6 +873,7 @@ export const createUIStore = (root: IRootStore) => {
 					normalizeCurrencyRefreshIntervalMinutes(
 						jsonConfig.currencyRefreshIntervalMinutes,
 					);
+				if (typeof jsonConfig.calculatorDateFormat === "string") store.calculatorDateFormat = jsonConfig.calculatorDateFormat;
 				if (jsonConfig.calendarEnabled !== undefined)
 					store.calendarEnabled = jsonConfig.calendarEnabled;
 				if (jsonConfig.showAllDayEvents !== undefined)
@@ -966,6 +968,7 @@ export const createUIStore = (root: IRootStore) => {
 		glassAppearance: { ...DEFAULT_GLASS_APPEARANCE } as GlassAppearance,
 		currencyRefreshIntervalMinutes:
 			DEFAULT_CURRENCY_REFRESH_INTERVAL_MINUTES,
+		calculatorDateFormat: "YYYY-MM-DD",
 		initialHydrationComplete: false,
 		query: "",
 		selectedIndex: 0,
@@ -1703,6 +1706,9 @@ export const createUIStore = (root: IRootStore) => {
 			store.currencyRefreshIntervalMinutes =
 				normalizeCurrencyRefreshIntervalMinutes(minutes);
 		},
+		setCalculatorDateFormat: (format: string) => {
+			store.calculatorDateFormat = format.slice(0, 120);
+		},
 		focusWidget: (widget: Widget) => {
 			if (widget !== Widget.SEARCH) {
 				invalidatePendingCalculation();
@@ -1921,6 +1927,7 @@ export const createUIStore = (root: IRootStore) => {
 								calculationResult = parseCalculation(
 									querySnapshot,
 									currencyRates,
+									store.calculatorDateFormat,
 								);
 							} catch {
 								// Calculator input is user-controlled. A malformed expression or
