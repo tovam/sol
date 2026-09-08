@@ -1,4 +1,5 @@
 import Big from "big.js";
+import { abbreviatedDecimal, abbreviatedExchangeRate } from "./calculatorFormatting.ts";
 import {
 	currencyCodeForIdentifier,
 	type CurrencyCode,
@@ -81,6 +82,7 @@ export type CalculatorExpressionResult = {
 	targetUnit: string;
 	value: string;
 	formattedValue: string;
+	displayValue?: string;
 	displayParts?: { text: string; muted?: boolean; small?: boolean }[];
 	hasUnits: boolean;
 	exchangeRateInfo?: {
@@ -1410,7 +1412,7 @@ function exchangeRateSummary(
 			const rate = new Big(currencyRates.rates[target]).div(
 				currencyRates.rates[source],
 			);
-			return `1 ${source} = ${formatResult(rate)} ${target}`;
+			return `1 ${source} = ${abbreviatedExchangeRate(rate.toString(), source, target)} ${target}`;
 		}
 	}
 
@@ -1418,7 +1420,7 @@ function exchangeRateSummary(
 	const summaries: string[] = [];
 	if (codes.includes("USD")) {
 		summaries.push(
-			`1 EUR = ${formatResult(new Big(currencyRates.rates.USD))} USD`,
+			`1 EUR = ${abbreviatedExchangeRate(currencyRates.rates.USD, "EUR", "USD")} USD`,
 		);
 	}
 	if (codes.includes("BTC")) {
@@ -1511,6 +1513,8 @@ export function evaluateCalculatorExpression(
 		}
 
 		const value = source.value.div(target.value);
+		const resultCurrencies = currencyCodesInExpression(resolvedTargetUnit);
+		const abbreviateMoney = source.dimensions[5] === 1 && resultCurrencies.length === 1 && resultCurrencies[0] !== "BTC";
 		const rateSummary = currencyRates
 			? exchangeRateSummary(expression, resolvedTargetUnit, currencyRates)
 			: null;
@@ -1522,6 +1526,7 @@ export function evaluateCalculatorExpression(
 			targetUnit: resolvedTargetUnit,
 			value: value.toString(),
 			formattedValue: formatResult(value),
+			...(abbreviateMoney ? { displayValue: abbreviatedDecimal(value.toString()) } : {}),
 			hasUnits: true,
 			...(rateSummary
 				? {

@@ -8,6 +8,28 @@ import {
 	isCalculatorExpressionCandidate,
 } from "../src/lib/unitExpression.ts";
 import { parseCoinbaseCurrencyRates } from "../src/lib/currencyRates.ts";
+import { formatRateAge, abbreviatedDecimal } from "../src/lib/calculatorFormatting.ts";
+
+test("abbreviates fiat outputs only at monetary exponent +1", () => {
+	for (const unit of ["EUR", "USD/h", "EUR/m^3"]) {
+		const result = evaluateCurrency(`12.3456 ${unit} in ${unit}`);
+		assert.equal(result.displayValue, "12.34...");
+		assert.equal(result.formattedValue, "12.3456");
+	}
+	for (const unit of ["BTC", "EUR^2", "m/USD", "EUR*USD/BTC"]) {
+		assert.equal(evaluateCurrency(`12.3456 (${unit}) in ${unit}`).displayValue, undefined);
+	}
+	assert.equal(evaluateCurrency("12.30 EUR in EUR").displayValue, "12.3");
+	assert.equal(abbreviatedDecimal("-0.001"), "-0...");
+	const rates = { ...currencyRates, rates: { ...currencyRates.rates, USD: "1.178945" } };
+	assert.equal(evaluateCalculatorExpression("EUR in USD", rates).exchangeRateInfo.summary, "1 EUR = 1.17... USD");
+	assert.equal(evaluateCalculatorExpression("USD in EUR", rates).exchangeRateInfo.summary, "1 USD = 0.84... EUR");
+	const now = 1700000000000;
+	assert.equal(formatRateAge(now - 15 * 60000, now), "15 minutes ago");
+	assert.equal(formatRateAge(now - 3 * 3600000, now), "3 hours ago");
+	assert.equal(formatRateAge(now - 4 * 86400000, now), "4 days ago");
+	assert.equal(formatRateAge(now - 3600000, now), "1 hour ago");
+});
 import { evaluateDateCalculation, isDateCalculationCandidate } from "../src/lib/calculatorDates.ts";
 
 test("calculates local dates using the unit engine", () => {

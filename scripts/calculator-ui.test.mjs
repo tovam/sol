@@ -12,6 +12,11 @@ registerHooks({ resolve(specifier, context, nextResolve) {
 const { parseCalculation, isCalculationCandidate } = await import("../src/stores/ui.store.helpers.ts");
 
 test("month settings gate recognition and attach both result conventions", () => {
+	const rates = { base: "EUR", rates: { EUR: "1", USD: "2", BTC: "0.0001" }, source: "Coinbase", fetchedAt: 1700000000000 };
+	const money = parseCalculation("12.3456 USD/h in USD/h", rates);
+	assert.equal(money.value, "12.34... USD/h");
+	assert.equal(money.copyValue, "12.3456 USD/h");
+	assert.deepEqual(money.displayParts[1], { text: "...", muted: true });
 	const variables = { zzz: "2384 m/s", delay: "1month", interval: "8j" };
 	assert.equal(parseCalculation("zzz in m/s", null, undefined, false, variables).value, "2384 m/s");
 	assert.equal(parseCalculation("delay in d", null, undefined, false, variables), null);

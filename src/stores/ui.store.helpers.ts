@@ -409,12 +409,16 @@ function parseCalculationValue(
 			? ` ${formatCalculatorUnitForDisplay(expressionResult.targetUnit)}`
 			: "";
 		const canonicalResult = `${expressionResult.formattedValue}${canonicalSuffix}`;
+		const displayValue = `${expressionResult.displayValue ?? expressionResult.formattedValue}${displaySuffix}`;
+		const displayParts = expressionResult.displayValue?.includes("...")
+			? displayValue.split(/(\.\.\.)/).filter(Boolean).map((text) => ({ text, muted: text === "..." }))
+			: expressionResult.displayParts;
 		return {
 			kind: "calculation",
 			expression: query.trim().replace(/\s+/g, " "),
 			interpretedExpression: expressionResult.interpretedExpression,
-			displayParts: expressionResult.displayParts,
-			value: `${expressionResult.formattedValue}${displaySuffix}`,
+			displayParts,
+			value: displayValue,
 			copyValue: canonicalResult,
 			exchangeRateInfo: expressionResult.exchangeRateInfo,
 		};
