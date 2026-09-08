@@ -6,6 +6,7 @@ import { observer } from "mobx-react-lite";
 import { useEffect, useState } from "react";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useStore } from "store";
+import { abbreviatedExchangeRate, formatRateAge } from "lib/calculatorFormatting";
 import { expandCalculatorVariables, isCalculatorExpressionCandidate, validateCalculatorVariableName } from "lib/unitExpression";
 
 const VariableSettings = observer(() => {
@@ -68,14 +69,11 @@ const CurrencyRateSettings = observer(() => {
 		parsedInterval >= MIN_CURRENCY_REFRESH_INTERVAL_MINUTES &&
 		parsedInterval <= MAX_CURRENCY_REFRESH_INTERVAL_MINUTES;
 	const snapshot = store.currencyRates.snapshot;
-	const numberFormatter = new Intl.NumberFormat(undefined, {
-		maximumSignificantDigits: 8,
-	});
 	const snapshotSummary = snapshot
-		? `1 EUR = ${numberFormatter.format(Number(snapshot.rates.USD))} USD · 1 BTC = ${numberFormatter.format(1 / Number(snapshot.rates.BTC))} EUR`
+		? `1 EUR = ${abbreviatedExchangeRate(snapshot.rates.USD, "EUR", "USD")} USD · 1 BTC = ${Math.round(1 / Number(snapshot.rates.BTC))} EUR`
 		: "No exchange rate cached yet";
 	const timestamp = snapshot
-		? new Date(snapshot.fetchedAt).toLocaleString()
+		? formatRateAge(snapshot.fetchedAt)
 		: null;
 
 	return (
@@ -113,7 +111,7 @@ const CurrencyRateSettings = observer(() => {
 				{store.currencyRates.isRefreshing
 					? "Refreshing…"
 					: timestamp
-						? `Retrieved ${timestamp}`
+						? timestamp
 						: store.currencyRates.lastError ?? "Waiting for the first refresh"}
 			</Text>
 

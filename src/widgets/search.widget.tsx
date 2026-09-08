@@ -10,6 +10,7 @@ import { MainInput } from "components/MainInput";
 import { isNetworkQuery, NetworkPanel } from "components/NetworkPanel";
 import { renderToKeys } from "lib/shortcuts";
 import { solNative } from "lib/SolNative";
+import { formatRateAge } from "lib/calculatorFormatting";
 import { observer } from "mobx-react-lite";
 import { type FC, useEffect, useRef, useState } from "react";
 import {
@@ -39,16 +40,14 @@ const SEARCH_TABS = [
 
 const SEARCH_ITEM_HEIGHT = 56;
 
-const formatRateTimestamp = (timestamp: number) => {
-	try {
-		return new Intl.DateTimeFormat(undefined, {
-			dateStyle: "short",
-			timeStyle: "short",
-		}).format(new Date(timestamp));
-	} catch {
-		return new Date(timestamp).toLocaleString();
-	}
-};
+function RateAge({ timestamp }: { timestamp: number }) {
+	const [now, setNow] = useState(Date.now);
+	useEffect(() => {
+		const timer = setInterval(() => setNow(Date.now()), 60000);
+		return () => clearInterval(timer);
+	}, []);
+	return <Text>{formatRateAge(timestamp, now)}</Text>;
+}
 
 function getSearchItemType(item: Item) {
 	return item.type === ItemType.TEMPORARY_RESULT ? "temporary" : "standard";
@@ -86,10 +85,9 @@ function TemporaryResultView({
 							<Text
 								className="max-w-[52%] text-xxs darker-text opacity-70"
 								numberOfLines={1}
-								accessibilityLabel={`${result.exchangeRateInfo.summary}. Retrieved ${formatRateTimestamp(result.exchangeRateInfo.fetchedAt)}`}
+								accessibilityLabel={`${result.exchangeRateInfo.summary}. ${formatRateAge(result.exchangeRateInfo.fetchedAt)}`}
 							>
-								{result.exchangeRateInfo.summary} · retrieved{" "}
-								{formatRateTimestamp(result.exchangeRateInfo.fetchedAt)}
+								{result.exchangeRateInfo.summary.split(/(\.\.\.)/).map((text, index) => <Text key={index} style={text === "..." ? { color: "#a3a3a3" } : undefined}>{text}</Text>)} · <RateAge timestamp={result.exchangeRateInfo.fetchedAt} />
 							</Text>
 						)}
 					</View>
