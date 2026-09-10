@@ -24,6 +24,11 @@ test("abbreviates fiat outputs only at monetary exponent +1", () => {
 	const rates = { ...currencyRates, rates: { ...currencyRates.rates, USD: "1.178945" } };
 	assert.equal(evaluateCalculatorExpression("EUR in USD", rates).exchangeRateInfo.summary, "1 EUR = 1.17... USD");
 	assert.equal(evaluateCalculatorExpression("USD in EUR", rates).exchangeRateInfo.summary, "1 USD = 0.84... EUR");
+	const bitcoinRates = { ...currencyRates, rates: { EUR: "1", USD: "1", BTC: "0.000012956742123" } };
+	const bitcoinPrice = evaluateCalculatorExpression("1 BTC in USD", bitcoinRates);
+	assert.equal(bitcoinPrice.displayValue, "77180");
+	assert.equal(bitcoinPrice.displayValue.includes("..."), false);
+	assert.notEqual(bitcoinPrice.formattedValue, bitcoinPrice.displayValue);
 	const now = 1700000000000;
 	assert.equal(formatRateAge(now - 15 * 60000, now), "15 minutes ago");
 	assert.equal(formatRateAge(now - 3 * 3600000, now), "3 hours ago");
