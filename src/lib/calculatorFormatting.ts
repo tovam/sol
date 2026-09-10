@@ -4,7 +4,8 @@ import Big from "big.js";
 export function abbreviatedDecimal(value: string, decimals = 2): string {
 	const exact = new Big(value);
 	const truncated = exact.round(decimals, Big.roundDown);
-	return `${exact.lt("0") && truncated.eq("0") ? "-" : ""}${truncated.toFixed()}${exact.eq(truncated) ? "" : "..."}`;
+	const isAbbreviated = !exact.eq(truncated);
+	return `${exact.lt("0") && truncated.eq("0") ? "-" : ""}${truncated.toFixed(isAbbreviated ? decimals : undefined)}${isAbbreviated ? "..." : ""}`;
 }
 
 const RATE_DECIMALS: Record<string, number> = { "EUR/USD": 2 };

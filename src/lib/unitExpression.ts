@@ -1561,8 +1561,6 @@ export function evaluateCalculatorExpression(
 		const value = source.value.div(target.value);
 		const resultCurrencies = currencyCodesInExpression(resolvedTargetUnit);
 		const abbreviateMoney = source.dimensions[5] === 1 && resultCurrencies.length === 1 && resultCurrencies[0] !== "BTC";
-		const sourceCurrencies = currencyCodesInExpression(expression);
-		const bitcoinPriceInFiat = abbreviateMoney && sourceCurrencies.includes("BTC");
 		const rateSummary = currencyRates
 			? exchangeRateSummary(expression, resolvedTargetUnit, currencyRates)
 			: null;
@@ -1574,11 +1572,7 @@ export function evaluateCalculatorExpression(
 			targetUnit: resolvedTargetUnit,
 			value: value.toString(),
 			formattedValue: formatResult(value),
-			...(bitcoinPriceInFiat
-				? { displayValue: value.round(0, Big.roundHalfEven).toFixed(0) }
-				: abbreviateMoney
-					? { displayValue: abbreviatedDecimal(value.toString()) }
-					: {}),
+			...(abbreviateMoney ? { displayValue: abbreviatedDecimal(value.toString()) } : {}),
 			hasUnits: true,
 			...(rateSummary
 				? {
