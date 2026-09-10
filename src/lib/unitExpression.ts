@@ -1293,11 +1293,23 @@ function splitConversionExpression(normalized: string) {
 	}
 
 	// Separate the conversion first: inv applies to the quantity, never its destination.
-	const source = separatorIndex < 0 ? normalized : normalized.slice(0, separatorIndex).trim();
-	const inverse = source.match(/^inv\s+(.+)$/i) ?? source.match(/^(.+)\s+inv$/i);
+	let source = separatorIndex < 0 ? normalized : normalized.slice(0, separatorIndex).trim();
+	let targetUnit = separatorIndex < 0 ? "" : normalized.slice(separatorIndex + 4).trim();
+	let inverse = false;
+	const stripInverse = (text: string) => {
+		let cleaned = text;
+		for (;;) {
+			const next = cleaned.replace(/^inv\s+/i, "").replace(/\s+inv$/i, "").trim();
+			if (next === cleaned) return cleaned;
+			inverse = true;
+			cleaned = next;
+		}
+	};
+	source = stripInverse(source);
+	targetUnit = stripInverse(targetUnit);
 	return {
-		expression: inverse ? `1/(${inverse[1].trim()})` : source,
-		targetUnit: separatorIndex < 0 ? "" : normalized.slice(separatorIndex + 4).trim(),
+		expression: inverse ? `1/(${source})` : source,
+		targetUnit,
 		hasExplicitTarget: separatorIndex >= 0,
 	};
 }
