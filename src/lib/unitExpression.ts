@@ -1449,8 +1449,8 @@ export function evaluateCalculatorExpression(
 			currencyRates,
 			monthDays,
 		);
-		const source = parsedSource.quantity;
-		const interpretedSource = renderParsedExpression(parsedSource.expression);
+		let source = parsedSource.quantity;
+		let interpretedSource = renderParsedExpression(parsedSource.expression);
 		if (hasExplicitTarget && targetUnit.toLowerCase() === "hmin") {
 			if (!dimensionsMatch(source.dimensions, TIME)) return null;
 			const units = ["j", "h", "min", "s", "ms"];
@@ -1504,6 +1504,12 @@ export function evaluateCalculatorExpression(
 			: inferTargetUnit(source, currencyRates);
 		const resolvedTargetUnit = inferredTarget?.unit ?? targetUnit;
 		const target = inferredTarget?.quantity ?? parsedTarget?.quantity;
+		if (hasExplicitTarget && target && !dimensionsMatch(source.dimensions, target.dimensions)
+			&& dimensionsMatch(subtractDimensions(DIMENSIONLESS, source.dimensions), target.dimensions)) {
+			if (source.value.eq("0")) return null;
+			source = quantity(new Big("1").div(source.value), target.dimensions, true);
+			interpretedSource = `1/(${interpretedSource})`;
+		}
 		if (
 			target == null ||
 			!dimensionsMatch(source.dimensions, target.dimensions) ||

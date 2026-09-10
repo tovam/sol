@@ -92,6 +92,13 @@ test("inverts the entire expression with a leading or trailing inv", () => {
 });
 
 test("uses exact decimal arithmetic", () => {
+	assert.equal(evaluate("2m/s in s/m").value, "0.5");
+	assert.equal(evaluate("2m/s in s/km").value, "500");
+	assert.equal(evaluate("2s/m in m/s").value, "0.5");
+	assert.equal(evaluate("2m/s in m/s").value, "2");
+	assert.match(evaluate("2m/s in s/m").interpretedExpression, /^1\/\(/);
+	assert.equal(evaluateCalculatorExpression("0m/s in s/m"), null);
+	assert.equal(evaluateCalculatorExpression("2m/s in kg"), null);
 	const variables = { zzz: "2384 m/s", toto: "1/(23 km/h) * e * pi*c", v2: "zzz * 2", period: "2w", fee: "2 USD" };
 	for (const [query, expanded] of [["2 * zzz in km/h", "2 * (2384 m/s) in km/h"], ["toto", "1/(23 km/h) * e * pi*c"], ["v2 in m/s", "4768m/s in m/s"], ["inv period in Hz", "inv 2w in Hz"]]) {
 		assert.equal(isCalculatorExpressionCandidate(query, variables), true);
