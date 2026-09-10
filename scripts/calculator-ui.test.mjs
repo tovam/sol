@@ -16,7 +16,7 @@ test("month settings gate recognition and attach both result conventions", () =>
 	const money = parseCalculation("12.3456 USD/h in USD/h", rates);
 	assert.equal(money.value, "12.34... USD/h");
 	assert.equal(money.copyValue, "12.3456 USD/h");
-	assert.deepEqual(money.displayParts[1], { text: "...", muted: true });
+	assert.deepEqual(money.displayParts[1], { text: "...", subtle: true });
 	const variables = { zzz: "2384 m/s", delay: "1month", interval: "8j" };
 	assert.equal(parseCalculation("zzz in m/s", null, undefined, false, variables).value, "2384 m/s");
 	assert.equal(parseCalculation("delay in d", null, undefined, false, variables), null);

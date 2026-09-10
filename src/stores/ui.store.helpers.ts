@@ -32,7 +32,7 @@ export type TemporaryResult =
 			kind: "calculation";
 			expression: string;
 			interpretedExpression?: string;
-			displayParts?: { text: string; muted?: boolean; small?: boolean }[];
+			displayParts?: { text: string; muted?: boolean; small?: boolean; subtle?: boolean }[];
 			monthWarning?: string;
 			monthAlternative?: string;
 			value: string;
@@ -411,7 +411,7 @@ function parseCalculationValue(
 		const canonicalResult = `${expressionResult.formattedValue}${canonicalSuffix}`;
 		const displayValue = `${expressionResult.displayValue ?? expressionResult.formattedValue}${displaySuffix}`;
 		const displayParts = expressionResult.displayValue?.includes("...")
-			? displayValue.split(/(\.\.\.)/).filter(Boolean).map((text) => ({ text, muted: text === "..." }))
+			? displayValue.split(/(\.\.\.)/).filter(Boolean).map((text) => ({ text, subtle: text === "..." }))
 			: expressionResult.displayParts;
 		return {
 			kind: "calculation",

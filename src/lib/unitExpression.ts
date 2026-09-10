@@ -83,7 +83,7 @@ export type CalculatorExpressionResult = {
 	value: string;
 	formattedValue: string;
 	displayValue?: string;
-	displayParts?: { text: string; muted?: boolean; small?: boolean }[];
+	displayParts?: { text: string; muted?: boolean; small?: boolean; subtle?: boolean }[];
 	hasUnits: boolean;
 	exchangeRateInfo?: {
 		summary: string;

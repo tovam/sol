@@ -87,7 +87,7 @@ function TemporaryResultView({
 								numberOfLines={1}
 								accessibilityLabel={`${result.exchangeRateInfo.summary}. ${formatRateAge(result.exchangeRateInfo.fetchedAt)}`}
 							>
-								{result.exchangeRateInfo.summary.split(/(\.\.\.)/).map((text, index) => <Text key={index} style={text === "..." ? { color: "#a3a3a3" } : undefined}>{text}</Text>)} · <RateAge timestamp={result.exchangeRateInfo.fetchedAt} />
+								{result.exchangeRateInfo.summary.split(/(\.\.\.)/).map((text, index) => <Text key={index} style={text === "..." ? { color: "#c7c7cc" } : undefined}>{text}</Text>)} · <RateAge timestamp={result.exchangeRateInfo.fetchedAt} />
 							</Text>
 						)}
 					</View>
@@ -101,6 +101,7 @@ function TemporaryResultView({
 							<Text key={index} style={{
 								...(part.small ? { fontSize: 18 } : {}),
 								...(part.muted ? { color: isDarkMode ? "#a3a3a3" : "#737373" } : {}),
+								...(part.subtle ? { color: "#c7c7cc" } : {}),
 							}}>{part.text}</Text>
 						)) : result.value}
 					</Text>
