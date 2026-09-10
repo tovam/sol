@@ -1311,7 +1311,26 @@ function splitConversionExpression(normalized: string) {
 		expression: inverse ? `1/(${source})` : source,
 		targetUnit,
 		hasExplicitTarget: separatorIndex >= 0,
+		inverseRequested: inverse,
 	};
+}
+
+function reciprocalUnitLabel(input: string) {
+	const unitExpression = input.trim();
+	if (/^1\s*\//.test(unitExpression)) {
+		return unitExpression.replace(/^1\s*\/\s*/, "").replace(/^\((.*)\)$/, "$1");
+	}
+	let depth = 0;
+	for (let index = 0; index < unitExpression.length; index += 1) {
+		if (unitExpression[index] === "(") depth += 1;
+		else if (unitExpression[index] === ")") depth -= 1;
+		else if (unitExpression[index] === "/" && depth === 0) {
+			const numerator = unitExpression.slice(0, index).trim();
+			const denominator = unitExpression.slice(index + 1).trim().replace(/^\((.*)\)$/, "$1");
+			return numerator === "1" ? denominator : `${denominator}/${numerator}`;
+		}
+	}
+	return `1/(${unitExpression})`;
 }
 
 function tokensFormCompleteCalculatorInput(tokens: Token[]) {
@@ -1451,7 +1470,7 @@ export function evaluateCalculatorExpression(
 ): CalculatorExpressionResult | null {
 	try { query = expandCalculatorVariables(query, variables); } catch { return null; }
 	const normalized = normalizeExpression(query);
-	const { expression, targetUnit, hasExplicitTarget } =
+	const { expression, targetUnit, hasExplicitTarget, inverseRequested } =
 		splitConversionExpression(normalized);
 	if (!expression || (hasExplicitTarget && !targetUnit)) return null;
 
@@ -1514,13 +1533,22 @@ export function evaluateCalculatorExpression(
 		const inferredTarget = hasExplicitTarget
 			? null
 			: inferTargetUnit(source, currencyRates);
-		const resolvedTargetUnit = inferredTarget?.unit ?? targetUnit;
-		const target = inferredTarget?.quantity ?? parsedTarget?.quantity;
+		let resolvedTargetUnit = inferredTarget?.unit ?? targetUnit;
+		let target = inferredTarget?.quantity ?? parsedTarget?.quantity;
 		if (hasExplicitTarget && target && !dimensionsMatch(source.dimensions, target.dimensions)
 			&& dimensionsMatch(subtractDimensions(DIMENSIONLESS, source.dimensions), target.dimensions)) {
-			if (source.value.eq("0")) return null;
-			source = quantity(new Big("1").div(source.value), target.dimensions, true);
-			interpretedSource = `1/(${interpretedSource})`;
+			if (inverseRequested) {
+				target = quantity(
+					new Big("1").div(target.value),
+					subtractDimensions(DIMENSIONLESS, target.dimensions),
+					true,
+				);
+				resolvedTargetUnit = reciprocalUnitLabel(targetUnit);
+			} else {
+				if (source.value.eq("0")) return null;
+				source = quantity(new Big("1").div(source.value), target.dimensions, true);
+				interpretedSource = `1/(${interpretedSource})`;
+			}
 		}
 		if (
 			target == null ||
@@ -1541,7 +1569,7 @@ export function evaluateCalculatorExpression(
 		return {
 			expression,
 			interpretedExpression: parsedTarget
-				? `${interpretedSource} → ${renderParsedExpression(parsedTarget.expression)}`
+				? `${interpretedSource} → ${resolvedTargetUnit === targetUnit ? renderParsedExpression(parsedTarget.expression) : resolvedTargetUnit}`
 				: interpretedSource,
 			targetUnit: resolvedTargetUnit,
 			value: value.toString(),

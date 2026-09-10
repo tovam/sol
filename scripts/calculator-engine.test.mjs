@@ -79,9 +79,19 @@ test("inverts the entire expression with a leading or trailing inv", () => {
 			assert.equal(isCalculatorExpressionCandidate(query), true, query);
 			assert.equal(evaluate(query).value, evaluate("1/(2w) in Hz").value, query);
 		}
-		assert.equal(evaluate(`2m/s in ${marker} m/s`).value, "2");
+		assert.equal(evaluate(`2m/s in ${marker} m/s`).value, "0.5");
+		assert.equal(evaluate(`2m/s in ${marker} m/s`).targetUnit, "s/m");
 		assert.equal(evaluate(`2m/s in ${marker} s/m`).value, "0.5");
+		assert.equal(evaluate(`2m/s in ${marker} s/m`).targetUnit, "s/m");
 	}
+	for (const query of ["inv 2m/s in km/h", "2m/s inv in km/h", "2m/s in inv km/h"]) {
+		const result = evaluate(query);
+		assert.equal(result.value, "0.1388888888888888888888888888888888888889", query);
+		assert.equal(result.targetUnit, "h/km", query);
+		assert.match(result.interpretedExpression, /→ h\/km$/, query);
+	}
+	assert.equal(evaluate("inv 2m/s in h/km").targetUnit, "h/km");
+	assert.equal(evaluate("2m/s in km/h").formattedValue, "7.2");
 	for (const query of ["inv 2w in Hz", "2w inv in Hz", "INV 2w TO Hz"]) {
 		assert.equal(isCalculatorExpressionCandidate(query), true);
 		assert.deepEqual(evaluate(query), evaluate("1/(2w) in Hz"));
