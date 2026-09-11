@@ -21,6 +21,8 @@ test("month settings gate recognition and attach both result conventions", () =>
 	assert.equal(hexadecimal.value, "17 m · 0x11 m");
 	assert.deepEqual(hexadecimal.displayParts.at(-1), { text: " · 0x11 m", muted: true });
 	assert.equal(parseCalculation("0x123456.123456").value, "1 193 046.071 111 08 · 0x12 3456.1234 56");
+	assert.equal(parseCalculation("1234567 in dec").value, "1 234 567");
+	assert.equal(parseCalculation("65536 in hex").value, "0x1 0000");
 	const variables = { zzz: "2384 m/s", delay: "1month", interval: "8j" };
 	assert.equal(parseCalculation("zzz in m/s", null, undefined, false, variables).value, "2 384 m/s");
 	assert.equal(parseCalculation("delay in d", null, undefined, false, variables), null);

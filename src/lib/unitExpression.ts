@@ -12,7 +12,7 @@ export type CalculatorVariables = Record<string, string>;
 
 export function validateCalculatorVariableName(name: string): string | null {
 	if (!/^[A-Za-z_][A-Za-z_0-9]*$/.test(name)) return "Use letters, digits and underscores; do not start with a digit.";
-	if (["today", "now", "inv", "in", "to", "mod", "of", "hmin", "mo", "month", "months"].includes(name.toLowerCase()) || FUNCTION_NAMES.has(name.toLowerCase())) return "This name is reserved by the calculator.";
+	if (["today", "now", "inv", "in", "to", "mod", "of", "hmin", "hex", "dec", "oct", "bin", "mo", "month", "months"].includes(name.toLowerCase()) || FUNCTION_NAMES.has(name.toLowerCase())) return "This name is reserved by the calculator.";
 	try { resolveIdentifier(name); return "This name is already a unit or constant."; } catch { return null; }
 }
 
@@ -1346,6 +1346,13 @@ function radicesInExpression(input: string) {
 	return tokenize(input).flatMap((token) => token.type === "number" && token.radix ? [token.radix] : []);
 }
 
+const OUTPUT_RADICES: Record<string, 2 | 8 | 10 | 16> = {
+	bin: 2,
+	oct: 8,
+	dec: 10,
+	hex: 16,
+};
+
 function splitConversionExpression(normalized: string) {
 	let depth = 0;
 	let separatorIndex = -1;
@@ -1488,6 +1495,7 @@ export function isCalculatorExpressionCandidate(query: string, variables: Calcul
 		return (
 			!hasExplicitTarget ||
 			targetUnit.toLowerCase() === "hmin" ||
+			OUTPUT_RADICES[targetUnit.toLowerCase()] != null ||
 			tokensFormCompleteCalculatorInput(tokenize(targetUnit))
 		);
 	} catch {
@@ -1554,6 +1562,39 @@ export function evaluateCalculatorExpression(
 		);
 		let source = parsedSource.quantity;
 		let interpretedSource = renderParsedExpression(parsedSource.expression);
+		const outputRadix = hasExplicitTarget
+			? OUTPUT_RADICES[targetUnit.toLowerCase()]
+			: undefined;
+		if (outputRadix != null) {
+			const inferredTarget = isDimensionless(source.dimensions)
+				? null
+				: inferTargetUnit(source, currencyRates);
+			if (!isDimensionless(source.dimensions) && !inferredTarget) return null;
+			const value = inferredTarget
+				? source.value.div(inferredTarget.quantity.value)
+				: source.value;
+			const resolvedTargetUnit = inferredTarget?.unit ?? "";
+			const rateSummary = currencyRates
+				? exchangeRateSummary(expression, resolvedTargetUnit, currencyRates)
+				: null;
+			return {
+				expression,
+				interpretedExpression: `${interpretedSource} → ${targetUnit.toLowerCase()}`,
+				targetUnit: resolvedTargetUnit,
+				value: value.toString(),
+				formattedValue: outputRadix === 10
+					? formatResult(value)
+					: formatBasedNumber(value, outputRadix),
+				hasUnits: !isDimensionless(source.dimensions),
+				...(rateSummary
+					? { exchangeRateInfo: {
+							summary: rateSummary,
+							fetchedAt: currencyRates!.fetchedAt,
+							source: currencyRates!.source,
+						} }
+					: {}),
+			};
+		}
 		const resultRadices = [...new Set([
 			...radicesInExpression(expression),
 			...radicesInExpression(targetUnit),

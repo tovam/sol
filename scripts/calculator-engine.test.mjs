@@ -208,6 +208,23 @@ test("parses hexadecimal and octal literals including fractions", () => {
 	assert.equal(isCalculatorExpressionCandidate("0XFF + 0O10 + 0b10 + 0B1"), true);
 });
 
+test("selects an explicit binary, octal, decimal, or hexadecimal output", () => {
+	assert.equal(evaluate("255 in hex").formattedValue, "0xFF");
+	assert.equal(evaluate("65536 IN HEX").formattedValue, "0x1 0000");
+	assert.equal(evaluate("64 in oct").formattedValue, "0o100");
+	assert.equal(evaluate("10 in bin").formattedValue, "0b1010");
+	assert.equal(evaluate("0xFF in dec").formattedValue, "255");
+	assert.equal(evaluate("0xFF in dec").radixValues, undefined);
+	assert.equal(evaluate("10 / 3 in hex").formattedValue, "0x3.5555 5555 5555...");
+	assert.equal(evaluate("0O10 in bin").formattedValue, "0b1000");
+	const dimensioned = evaluate("0b10000m in hex");
+	assert.equal(dimensioned.formattedValue, "0x10");
+	assert.equal(dimensioned.targetUnit, "m");
+	for (const format of ["hex", "dec", "oct", "bin"]) {
+		assert.equal(isCalculatorExpressionCandidate(`42 in ${format}`), true, format);
+	}
+});
+
 test("recognizes complete calculator input without evaluating it", () => {
 	assert.equal(isCalculatorExpressionCandidate("exp(40)"), true);
 	assert.equal(isCalculatorExpressionCandidate("26**8"), true);
