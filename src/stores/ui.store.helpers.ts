@@ -409,10 +409,17 @@ function parseCalculationValue(
 			? ` ${formatCalculatorUnitForDisplay(expressionResult.targetUnit)}`
 			: "";
 		const canonicalResult = `${expressionResult.formattedValue}${canonicalSuffix}`;
-		const displayValue = `${expressionResult.displayValue ?? expressionResult.formattedValue}${displaySuffix}`;
-		const displayParts = expressionResult.displayValue?.includes("...")
-			? displayValue.split(/(\.\.\.)/).filter(Boolean).map((text) => ({ text, subtle: text === "..." }))
+		const primaryDisplayValue = `${expressionResult.displayValue ?? expressionResult.formattedValue}${displaySuffix}`;
+		const hexadecimalDisplayValue = expressionResult.hexadecimalValue
+			? ` · ${expressionResult.hexadecimalValue}${displaySuffix}`
+			: "";
+		const displayValue = `${primaryDisplayValue}${hexadecimalDisplayValue}`;
+		const primaryDisplayParts = expressionResult.displayValue?.includes("...")
+			? primaryDisplayValue.split(/(\.\.\.)/).filter(Boolean).map((text) => ({ text, subtle: text === "..." }))
 			: expressionResult.displayParts;
+		const displayParts = expressionResult.hexadecimalValue
+			? [...(primaryDisplayParts ?? [{ text: primaryDisplayValue }]), { text: hexadecimalDisplayValue, muted: true }]
+			: primaryDisplayParts;
 		return {
 			kind: "calculation",
 			expression: query.trim().replace(/\s+/g, " "),

@@ -185,6 +185,26 @@ test("uses exact decimal arithmetic", () => {
 	assert.equal(evaluate("0.1 + 0.2").value, "0.3");
 });
 
+test("parses hexadecimal and octal literals including fractions", () => {
+	assert.equal(evaluate("0xA + 5").formattedValue, "15");
+	assert.equal(evaluate("0xA + 5").hexadecimalValue, "0xF");
+	assert.equal(evaluate("0XA.B + 0.5").formattedValue, "11.1875");
+	assert.equal(evaluate("0XA.B + 0.5").hexadecimalValue, "0xB.3");
+	assert.equal(evaluate("0xAB,3F").formattedValue, "171.24609375");
+	assert.equal(evaluate("0xAB,3F").hexadecimalValue, "0xAB.3F");
+	assert.equal(evaluate("0x1,234").hexadecimalValue, "0x1.234");
+	assert.equal(evaluate("0o10 + 1").formattedValue, "9");
+	assert.equal(evaluate("0o10 + 1").hexadecimalValue, undefined);
+	assert.equal(evaluate("0o7.4").formattedValue, "7.5");
+	assert.equal(evaluate("0x10m / 0o4s").formattedValue, "4");
+	assert.equal(evaluate("0x10m / 0o4s").hexadecimalValue, "0x4");
+	assert.equal(evaluate("max(0xA,0xB)").hexadecimalValue, "0xB");
+	assert.equal(evaluate("0xA / 3").hexadecimalValue, "0x3.555555555555...");
+	assert.equal(evaluateCalculatorExpression("0xA + 1", null, undefined, { xA: "99" }).formattedValue, "11");
+	assert.equal(evaluate("10m in 0x2m").hexadecimalValue, "0x5");
+	assert.equal(isCalculatorExpressionCandidate("0XFF + 0o10"), true);
+});
+
 test("recognizes complete calculator input without evaluating it", () => {
 	assert.equal(isCalculatorExpressionCandidate("exp(40)"), true);
 	assert.equal(isCalculatorExpressionCandidate("26**8"), true);
