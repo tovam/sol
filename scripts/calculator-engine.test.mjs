@@ -187,22 +187,25 @@ test("uses exact decimal arithmetic", () => {
 
 test("parses hexadecimal and octal literals including fractions", () => {
 	assert.equal(evaluate("0xA + 5").formattedValue, "15");
-	assert.equal(evaluate("0xA + 5").hexadecimalValue, "0xF");
+	assert.deepEqual(evaluate("0xA + 5").radixValues, ["0xF"]);
 	assert.equal(evaluate("0XA.B + 0.5").formattedValue, "11.1875");
-	assert.equal(evaluate("0XA.B + 0.5").hexadecimalValue, "0xB.3");
+	assert.deepEqual(evaluate("0XA.B + 0.5").radixValues, ["0xB.3"]);
 	assert.equal(evaluate("0xAB,3F").formattedValue, "171.24609375");
-	assert.equal(evaluate("0xAB,3F").hexadecimalValue, "0xAB.3F");
-	assert.equal(evaluate("0x1,234").hexadecimalValue, "0x1.234");
+	assert.deepEqual(evaluate("0xAB,3F").radixValues, ["0xAB.3F"]);
+	assert.deepEqual(evaluate("0x1,234").radixValues, ["0x1.234"]);
 	assert.equal(evaluate("0o10 + 1").formattedValue, "9");
-	assert.equal(evaluate("0o10 + 1").hexadecimalValue, undefined);
+	assert.deepEqual(evaluate("0o10 + 1").radixValues, ["0o11"]);
+	assert.deepEqual(evaluate("0O7777 + 1").radixValues, ["0o10 000"]);
 	assert.equal(evaluate("0o7.4").formattedValue, "7.5");
 	assert.equal(evaluate("0x10m / 0o4s").formattedValue, "4");
-	assert.equal(evaluate("0x10m / 0o4s").hexadecimalValue, "0x4");
-	assert.equal(evaluate("max(0xA,0xB)").hexadecimalValue, "0xB");
-	assert.equal(evaluate("0xA / 3").hexadecimalValue, "0x3.555555555555...");
+	assert.deepEqual(evaluate("0x10m / 0o4s").radixValues, ["0x4", "0o4"]);
+	assert.deepEqual(evaluate("max(0xA,0xB)").radixValues, ["0xB"]);
+	assert.deepEqual(evaluate("0xA / 3").radixValues, ["0x3.5555 5555 5555..."]);
 	assert.equal(evaluateCalculatorExpression("0xA + 1", null, undefined, { xA: "99" }).formattedValue, "11");
-	assert.equal(evaluate("10m in 0x2m").hexadecimalValue, "0x5");
-	assert.equal(isCalculatorExpressionCandidate("0XFF + 0o10"), true);
+	assert.deepEqual(evaluate("10m in 0x2m").radixValues, ["0x5"]);
+	assert.deepEqual(evaluate("0b111100001111 + 1").radixValues, ["0b1111 0001 0000"]);
+	assert.deepEqual(evaluate("0B1.01 + 0O1.4").radixValues, ["0b10.11", "0o2.6"]);
+	assert.equal(isCalculatorExpressionCandidate("0XFF + 0O10 + 0b10 + 0B1"), true);
 });
 
 test("recognizes complete calculator input without evaluating it", () => {
@@ -226,7 +229,7 @@ test("converts EUR, USD and BTC as case-insensitive units", () => {
 
 	const result = evaluateCurrency("btc in $");
 	assert.deepEqual(result.exchangeRateInfo, {
-		summary: "1 BTC = 20000 USD",
+		summary: "1 BTC = 20 000 USD",
 		fetchedAt: currencyRates.fetchedAt,
 		source: "Coinbase",
 	});
@@ -235,11 +238,11 @@ test("converts EUR, USD and BTC as case-insensitive units", () => {
 test("displays rounded Bitcoin reference rates in the same direction", () => {
 	const rates = { ...currencyRates, rates: { EUR: "1", USD: "1.23456", BTC: "0.00003" } };
 	for (const [query, summary] of [
-		["BTC in USD", "1 BTC = 41152 USD"],
-		["USD in BTC", "1 BTC = 41152 USD"],
-		["€ in btc", "1 BTC = 33333 EUR"],
-		["btc in €", "1 BTC = 33333 EUR"],
-		["2 btc", "1 BTC = 33333 EUR"],
+		["BTC in USD", "1 BTC = 41 152 USD"],
+		["USD in BTC", "1 BTC = 41 152 USD"],
+		["€ in btc", "1 BTC = 33 333 EUR"],
+		["btc in €", "1 BTC = 33 333 EUR"],
+		["2 btc", "1 BTC = 33 333 EUR"],
 	]) {
 		assert.equal(evaluateCalculatorExpression(query, rates)?.exchangeRateInfo?.summary, summary, query);
 	}

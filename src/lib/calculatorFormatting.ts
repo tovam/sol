@@ -1,5 +1,22 @@
 import Big from "big.js";
 
+const THIN_SPACE = "\u2009";
+
+function groupDigits(value: string, size: number, fromRight: boolean) {
+	if (value.length <= size) return value;
+	if (fromRight) {
+		const first = value.length % size || size;
+		return [value.slice(0, first), ...(value.slice(first).match(new RegExp(`.{1,${size}}`, "g")) ?? [])].join(THIN_SPACE);
+	}
+	return value.match(new RegExp(`.{1,${size}}`, "g"))?.join(THIN_SPACE) ?? value;
+}
+
+export function groupDecimalForDisplay(input: string) {
+	return input.replace(/^(-?)(\d+)(?:\.(\d+))?([eE][+-]?\d+)?/, (_match, sign, integer, fraction, exponent) =>
+		`${sign}${groupDigits(integer, 3, true)}${fraction ? `.${groupDigits(fraction, 3, false)}` : ""}${exponent ?? ""}`,
+	);
+}
+
 // Display only: calculations and clipboard values keep their original precision.
 export function abbreviatedDecimal(value: string, decimals = 2): string {
 	const exact = new Big(value);

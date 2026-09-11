@@ -1,5 +1,5 @@
 import Big from "big.js";
-import { abbreviatedDecimal, abbreviatedExchangeRate } from "./calculatorFormatting.ts";
+import { abbreviatedDecimal, abbreviatedExchangeRate, groupDecimalForDisplay } from "./calculatorFormatting.ts";
 import {
 	currencyCodeForIdentifier,
 	type CurrencyCode,
@@ -30,8 +30,8 @@ export function expandCalculatorVariables(query: string, variables: CalculatorVa
 	let budget = 1000;
 	const expand = (text: string, path: string[]): string => {
 		if (text.length > 32768 || path.length > 32 || --budget < 0) throw new Error("Variable expression is too complex.");
-		const expanded = text.replace(/0[xX][0-9A-Fa-f]+(?:[.,][0-9A-Fa-f]+)?|0o[0-7]+(?:[.,][0-7]+)?|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?|[A-Za-z_][A-Za-z_0-9]*/g, (token) => {
-			if (/^0(?:[xX][0-9A-Fa-f]|o[0-7])/.test(token)) return token;
+		const expanded = text.replace(/0[xX][0-9A-Fa-f]+(?:\.[0-9A-Fa-f]+|,[0-9A-Fa-f]+(?![xX]))?|0[oO][0-7]+(?:\.[0-7]+|,[0-7]+(?![oO]))?|0[bB][01]+(?:\.[01]+|,[01]+(?![bB]))?|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?|[A-Za-z_][A-Za-z_0-9]*/g, (token) => {
+			if (/^0(?:[xX][0-9A-Fa-f]|[oO][0-7]|[bB][01])/.test(token)) return token;
 			if (!Object.hasOwn(variables, token)) return token;
 			if (path.includes(token)) throw new Error(`Circular variable reference: ${[...path, token].join(" → ")}`);
 			return `(${expand(variables[token], [...path, token])})`;
@@ -49,7 +49,7 @@ type Quantity = {
 };
 
 type Token = (
-	| { type: "number"; value: string; source?: string; radix?: 8 | 16 }
+	| { type: "number"; value: string; source?: string; radix?: 2 | 8 | 16 }
 	| { type: "identifier"; value: string }
 	| {
 			type: "operator";
@@ -83,7 +83,7 @@ export type CalculatorExpressionResult = {
 	targetUnit: string;
 	value: string;
 	formattedValue: string;
-	hexadecimalValue?: string;
+	radixValues?: string[];
 	displayValue?: string;
 	displayParts?: { text: string; muted?: boolean; small?: boolean; subtle?: boolean }[];
 	hasUnits: boolean;
@@ -353,7 +353,8 @@ function normalizeExpression(input: string) {
 	const normalized = normalizeCalculatorExpression(input)
 		.trim()
 		.replace(/(0[xX][0-9A-Fa-f]+),(?!0[xX])(?=[0-9A-Fa-f])/g, "$1.")
-		.replace(/(0o[0-7]+),(?!0o)(?=[0-7])/g, "$1.")
+		.replace(/(0[oO][0-7]+),(?!0[oO])(?=[0-7])/g, "$1.")
+		.replace(/(0[bB][01]+),(?!0[bB])(?=[01])/g, "$1.")
 		.replace(/π/g, "pi")
 		.replace(/[×·]/g, "*")
 		.replace(/÷/g, "/")
@@ -459,7 +460,7 @@ function resolveIdentifier(
 function tokenize(input: string): Token[] {
 	const tokens: Token[] = [];
 	const tokenPattern =
-		/\s*(?:(0[xX][0-9A-Fa-f]+(?:\.[0-9A-Fa-f]+|,[0-9A-Fa-f]+(?![xX]))?(?![0-9A-Fa-f_.])|0o[0-7]+(?:\.[0-7]+|,[0-7]+(?!o))?(?![0-7_.])|\d+(?:\.\d*)?(?:[eE][+-]?\d+)?|\.\d+(?:[eE][+-]?\d+)?)|([A-Za-zµμ°$€]+)|([()+\-*/^%,]))/y;
+		/\s*(?:(0[xX][0-9A-Fa-f]+(?:\.[0-9A-Fa-f]+|,[0-9A-Fa-f]+(?![xX]))?(?![0-9A-Fa-f_.])|0[oO][0-7]+(?:\.[0-7]+|,[0-7]+(?![oO]))?(?![0-7_.])|0[bB][01]+(?:\.[01]+|,[01]+(?![bB]))?(?![01_.])|\d+(?:\.\d*)?(?:[eE][+-]?\d+)?|\.\d+(?:[eE][+-]?\d+)?)|([A-Za-zµμ°$€]+)|([()+\-*/^%,]))/y;
 	let offset = 0;
 
 	while (offset < input.length) {
@@ -517,10 +518,11 @@ function tokenize(input: string): Token[] {
 	return tokens;
 }
 
-function parseBasedNumberLiteral(input: string): { value: string; radix: 8 | 16 } | null {
-	const match = input.match(/^0([xX]|o)([0-9A-Fa-f]+)(?:[.,]([0-9A-Fa-f]+))?$/);
+function parseBasedNumberLiteral(input: string): { value: string; radix: 2 | 8 | 16 } | null {
+	const match = input.match(/^0([xX]|[oO]|[bB])([0-9A-Fa-f]+)(?:[.,]([0-9A-Fa-f]+))?$/);
 	if (!match) return null;
-	const radix = match[1].toLowerCase() === "x" ? 16 : 8;
+	const prefix = match[1].toLowerCase();
+	const radix = prefix === "x" ? 16 : prefix === "o" ? 8 : 2;
 	const decode = (character: string) => Number.parseInt(character, radix);
 	if ([...match[2], ...(match[3] ?? "")].some((character) => !Number.isFinite(decode(character)))) return null;
 
@@ -1303,8 +1305,20 @@ function formatResult(value: Big) {
 	return value.prec(15, Big.roundHalfEven).toFixed();
 }
 
-function formatHexadecimal(value: Big) {
+function groupBasedDigits(value: string, size: number, fromRight: boolean) {
+	if (value.length <= size) return value;
+	if (fromRight) {
+		const first = value.length % size || size;
+		return [value.slice(0, first), ...(value.slice(first).match(new RegExp(`.{1,${size}}`, "g")) ?? [])].join("\u2009");
+	}
+	return value.match(new RegExp(`.{1,${size}}`, "g"))?.join("\u2009") ?? value;
+}
+
+function formatBasedNumber(value: Big, radix: 2 | 8 | 16) {
 	const digits = "0123456789ABCDEF";
+	const prefix = radix === 16 ? "0x" : radix === 8 ? "0o" : "0b";
+	const groupSize = radix === 8 ? 3 : 4;
+	const maximumFractionDigits = Math.ceil(48 / Math.log2(radix));
 	const negative = value.lt("0");
 	const absolute = value.abs();
 	let integer = absolute.round(0, Big.roundDown);
@@ -1312,24 +1326,24 @@ function formatHexadecimal(value: Big) {
 	const integerDigits: string[] = [];
 
 	do {
-		const digit = Number(integer.mod("16").toString());
+		const digit = Number(integer.mod(radix.toString()).toString());
 		integerDigits.push(digits[digit]);
-		integer = integer.div("16").round(0, Big.roundDown);
+		integer = integer.div(radix.toString()).round(0, Big.roundDown);
 	} while (!integer.eq("0"));
 
 	const fractionDigits: string[] = [];
-	for (let index = 0; index < 12 && !fraction.eq("0"); index += 1) {
-		fraction = fraction.times("16");
+	for (let index = 0; index < maximumFractionDigits && !fraction.eq("0"); index += 1) {
+		fraction = fraction.times(radix.toString());
 		const digit = Number(fraction.round(0, Big.roundDown).toString());
 		fractionDigits.push(digits[digit]);
 		fraction = fraction.minus(digit.toString());
 	}
 
-	return `${negative ? "-" : ""}0x${integerDigits.reverse().join("")}${fractionDigits.length ? `.${fractionDigits.join("")}` : ""}${fraction.eq("0") ? "" : "..."}`;
+	return `${negative ? "-" : ""}${prefix}${groupBasedDigits(integerDigits.reverse().join(""), groupSize, true)}${fractionDigits.length ? `.${groupBasedDigits(fractionDigits.join(""), groupSize, false)}` : ""}${fraction.eq("0") ? "" : "..."}`;
 }
 
-function containsHexadecimalLiteral(input: string) {
-	return tokenize(input).some((token) => token.type === "number" && token.radix === 16);
+function radicesInExpression(input: string) {
+	return tokenize(input).flatMap((token) => token.type === "number" && token.radix ? [token.radix] : []);
 }
 
 function splitConversionExpression(normalized: string) {
@@ -1494,9 +1508,9 @@ function exchangeRateSummary(
 		if (source !== target) {
 			if (source === "BTC" || target === "BTC") {
 				const fiat = source === "BTC" ? target : source;
-				return `1 BTC = ${new Big(currencyRates.rates[fiat])
+				return `1 BTC = ${groupDecimalForDisplay(new Big(currencyRates.rates[fiat])
 					.div(currencyRates.rates.BTC)
-					.toFixed(0)} ${fiat}`;
+					.toFixed(0))} ${fiat}`;
 			}
 			const rate = new Big(currencyRates.rates[target]).div(
 				currencyRates.rates[source],
@@ -1514,7 +1528,7 @@ function exchangeRateSummary(
 	}
 	if (codes.includes("BTC")) {
 		summaries.push(
-			`1 BTC = ${new Big("1").div(currencyRates.rates.BTC).toFixed(0)} EUR`,
+			`1 BTC = ${groupDecimalForDisplay(new Big("1").div(currencyRates.rates.BTC).toFixed(0))} EUR`,
 		);
 	}
 	return summaries.length > 0 ? summaries.join(" · ") : null;
@@ -1540,8 +1554,12 @@ export function evaluateCalculatorExpression(
 		);
 		let source = parsedSource.quantity;
 		let interpretedSource = renderParsedExpression(parsedSource.expression);
-		const showHexadecimalResult =
-			containsHexadecimalLiteral(expression) || containsHexadecimalLiteral(targetUnit);
+		const resultRadices = [...new Set([
+			...radicesInExpression(expression),
+			...radicesInExpression(targetUnit),
+		])];
+		const formatRadixValues = (value: Big) =>
+			resultRadices.map((radix) => formatBasedNumber(value, radix));
 		if (hasExplicitTarget && targetUnit.toLowerCase() === "hmin") {
 			if (!dimensionsMatch(source.dimensions, TIME)) return null;
 			const units = ["j", "h", "min", "s", "ms"];
@@ -1563,7 +1581,7 @@ export function evaluateCalculatorExpression(
 			return { expression, interpretedExpression: `${interpretedSource} → hmin`,
 				targetUnit: "", value: source.value.toString(),
 				formattedValue: displayParts.map((part) => part.text).join(""),
-				...(showHexadecimalResult ? { hexadecimalValue: formatHexadecimal(source.value) } : {}),
+				...(resultRadices.length ? { radixValues: formatRadixValues(source.value) } : {}),
 				hasUnits: true, displayParts };
 		}
 		if (!hasExplicitTarget && isDimensionless(source.dimensions)) {
@@ -1576,7 +1594,7 @@ export function evaluateCalculatorExpression(
 				targetUnit: "",
 				value: source.value.toString(),
 				formattedValue: formatResult(source.value),
-				...(showHexadecimalResult ? { hexadecimalValue: formatHexadecimal(source.value) } : {}),
+				...(resultRadices.length ? { radixValues: formatRadixValues(source.value) } : {}),
 				hasUnits: false,
 				...(rateSummary
 					? {
@@ -1634,7 +1652,7 @@ export function evaluateCalculatorExpression(
 			targetUnit: resolvedTargetUnit,
 			value: value.toString(),
 			formattedValue: formatResult(value),
-			...(showHexadecimalResult ? { hexadecimalValue: formatHexadecimal(value) } : {}),
+			...(resultRadices.length ? { radixValues: formatRadixValues(value) } : {}),
 			...(abbreviateMoney ? { displayValue: abbreviatedDecimal(value.toString()) } : {}),
 			hasUnits: true,
 			...(rateSummary

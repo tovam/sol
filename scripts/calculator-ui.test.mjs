@@ -4,7 +4,7 @@ import test from "node:test";
 
 // Resolve only the calculator's source aliases; never load the app or its data.
 registerHooks({ resolve(specifier, context, nextResolve) {
-	if (["lib/currencyRates", "lib/calculatorDates", "lib/unitExpression"].includes(specifier)) {
+	if (["lib/calculatorFormatting", "lib/currencyRates", "lib/calculatorDates", "lib/unitExpression"].includes(specifier)) {
 		return nextResolve(new URL(`../src/${specifier}.ts`, import.meta.url).href, context);
 	}
 	return nextResolve(specifier, context);
@@ -20,10 +20,11 @@ test("month settings gate recognition and attach both result conventions", () =>
 	const hexadecimal = parseCalculation("0x10m + 1m");
 	assert.equal(hexadecimal.value, "17 m · 0x11 m");
 	assert.deepEqual(hexadecimal.displayParts.at(-1), { text: " · 0x11 m", muted: true });
+	assert.equal(parseCalculation("0x123456.123456").value, "1 193 046.071 111 08 · 0x12 3456.1234 56");
 	const variables = { zzz: "2384 m/s", delay: "1month", interval: "8j" };
-	assert.equal(parseCalculation("zzz in m/s", null, undefined, false, variables).value, "2384 m/s");
+	assert.equal(parseCalculation("zzz in m/s", null, undefined, false, variables).value, "2 384 m/s");
 	assert.equal(parseCalculation("delay in d", null, undefined, false, variables), null);
-	assert.match(parseCalculation("delay in d", null, undefined, true, variables).monthAlternative, /30\.4375 d/);
+	assert.match(parseCalculation("delay in d", null, undefined, true, variables).monthAlternative, /30\.437 5 d/);
 	assert.equal(parseCalculation("2026-09-07 + interval", null, undefined, false, variables).value, "2026-09-15");
 	assert.equal(isCalculationCandidate("1month in d"), false);
 	assert.equal(isCalculationCandidate("1month in d", true), true);
@@ -31,7 +32,7 @@ test("month settings gate recognition and attach both result conventions", () =>
 	const result = parseCalculation("1month in d", null, undefined, true);
 	assert.equal(result.value, "30 d");
 	assert.match(result.monthWarning, /30 j/);
-	assert.match(result.monthAlternative, /30\.4375 d/);
+	assert.match(result.monthAlternative, /30\.437 5 d/);
 	assert.equal(parseCalculation("1j in h", null, undefined, true).monthWarning, undefined);
 	assert.match(parseCalculation("60d in month", null, undefined, true).monthAlternative, /1\.971/);
 	assert.match(parseCalculation("2026-01-01 + 1month", null, undefined, true).monthAlternative, /2026-01-31 10:30/);

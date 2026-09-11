@@ -1,6 +1,7 @@
 import axios from "axios";
 import * as chrono from "chrono-node";
 import convert from "convert-units";
+import { groupDecimalForDisplay } from "lib/calculatorFormatting";
 import type { CurrencyRateSnapshot } from "lib/currencyRates";
 import { evaluateDateCalculation, isDateCalculationCandidate } from "lib/calculatorDates";
 import {
@@ -409,16 +410,16 @@ function parseCalculationValue(
 			? ` ${formatCalculatorUnitForDisplay(expressionResult.targetUnit)}`
 			: "";
 		const canonicalResult = `${expressionResult.formattedValue}${canonicalSuffix}`;
-		const primaryDisplayValue = `${expressionResult.displayValue ?? expressionResult.formattedValue}${displaySuffix}`;
-		const hexadecimalDisplayValue = expressionResult.hexadecimalValue
-			? ` · ${expressionResult.hexadecimalValue}${displaySuffix}`
-			: "";
-		const displayValue = `${primaryDisplayValue}${hexadecimalDisplayValue}`;
+		const primaryDisplayValue = `${groupDecimalForDisplay(expressionResult.displayValue ?? expressionResult.formattedValue)}${displaySuffix}`;
+		const radixDisplayValue = expressionResult.radixValues
+			?.map((value) => ` · ${value}${displaySuffix}`)
+			.join("") ?? "";
+		const displayValue = `${primaryDisplayValue}${radixDisplayValue}`;
 		const primaryDisplayParts = expressionResult.displayValue?.includes("...")
 			? primaryDisplayValue.split(/(\.\.\.)/).filter(Boolean).map((text) => ({ text, subtle: text === "..." }))
 			: expressionResult.displayParts;
-		const displayParts = expressionResult.hexadecimalValue
-			? [...(primaryDisplayParts ?? [{ text: primaryDisplayValue }]), { text: hexadecimalDisplayValue, muted: true }]
+		const displayParts = expressionResult.radixValues?.length
+			? [...(primaryDisplayParts ?? [{ text: primaryDisplayValue }]), { text: radixDisplayValue, muted: true }]
 			: primaryDisplayParts;
 		return {
 			kind: "calculation",
