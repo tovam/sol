@@ -85,6 +85,9 @@ jobs:
                 done
           fi
 
+          # The real bundle is produced by Xcode. This was only a validation copy.
+          rm -rf "$RUNNER_TEMP/bundle-assets"
+          rm -f "$RUNNER_TEMP/main.jsbundle"
           exit "$bundle_status"
 
       - name: Install CocoaPods dependencies
@@ -124,6 +127,14 @@ jobs:
             DEVELOPMENT_TEAM="" \
             PROVISIONING_PROFILE_SPECIFIER="" \
             COMPILER_INDEX_STORE_ENABLE=NO \
+            DEBUG_INFORMATION_FORMAT=dwarf \
+            GCC_GENERATE_DEBUGGING_SYMBOLS=NO \
+            SWIFT_SERIALIZE_DEBUGGING_OPTIONS=NO \
+            ENABLE_TESTABILITY=NO \
+            DEAD_CODE_STRIPPING=YES \
+            COPY_PHASE_STRIP=YES \
+            STRIP_INSTALLED_PRODUCT=YES \
+            DEPLOYMENT_POSTPROCESSING=YES \
             build 2>&1 | tee "$RUNNER_TEMP/xcodebuild.log"
 
           build_status=${PIPESTATUS[0]}
@@ -159,6 +170,9 @@ jobs:
         run: |
           APP_PATH="$RUNNER_TEMP/DerivedData/Build/Products/Release/sol.app"
           test -d "$APP_PATH"
+          echo '### Build disk usage (before packaging)' >> "$GITHUB_STEP_SUMMARY"
+          du -sh "$RUNNER_TEMP/DerivedData" "$APP_PATH" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
           codesign --force --deep --sign - \
             --options runtime \
             --timestamp=none \
@@ -169,6 +183,12 @@ jobs:
             "$APP_PATH" \
             Sol-macOS-unsigned.zip
           du -sh Sol-macOS-unsigned.zip
+          echo '### Download size' >> "$GITHUB_STEP_SUMMARY"
+          du -sh Sol-macOS-unsigned.zip >> "$GITHUB_STEP_SUMMARY"
+          # The ZIP is the deliverable; discard generated intermediates and the
+          # duplicate app once it has been packaged and its signature verified.
+          rm -rf "$RUNNER_TEMP/DerivedData" "$RUNNER_TEMP/bundle-assets"
+          rm -f "$RUNNER_TEMP/main.jsbundle"
           df -h /
 
       - name: Upload application
@@ -177,7 +197,9 @@ jobs:
           name: Sol-macOS-unsigned
           path: Sol-macOS-unsigned.zip
           if-no-files-found: error
-          retention-days: 7
+          # The public release retains the download; this is only a job handoff.
+          retention-days: 1
+          compression-level: 0
 
   publish-development-release:
     name: Publish public development release
