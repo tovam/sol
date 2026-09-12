@@ -527,6 +527,8 @@ export const createUIStore = (root: IRootStore) => {
 	let calculationTimer: ReturnType<typeof setTimeout> | undefined;
 	let fileSearchRequestId = 0;
 	let fileSearchPrefetchTimer: ReturnType<typeof setTimeout> | undefined;
+	let retainedQueryTimer: ReturnType<typeof setTimeout> | undefined;
+	let queryExpiresAt = 0;
 	let fileSearchCacheEpoch = 0;
 	let displayedFileSearchKey: string | null = null;
 	const fileSearchCache = new Map<
@@ -2106,6 +2108,11 @@ export const createUIStore = (root: IRootStore) => {
 			}
 		},
 		onShow: ({ target }: { target?: string }) => {
+			if (retainedQueryTimer) clearTimeout(retainedQueryTimer);
+			retainedQueryTimer = undefined;
+			// Check wall-clock time too: timers may be suspended while the Mac sleeps.
+			if (queryExpiresAt && Date.now() >= queryExpiresAt) store.setQuery("");
+			queryExpiresAt = 0;
 			store.getApps();
 			store.isVisible = true;
 			if (target != null) {
@@ -2142,6 +2149,12 @@ export const createUIStore = (root: IRootStore) => {
 			});
 		},
 		onHide: () => {
+			if (retainedQueryTimer) clearTimeout(retainedQueryTimer);
+			queryExpiresAt = Date.now() + 3 * 60 * 1000;
+			retainedQueryTimer = setTimeout(() => {
+				retainedQueryTimer = undefined;
+				if (!store.isVisible) store.setQuery("");
+			}, 3 * 60 * 1000);
 			invalidatePendingCalculation();
 			fileSearchRequestId += 1;
 			if (fileSearchPrefetchTimer) {
@@ -2164,6 +2177,8 @@ export const createUIStore = (root: IRootStore) => {
 			store.translationResults = [];
 		},
 		cleanUp: () => {
+			if (retainedQueryTimer) clearTimeout(retainedQueryTimer);
+			retainedQueryTimer = undefined;
 			invalidatePendingCalculation();
 			if (fileSearchPrefetchTimer) {
 				clearTimeout(fileSearchPrefetchTimer);
