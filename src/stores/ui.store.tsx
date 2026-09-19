@@ -23,6 +23,7 @@ import {
 	type TextSelection,
 } from "lib/fileSearch";
 import { fetchPublicIPAddress } from "lib/publicIp";
+import { DEFAULT_OPENCODE_URL, openCodeMiniSession, resolveOpenCodePrompt } from "lib/openCode";
 import { resolveSpreadsheetCommand } from "lib/spreadsheets";
 import {
 	parseCommandArguments,
@@ -784,6 +785,7 @@ export const createUIStore = (root: IRootStore) => {
 					store.searchEngine = src.searchEngine ?? "google";
 					store.customSearchUrl =
 						src.customSearchUrl ?? "https://google.com/search?q=%s";
+					store.openCodeUrl = src.openCodeUrl ?? DEFAULT_OPENCODE_URL;
 					store.shortcuts = applyShortcutNormalization(src.shortcuts);
 					store.showInAppBrowserBookMarks =
 						src.showInAppBrowserBookMarks ?? true;
@@ -909,6 +911,8 @@ export const createUIStore = (root: IRootStore) => {
 					store.searchEngine = jsonConfig.searchEngine;
 				if (jsonConfig.customSearchUrl !== undefined)
 					store.customSearchUrl = jsonConfig.customSearchUrl;
+				if (typeof jsonConfig.openCodeUrl === "string")
+					store.openCodeUrl = jsonConfig.openCodeUrl;
 				if (jsonConfig.shortcuts !== undefined)
 					store.shortcuts = applyShortcutNormalization(jsonConfig.shortcuts);
 				if (jsonConfig.showInAppBrowserBookMarks !== undefined)
@@ -960,6 +964,8 @@ export const createUIStore = (root: IRootStore) => {
 		onboardingStep: "v1_start" as OnboardingStep,
 		searchEngine: "google" as SearchEngine,
 		customSearchUrl: "https://google.com/search?q=%s" as string,
+		openCodeUrl: DEFAULT_OPENCODE_URL,
+		isOpeningOpenCode: false,
 		globalShortcut: "option" as "command" | "option" | "control",
 		scratchpadShortcut: "command" as "command" | "option" | "none",
 		clipboardManagerShortcut: "shift" as "shift" | "option" | "none",
@@ -1145,6 +1151,17 @@ export const createUIStore = (root: IRootStore) => {
 				return [...allItems].sort(compareRankedItems);
 			}
 
+			const openCodePrompt = resolveOpenCodePrompt(store.query);
+			if (openCodePrompt !== null) {
+				return [{
+					id: "opencode_command",
+					icon: "⌘",
+					name: store.isOpeningOpenCode ? "Opening OpenCode…" : "OpenCode · Mini conversation",
+					subName: openCodePrompt || "Open an empty conversation",
+					type: ItemType.CONFIGURATION,
+					callback: () => { void store.openCode(openCodePrompt); },
+				}];
+			}
 			const aiCommandPrompt = resolveAICommandPrompt(store.query);
 			if (aiCommandPrompt) {
 				return [
@@ -1366,6 +1383,7 @@ export const createUIStore = (root: IRootStore) => {
 			const hasExternalCommand =
 				resolveLauncherCommand(store.query, root.externalCommands.items).length > 0;
 			if (
+				resolveOpenCodePrompt(store.query) !== null ||
 				hasSpreadsheetCommand ||
 				hasAICommand ||
 				hasDirectDailymotionCommand ||
@@ -2537,6 +2555,20 @@ export const createUIStore = (root: IRootStore) => {
 
 		setCustomSearchUrl: (url: string) => {
 			store.customSearchUrl = url;
+		},
+		setOpenCodeUrl: (url: string) => {
+			store.openCodeUrl = url;
+		},
+		openCode: async (prompt: string) => {
+			if (store.isOpeningOpenCode) return;
+			store.isOpeningOpenCode = true;
+			try {
+				await openCodeMiniSession(store.openCodeUrl, prompt);
+			} catch {
+				void solNative.showToast("OpenCode could not be opened. Check its URL in General settings and that OpenCode is running (prompt limit: 32 KiB).", "error");
+			} finally {
+				runInAction(() => { store.isOpeningOpenCode = false; });
+			}
 		},
 
 		onHotKey: async ({ id }: { id: string }) => {

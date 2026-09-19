@@ -732,6 +732,17 @@ export const General = observer(() => {
 			</View>
 
 			<View className="z-10 p-2.5 gap-1 subBg rounded-lg border border-lightBorder dark:border-darkBorder">
+				<Text className="text-sm">OpenCode · oc</Text>
+				<Text className="text-xxs text-neutral-500 dark:text-neutral-400">
+					oc opens a mini conversation. oc followed by text prefills the editor without sending it. OpenCode must be running.
+				</Text>
+				<Input bordered className="w-full h-8 text-xs" inputClassName="w-full"
+					value={store.ui.openCodeUrl}
+					onChangeText={(value) => store.ui.setOpenCodeUrl(value)}
+					placeholder="http://opencode.localhost:55472/v1/mini-sessions" />
+			</View>
+
+			<View className="z-10 p-2.5 gap-1 subBg rounded-lg border border-lightBorder dark:border-darkBorder">
 				<Text className="text-sm">File Search Paths</Text>
 				<Text className="text-xxs text-neutral-500 dark:text-neutral-400">
 					Add folders for the Search Files functionality.

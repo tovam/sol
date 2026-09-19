@@ -28,6 +28,7 @@ export const PORTABLE_KEYS = [
 	"fileSort",
 	"searchEngine",
 	"customSearchUrl",
+	"openCodeUrl",
 	"shortcuts",
 	"showInAppBrowserBookMarks",
 	"hasDismissedGettingStarted",
